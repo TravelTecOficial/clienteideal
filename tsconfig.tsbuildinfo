@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/ui/alert.tsx","./src/components/ui/badge.tsx","./src/components/ui/button.tsx","./src/components/ui/card.tsx","./src/components/ui/radio-group.tsx","./src/lib/utils.ts","./src/styleguide/styleguidelayout.tsx","./src/styleguide/styleguidepage.tsx","./src/styleguide/navigation.ts"],"errors":true,"version":"5.9.3"}

@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design System: Inter (WCAG 2.1 compliant contrast) */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+@layer base {
+  :root {
+    /* Surfaces & text (Beige/Neutral scale - from design) */
+    --background: 240 2% 96%; /* #F8F8F6 */
+    --foreground: 210 22% 20%; /* #333D45 */
+    --card: 240 2% 93%; /* #F4F2EE */
+    --card-foreground: 210 22% 20%;
+    --popover: 240 2% 96%;
+    --popover-foreground: 210 22% 20%;
+
+    /* Primary (Beige/Brown - brand) */
+    --primary: 220 5% 30%; /* #7D7A67 */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary & Muted */
+    --secondary: 220 5% 75%; /* #BEBBAF */
+    --secondary-foreground: 210 22% 20%;
+    --muted: 220 5% 85%; /* #E0DDD4 */
+    --muted-foreground: 210 22% 20%;
+    --accent: 220 5% 85%;
+    --accent-foreground: 210 22% 20%;
+
+    /* Semantic */
+    --destructive: 0 78% 46%; /* #B62E19 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 97 13% 33%; /* #545E4D */
+    --success-foreground: 0 0% 100%;
+    --warning: 34 60% 47%; /* #B4833B */
+    --warning-foreground: 0 0% 100%;
+    --info: 215 30% 40%; /* #4C6E8D */
+    --info-foreground: 0 0% 100%;
+
+    /* Borders & inputs */
+    --border: 220 5% 85%;
+    --input: 220 5% 75%;
+    --ring: 220 5% 30%;
+
+    /* Radius (rounded, 8px) */
+    --radius: 0.5rem;
+
+    /* Primary scale 50–900 (for swatches) */
+    --primary-50: 220 10% 97%;
+    --primary-100: 220 8% 93%;
+    --primary-200: 220 6% 85%;
+    --primary-300: 220 5% 75%;
+    --primary-400: 220 5% 60%;
+    --primary-500: 220 5% 30%;
+    --primary-600: 220 6% 25%;
+    --primary-700: 220 8% 20%;
+    --primary-800: 220 10% 15%;
+    --primary-900: 220 12% 10%;
+
+    /* Grey scale 50–900 */
+    --grey-50: 210 20% 98%;
+    --grey-100: 210 20% 95%;
+    --grey-200: 210 18% 90%;
+    --grey-300: 210 18% 80%;
+    --grey-400: 210 20% 60%;
+    --grey-500: 210 22% 45%;
+    --grey-600: 210 22% 30%;
+    --grey-700: 210 22% 20%;
+    --grey-800: 210 25% 15%;
+    --grey-900: 210 30% 10%;
+  }
+
+  .dark {
+    --background: 220 12% 10%;
+    --foreground: 210 20% 95%;
+    --card: 220 10% 13%;
+    --card-foreground: 210 20% 95%;
+    --popover: 220 10% 13%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 220 5% 75%;
+    --primary-foreground: 220 12% 10%;
+    --secondary: 220 6% 20%;
+    --secondary-foreground: 210 20% 95%;
+    --muted: 220 6% 18%;
+    --muted-foreground: 210 18% 70%;
+    --accent: 220 6% 18%;
+    --accent-foreground: 210 20% 95%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 97 25% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 34 60% 50%;
+    --warning-foreground: 220 12% 10%;
+    --info: 215 35% 50%;
+    --info-foreground: 0 0% 100%;
+    --border: 220 6% 22%;
+    --input: 220 6% 22%;
+    --ring: 220 5% 60%;
+    --primary-50: 220 12% 15%;
+    --primary-100: 220 10% 20%;
+    --primary-200: 220 8% 28%;
+    --primary-300: 220 6% 40%;
+    --primary-400: 220 5% 55%;
+    --primary-500: 220 5% 70%;
+    --primary-600: 220 5% 75%;
+    --primary-700: 220 6% 82%;
+    --primary-800: 220 8% 88%;
+    --primary-900: 220 10% 95%;
+    --grey-50: 210 25% 12%;
+    --grey-100: 210 22% 18%;
+    --grey-200: 210 20% 25%;
+    --grey-300: 210 18% 35%;
+    --grey-400: 210 18% 50%;
+    --grey-500: 210 20% 65%;
+    --grey-600: 210 20% 75%;
+    --grey-700: 210 20% 85%;
+    --grey-800: 210 18% 92%;
+    --grey-900: 210 15% 97%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+}
