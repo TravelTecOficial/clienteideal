@@ -8,6 +8,7 @@ import { ProfilePage } from "@/pages/ProfilePage"
 import { LoginPage } from "@/pages/LoginPage"
 import { SignupPage } from "@/pages/SignupPage"
 import { Planos } from "@/pages/Planos"
+import VendedoresPage from "@/pages/vendedores"
 import { SupabaseProvider } from "@/lib/supabase-context"
 import { StyleguideLayout } from "@/styleguide/StyleguideLayout"
 import { StyleguidePage } from "@/styleguide/StyleguidePage"
@@ -89,6 +90,16 @@ function App() {
             <SupabaseProvider>
               <ProtectedRoute>
                 <ProfilePage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/vendedores"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <VendedoresPage />
               </ProtectedRoute>
             </SupabaseProvider>
           }

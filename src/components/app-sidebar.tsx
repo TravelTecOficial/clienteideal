@@ -39,6 +39,7 @@ const data = {
       url: "#",
       items: [
         { title: "Perfil", url: "/dashboard/perfil" },
+        { title: "Vendedores", url: "/dashboard/vendedores" },
         { title: "Qualificação", url: "/dashboard/qualificacao" },
       ],
     },
