@@ -82,7 +82,6 @@ async function fetchProfileWithRetry(
   onRetry?: (attempt: number) => void
 ): Promise<string | null> {
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
-    // A correção principal está no .eq("id", String(userId))
     const { data, error } = await supabaseClient
       .from("profiles")
       .select("id, company_id")
@@ -105,6 +104,35 @@ async function fetchProfileWithRetry(
     }
   }
   return null
+}
+
+/** Chama Edge Function para criar perfil e company sob demanda (quando webhook não rodou). */
+async function syncProfile(
+  supabaseClient: SupabaseClient,
+  email: string,
+  fullName: string
+): Promise<{ companyId: string } | { error: string }> {
+  const { data, error } = await supabaseClient.functions.invoke("sync-profile", {
+    body: { email, fullName },
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  const body = data as { companyId?: string; error?: string } | null
+  const companyId = body?.companyId
+  if (companyId && typeof companyId === "string") {
+    return { companyId }
+  }
+
+  const errMsg = body?.error
+  return {
+    error:
+      errMsg && typeof errMsg === "string"
+        ? errMsg
+        : "Erro ao sincronizar perfil. Verifique se CLERK_SECRET_KEY está configurado no Supabase (Edge Functions > Secrets).",
+  }
 }
 
 /** Atualiza company com plan_type e status. */
@@ -151,8 +179,23 @@ export function Planos() {
     setErrorMsg("")
 
     try {
-      // Passamos o user.id do Clerk que começa com "user_..."
-      const id = await fetchProfileWithRetry(supabaseClient, user.id)
+      let id = await fetchProfileWithRetry(supabaseClient, user.id)
+
+      if (!id) {
+        // Perfil não existe: tentar criar via Edge Function (fallback quando webhook não rodou)
+        const primaryEmail = user.primaryEmailAddress?.emailAddress ?? ""
+        const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim()
+        const result = await syncProfile(supabaseClient, primaryEmail, fullName)
+
+        if ("companyId" in result) {
+          id = result.companyId
+        } else {
+          setStatus("error")
+          setErrorMsg(result.error)
+          return
+        }
+      }
+
       if (id) {
         setCompanyId(id)
         setStatus("ready")
@@ -166,7 +209,7 @@ export function Planos() {
       setStatus("error")
       setErrorMsg(err instanceof Error ? err.message : "Erro ao buscar perfil.")
     }
-  }, [user?.id, supabaseClient])
+  }, [user?.id, user?.primaryEmailAddress, user?.firstName, user?.lastName, supabaseClient])
 
   useEffect(() => {
     if (!isLoaded) return
