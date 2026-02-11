@@ -123,12 +123,17 @@ async function updateCompanyPlan(
   companyId: string,
   planType: PlanType
 ): Promise<{ error: Error | null }> {
-  const { error } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("companies")
     .update({ plan_type: planType, status: "active" })
     .eq("id", String(companyId))
+    .select("id")
 
-  return { error: error ? new Error(error.message) : null }
+  if (error) return { error: new Error(error.message) }
+  if (!data || data.length === 0) {
+    return { error: new Error("Atualização bloqueada. Verifique suas permissões.") }
+  }
+  return { error: null }
 }
 
 function LoadingState({ message }: { message: string }) {
@@ -211,7 +216,7 @@ export function Planos() {
       return
     }
 
-    navigate("/dashboard", { replace: true })
+    navigate("/dashboard", { replace: true, state: { fromPlanSelection: true } })
   }
 
   if (!isLoaded || status === "loading-profile") {

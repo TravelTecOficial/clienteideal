@@ -44,37 +44,60 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     "idle" | "loading" | "allowed" | "blocked"
   >("idle")
 
-  const fetchAndCheckPlan = useCallback(async () => {
-    if (!user?.id) return
-    setPlanCheckStatus("loading")
+  const fetchAndCheckPlan = useCallback(
+    async (retryCount = 0): Promise<void> => {
+      if (!user?.id) return
+      setPlanCheckStatus("loading")
 
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("company_id, companies(plan_type)")
-        .eq("id", user.id)
-        .maybeSingle()
+      const maxRetries = location.state?.fromPlanSelection ? 3 : 0
+      const retryDelay = 400
 
-      if (error) {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("company_id, companies(plan_type)")
+          .eq("id", user.id)
+          .maybeSingle()
+
+        if (error) {
+          if (retryCount < maxRetries) {
+            await new Promise((r) => setTimeout(r, retryDelay))
+            return fetchAndCheckPlan(retryCount + 1)
+          }
+          setPlanCheckStatus("blocked")
+          return
+        }
+
+        const profile = data as ProfileWithCompany | null
+        const companyId = profile?.company_id ?? null
+        const planType = profile?.companies?.plan_type ?? null
+
+        const hasValidPlan =
+          companyId &&
+          planType &&
+          planType.trim() !== "" &&
+          planType.toLowerCase() !== "none"
+
+        if (hasValidPlan) {
+          setPlanCheckStatus("allowed")
+          return
+        }
+
+        if (retryCount < maxRetries) {
+          await new Promise((r) => setTimeout(r, retryDelay))
+          return fetchAndCheckPlan(retryCount + 1)
+        }
         setPlanCheckStatus("blocked")
-        return
+      } catch {
+        if (retryCount < maxRetries) {
+          await new Promise((r) => setTimeout(r, retryDelay))
+          return fetchAndCheckPlan(retryCount + 1)
+        }
+        setPlanCheckStatus("blocked")
       }
-
-      const profile = data as ProfileWithCompany | null
-      const companyId = profile?.company_id ?? null
-      const planType = profile?.companies?.plan_type ?? null
-
-      const hasValidPlan =
-        companyId &&
-        planType &&
-        planType.trim() !== "" &&
-        planType.toLowerCase() !== "none"
-
-      setPlanCheckStatus(hasValidPlan ? "allowed" : "blocked")
-    } catch {
-      setPlanCheckStatus("blocked")
-    }
-  }, [user?.id, supabase])
+    },
+    [user?.id, supabase, location.state?.fromPlanSelection]
+  )
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) return
