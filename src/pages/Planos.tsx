@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useUser } from "@clerk/clerk-react"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { FunctionsHttpError } from "@supabase/supabase-js"
 import { useSupabaseClient } from "@/lib/supabase-context"
 import {
   Card,
@@ -117,7 +118,18 @@ async function syncProfile(
   })
 
   if (error) {
-    return { error: error.message }
+    let errMsg = error.message
+    if (error instanceof FunctionsHttpError) {
+      try {
+        const parsed = (await error.context.json()) as { error?: string }
+        if (parsed?.error && typeof parsed.error === "string") {
+          errMsg = parsed.error
+        }
+      } catch {
+        // fallback para error.message
+      }
+    }
+    return { error: errMsg }
   }
 
   const body = data as { companyId?: string; error?: string } | null
