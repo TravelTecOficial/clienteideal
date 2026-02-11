@@ -57,7 +57,9 @@ export function AdminPage() {
   const [errorMsg, setErrorMsg] = useState<string>("")
 
   const fetchUsers = useCallback(async () => {
-    const token = await getToken({ template: "supabase" })
+    // Token de sessão do Clerk (não o template supabase). A Edge Function admin-list-users
+    // valida com verifyToken do Clerk, que exige o token padrão assinado pela chave do Clerk.
+    const token = await getToken()
     if (!token) {
       setStatus("error")
       setErrorMsg("Token de acesso indisponível. Faça logout e login novamente.")
