@@ -2,7 +2,9 @@ import { Suspense, Component, type ReactNode } from "react"
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { AdminPage } from "@/pages/AdminPage"
+import { AdminConfigPage } from "@/pages/AdminConfigPage"
 import { DashboardPage } from "@/pages/DashboardPage"
+import { ProfilePage } from "@/pages/ProfilePage"
 import { LoginPage } from "@/pages/LoginPage"
 import { SignupPage } from "@/pages/SignupPage"
 import { Planos } from "@/pages/Planos"
@@ -81,12 +83,30 @@ function App() {
             </SupabaseProvider>
           }
         />
+        <Route
+          path="/dashboard/perfil"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
 
         <Route
           path="/admin"
           element={
             <SupabaseProvider>
               <AdminPage />
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/configuracoes"
+          element={
+            <SupabaseProvider>
+              <AdminConfigPage />
             </SupabaseProvider>
           }
         />

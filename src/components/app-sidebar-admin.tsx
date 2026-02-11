@@ -2,7 +2,6 @@ import * as React from "react"
 import { Link, useLocation } from "react-router-dom"
 import { Minus, Plus } from "lucide-react"
 
-import { SearchForm } from "@/components/search-form"
 import {
   Collapsible,
   CollapsibleContent,
@@ -22,32 +21,29 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-// Dados de navegação do dashboard (usuário) — sem Conta (Configurações/Planos ficam no admin)
-const data = {
-  navMain: [
-    {
-      title: "Início",
-      url: "/dashboard",
-      items: [
-        { title: "Visão geral", url: "/dashboard", isActive: true },
-      ],
-    },
-    {
-      title: "Cliente Ideal",
-      url: "#",
-      items: [
-        { title: "Perfil", url: "/dashboard/perfil" },
-        { title: "Qualificação", url: "/dashboard/qualificacao" },
-      ],
-    },
-  ],
-}
+const adminNavMain = [
+  {
+    title: "Usuários",
+    url: "/admin",
+    items: [{ title: "Usuários do sistema", url: "/admin" }], // Usuários que se autenticaram
+  },
+  {
+    title: "Conta",
+    url: "#",
+    items: [
+      { title: "Configurações", url: "/admin/configuracoes" },
+      { title: "Planos", url: "/planos" },
+    ],
+  },
+]
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebarAdmin(
+  props: React.ComponentProps<typeof Sidebar>
+) {
   const location = useLocation()
 
   const isActive = (url: string) => {
-    if (url === "/dashboard") return location.pathname === "/dashboard"
+    if (url === "/admin") return location.pathname === "/admin"
     return location.pathname.startsWith(url)
   }
 
@@ -57,7 +53,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild className="h-auto p-2">
-              <Link to="/dashboard" className="flex items-center justify-center">
+              <Link to="/admin" className="flex items-center justify-center">
                 <img
                   src="/logo-cliente-ideal.png"
                   alt="CLIENTE IDEAL Online"
@@ -67,12 +63,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <SearchForm />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
-            {data.navMain.map((item, index) => (
+            {adminNavMain.map((item, index) => (
               <Collapsible
                 key={item.title}
                 defaultOpen={index === 0}

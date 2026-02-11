@@ -19,10 +19,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, AlertCircle, Users } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 import { isSaasAdmin } from "@/lib/use-saas-admin"
+import { AdminLayout } from "@/components/admin-layout"
 
 /** Tipo retornado pela Edge Function admin-list-users */
 interface AdminUser {
@@ -118,20 +119,8 @@ export function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" aria-hidden />
-            <h1 className="text-xl font-semibold text-foreground">
-              Painel Administrativo
-            </h1>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <Card className="border-border bg-card">
+    <AdminLayout breadcrumb={{ label: "Usuários", page: "Usuários do sistema" }}>
+      <Card className="border-border bg-card">
           <CardHeader>
             <CardTitle className="text-foreground">Usuários do sistema</CardTitle>
             <CardDescription className="text-muted-foreground">
@@ -208,8 +197,7 @@ export function AdminPage() {
               </div>
             )}
           </CardContent>
-        </Card>
-      </div>
-    </main>
+      </Card>
+    </AdminLayout>
   )
 }
