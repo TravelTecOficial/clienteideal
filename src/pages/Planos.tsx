@@ -112,7 +112,7 @@ async function syncProfile(
   email: string,
   fullName: string
 ): Promise<{ companyId: string } | { error: string }> {
-  const { data, error } = await supabaseClient.functions.invoke("sync-profile", {
+  const { data, error } = await supabaseClient.functions.invoke("sync-profile-client", {
     body: { email, fullName },
   })
 
