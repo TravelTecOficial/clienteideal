@@ -112,6 +112,8 @@ export default function VendedoresPage() {
   const [saving, setSaving] = useState(false);
   const [invitingEmail, setInvitingEmail] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [editingEmail, setEditingEmail] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -201,6 +203,7 @@ export default function VendedoresPage() {
   const openNew = () => {
     setEditingEmail(null);
     setInviteError(null);
+    setSaveError(null);
     setForm({ nome: "", email: "", celular: "", status: true, sendInvite: false });
     setFormDiasAtivos(
       Object.fromEntries(DIAS_SEMANA.map((d) => [d.id, d.id >= 1 && d.id <= 5]))
@@ -216,6 +219,7 @@ export default function VendedoresPage() {
   const openEdit = (v: VendedorRow) => {
     setEditingEmail(v.email);
     setInviteError(null);
+    setSaveError(null);
     setForm({
       nome: v.nome ?? "",
       email: v.email,
@@ -244,6 +248,7 @@ export default function VendedoresPage() {
     const email = form.email.trim().toLowerCase();
     if (!email) return;
 
+    setSaveError(null);
     setSaving(true);
     try {
       const { error: vendErr } = await supabase.from("vendedores").upsert(
@@ -258,7 +263,7 @@ export default function VendedoresPage() {
       );
 
       if (vendErr) {
-        console.error("Erro ao salvar vendedor:", vendErr);
+        setSaveError(vendErr.message ?? "Erro ao salvar vendedor.");
         return;
       }
 
@@ -277,7 +282,8 @@ export default function VendedoresPage() {
             { onConflict: "vendedor_email,dia_semana" }
           );
           if (horErr) {
-            console.error("Erro ao salvar horário:", horErr);
+            setSaveError(horErr.message ?? "Erro ao salvar horário.");
+            return;
           }
         } else {
           const { error: delErr } = await supabase
@@ -287,7 +293,8 @@ export default function VendedoresPage() {
             .eq("company_id", companyId)
             .eq("dia_semana", d.id);
           if (delErr) {
-            console.error("Erro ao remover horário:", delErr);
+            setSaveError(delErr.message ?? "Erro ao remover horário.");
+            return;
           }
         }
       }
@@ -296,6 +303,7 @@ export default function VendedoresPage() {
 
       if (!editingEmail && form.sendInvite && email) {
         setInviteError(null);
+        setInviteSuccess(null);
         try {
           const token = await getToken();
           if (!token) {
@@ -314,19 +322,28 @@ export default function VendedoresPage() {
           const data = (await res.json().catch(() => ({}))) as { error?: string };
           if (!res.ok) {
             setInviteError(data?.error ?? "Erro ao enviar convite. Tente novamente.");
+            setIsModalOpen(false);
             return;
           }
           if (data?.error) {
             setInviteError(data.error);
+            setIsModalOpen(false);
             return;
           }
+          setInviteSuccess(`Vendedor cadastrado. Convite enviado para ${email}.`);
+          setTimeout(() => setInviteSuccess(null), 5000);
           await loadCompanyAndData();
         } catch {
           setInviteError("Erro ao enviar convite. Tente novamente.");
+          setIsModalOpen(false);
           return;
         }
+      } else {
+        setInviteSuccess(editingEmail ? "Vendedor atualizado com sucesso." : "Vendedor cadastrado com sucesso.");
+        setTimeout(() => setInviteSuccess(null), 5000);
       }
 
+      setInviteError(null);
       setIsModalOpen(false);
     } finally {
       setSaving(false);
@@ -335,6 +352,7 @@ export default function VendedoresPage() {
 
   const handleInvite = async (v: VendedorRow) => {
     setInviteError(null);
+    setInviteSuccess(null);
     setInvitingEmail(v.email);
     try {
       const token = await getToken();
@@ -360,7 +378,9 @@ export default function VendedoresPage() {
         setInviteError(data.error);
         return;
       }
+      setInviteSuccess(`Convite enviado com sucesso para ${v.email}. O vendedor receberá um e-mail.`);
       await loadCompanyAndData();
+      setTimeout(() => setInviteSuccess(null), 5000);
     } catch {
       setInviteError("Erro ao enviar convite. Tente novamente.");
     } finally {
@@ -431,6 +451,11 @@ export default function VendedoresPage() {
           {inviteError && (
             <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {inviteError}
+            </div>
+          )}
+          {inviteSuccess && (
+            <div className="rounded-md border border-primary/50 bg-primary/10 px-4 py-3 text-sm text-foreground">
+              {inviteSuccess}
             </div>
           )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -518,7 +543,13 @@ export default function VendedoresPage() {
         </Table>
       </div>
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          if (!open) setSaveError(null);
+          setIsModalOpen(open);
+        }}
+      >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
@@ -528,6 +559,12 @@ export default function VendedoresPage() {
               Preencha os dados e configure os dias e horários de trabalho.
             </DialogDescription>
           </DialogHeader>
+
+          {saveError && (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {saveError}
+            </div>
+          )}
 
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
