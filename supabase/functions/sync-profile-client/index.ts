@@ -197,10 +197,16 @@ Deno.serve(async (req) => {
 
     if (profileError) {
       console.error("[sync-profile-client] Erro ao upsert profile:", profileError)
+      const isDuplicateEmail =
+        profileError.code === "23505" &&
+        String(profileError.message).includes("profiles_email_key")
+      const errorMessage = isDuplicateEmail
+        ? "Este e-mail já está vinculado a outra conta. Faça login com a conta original ou use outro e-mail para cadastro."
+        : profileError.message
       return new Response(
-        JSON.stringify({ error: profileError.message }),
+        JSON.stringify({ error: errorMessage }),
         {
-          status: 500,
+          status: isDuplicateEmail ? 409 : 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       )

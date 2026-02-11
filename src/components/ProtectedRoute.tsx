@@ -3,7 +3,7 @@ import { useUser } from "@clerk/clerk-react"
 import { Navigate, useLocation } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { useSupabaseClient } from "@/lib/supabase-context"
-import { isSaasAdmin } from "@/lib/use-saas-admin"
+import { isSaasAdmin, isLocalhost } from "@/lib/use-saas-admin"
 
 interface ProfileWithCompany {
   company_id: string | null
@@ -124,7 +124,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // Admin do SaaS (publicMetadata.role === "admin") → /admin. Note: UI-level check. API enforcement required.
-  if (isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
+  // Em localhost, não redireciona para permitir testar fluxo de usuário normal.
+  if (!isLocalhost() && isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
     return <Navigate to="/admin" replace />
   }
 
