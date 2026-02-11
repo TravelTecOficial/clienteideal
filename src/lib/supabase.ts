@@ -9,6 +9,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
+/** URL do projeto Supabase (para chamadas diretas a Edge Functions). */
+export const SUPABASE_URL = supabaseUrl
+
 /** Cliente Supabase básico (sem autenticação). Não usar em rotas protegidas. */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 

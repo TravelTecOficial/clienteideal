@@ -57,10 +57,12 @@ Deno.serve(async (req) => {
   try {
     const verified = await verifyToken(token, { secretKey: clerkSecret })
     sub = verified.sub as string
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error("[clerk-invite-vendedor] verifyToken falhou:", msg)
     return new Response(
       JSON.stringify({
-        error: "Token inválido ou expirado. Faça login novamente.",
+        error: "Token inválido ou expirado. Faça login novamente. Verifique se CLERK_SECRET_KEY está correta nos secrets Supabase.",
       }),
       {
         status: 401,

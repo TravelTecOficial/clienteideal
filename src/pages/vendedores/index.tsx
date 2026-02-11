@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { SUPABASE_URL } from "@/lib/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Dia da semana: 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb (Date.getDay()) */
@@ -296,22 +297,27 @@ export default function VendedoresPage() {
       if (!editingEmail && form.sendInvite && email) {
         setInviteError(null);
         try {
-          const token = await getToken({ template: "supabase" }) ?? await getToken();
+          const token = await getToken();
           if (!token) {
             setInviteError("Sessão expirada. Faça login novamente.");
             return;
           }
-          const { data, error } = await supabase.functions.invoke("clerk-invite-vendedor", {
-            body: { email },
-            headers: { Authorization: `Bearer ${token}` },
+          const url = `${SUPABASE_URL}/functions/v1/clerk-invite-vendedor`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ email }),
           });
-          if (error) {
-            setInviteError("Erro ao enviar convite. Tente novamente.");
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          if (!res.ok) {
+            setInviteError(data?.error ?? "Erro ao enviar convite. Tente novamente.");
             return;
           }
-          const err = (data as { error?: string })?.error;
-          if (err) {
-            setInviteError(err);
+          if (data?.error) {
+            setInviteError(data.error);
             return;
           }
           await loadCompanyAndData();
@@ -331,22 +337,27 @@ export default function VendedoresPage() {
     setInviteError(null);
     setInvitingEmail(v.email);
     try {
-      const token = await getToken({ template: "supabase" }) ?? await getToken();
+      const token = await getToken();
       if (!token) {
         setInviteError("Sessão expirada. Faça login novamente.");
         return;
       }
-      const { data, error } = await supabase.functions.invoke("clerk-invite-vendedor", {
-        body: { email: v.email },
-        headers: { Authorization: `Bearer ${token}` },
+      const url = `${SUPABASE_URL}/functions/v1/clerk-invite-vendedor`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email: v.email }),
       });
-      if (error) {
-        setInviteError("Erro ao enviar convite. Tente novamente.");
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setInviteError(data?.error ?? "Erro ao enviar convite. Tente novamente.");
         return;
       }
-      const err = (data as { error?: string })?.error;
-      if (err) {
-        setInviteError(err);
+      if (data?.error) {
+        setInviteError(data.error);
         return;
       }
       await loadCompanyAndData();
