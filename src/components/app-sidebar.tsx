@@ -1,14 +1,9 @@
 import * as React from "react"
 import { Link, useLocation } from "react-router-dom"
 import { useClerk } from "@clerk/clerk-react"
-import { LogOut, Minus, Plus } from "lucide-react"
+import { LogOut } from "lucide-react"
 
 import { SearchForm } from "@/components/search-form"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
 import {
   Sidebar,
   SidebarContent,
@@ -18,33 +13,23 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-// Dados de navegação do dashboard (usuário) — sem Conta (Configurações/Planos ficam no admin)
-const data = {
-  navMain: [
-    {
-      title: "Início",
-      url: "/dashboard",
-      items: [
-        { title: "Visão geral", url: "/dashboard", isActive: true },
-      ],
-    },
-    {
-      title: "Cliente Ideal",
-      url: "#",
-      items: [
-        { title: "Perfil", url: "/dashboard/perfil" },
-        { title: "Vendedores", url: "/dashboard/vendedores" },
-        { title: "Qualificação", url: "/dashboard/qualificacao" },
-      ],
-    },
-  ],
-}
+// Menu flat: 11 itens ligados às rotas existentes
+const navItems = [
+  { title: "Home", url: "/dashboard" },
+  { title: "Cliente Ideal", url: "/dashboard/cliente-ideal" },
+  { title: "Qualificador", url: "/dashboard/qualificador" },
+  { title: "Leads", url: "/dashboard/leads" },
+  { title: "Oportunidades", url: "/dashboard/oportunidades" },
+  { title: "Agenda", url: "/dashboard/agenda" },
+  { title: "Atendimentos", url: "/dashboard/atendimentos" },
+  { title: "Base de conhecimento", url: "/dashboard/base-conhecimento" },
+  { title: "Usuários", url: "/admin" },
+  { title: "Produtos & Serviços", url: "/dashboard/produtos-servicos" },
+  { title: "Perfil", url: "/dashboard/perfil" },
+]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
@@ -71,47 +56,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <SearchForm />
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarMenu>
-            {data.navMain.map((item, index) => (
-              <Collapsible
-                key={item.title}
-                defaultOpen={index === 0}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton>
-                      {item.title}{" "}
-                      <Plus className="ml-auto group-data-[state=open]/collapsible:hidden" />
-                      <Minus className="ml-auto group-data-[state=closed]/collapsible:hidden" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  {item.items?.length ? (
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {item.items.map((subItem) => (
-                          <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={isActive(subItem.url)}
-                            >
-                              <Link to={subItem.url}>{subItem.title}</Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  ) : null}
+      <div className="mx-2 flex flex-1 min-h-0 flex-col gap-2 rounded-lg border border-border bg-white p-2 shadow-sm">
+        <SearchForm />
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarMenu>
+              {navItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                    <Link to={item.url}>{item.title}</Link>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
-              </Collapsible>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
-      </SidebarContent>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        </SidebarContent>
+      </div>
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>

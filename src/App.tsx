@@ -9,6 +9,14 @@ import { LoginPage } from "@/pages/LoginPage"
 import { SignupPage } from "@/pages/SignupPage"
 import { Planos } from "@/pages/Planos"
 import VendedoresPage from "@/pages/vendedores"
+import { ClienteIdealPage } from "@/pages/ClienteIdealPage"
+import { QualificadorPage } from "@/pages/QualificadorPage"
+import { LeadsPage } from "@/pages/LeadsPage"
+import { OportunidadesPage } from "@/pages/OportunidadesPage"
+import { AgendaPage } from "@/pages/AgendaPage"
+import { AtendimentosPage } from "@/pages/AtendimentosPage"
+import { BaseConhecimentoPage } from "@/pages/BaseConhecimentoPage"
+import { ProdutosServicosPage } from "@/pages/ProdutosServicosPage"
 import { SupabaseProvider } from "@/lib/supabase-context"
 import { StyleguideLayout } from "@/styleguide/StyleguideLayout"
 import { StyleguidePage } from "@/styleguide/StyleguidePage"
@@ -100,6 +108,86 @@ function App() {
             <SupabaseProvider>
               <ProtectedRoute>
                 <VendedoresPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/cliente-ideal"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <ClienteIdealPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/qualificador"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <QualificadorPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/leads"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <LeadsPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/oportunidades"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <OportunidadesPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/agenda"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <AgendaPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/atendimentos"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <AtendimentosPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/base-conhecimento"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <BaseConhecimentoPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/produtos-servicos"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <ProdutosServicosPage />
               </ProtectedRoute>
             </SupabaseProvider>
           }
