@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { useUser } from "@clerk/clerk-react"
+import { useUser, useAuth } from "@clerk/clerk-react"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { FunctionsHttpError } from "@supabase/supabase-js"
 import { useSupabaseClient } from "@/lib/supabase-context"
@@ -39,44 +39,24 @@ const PLANS: {
     title: "Free",
     price: "R$ 0",
     description: "Para começar",
-    benefits: [
-      "Até 50 leads por mês",
-      "1 usuário",
-      "Relatórios básicos",
-      "Suporte por e-mail",
-    ],
+    benefits: ["Até 50 leads por mês", "1 usuário", "Relatórios básicos", "Suporte por e-mail"],
   },
   {
     type: "pro",
     title: "Pro",
     price: "R$ 49",
     description: "Acesso completo",
-    benefits: [
-      "Leads ilimitados",
-      "Até 5 usuários",
-      "Relatórios avançados",
-      "Suporte prioritário",
-      "Integrações de CRM",
-      "API de acesso",
-    ],
+    benefits: ["Leads ilimitados", "Até 5 usuários", "Relatórios avançados", "Suporte prioritário", "Integrações de CRM", "API de acesso"],
   },
   {
     type: "enterprise",
     title: "Enterprise",
     price: "Sob consulta",
     description: "Suporte dedicado",
-    benefits: [
-      "Tudo do Pro",
-      "Usuários ilimitados",
-      "SLA garantido",
-      "Gerente de conta dedicado",
-      "Onboarding personalizado",
-      "Customizações sob medida",
-    ],
+    benefits: ["Tudo do Pro", "Usuários ilimitados", "SLA garantido", "Gerente de conta dedicado", "Onboarding personalizado", "Customizações sob medida"],
   },
 ]
 
-/** Busca company_id do perfil com retry. Forçamos o ID como string para evitar erro de UUID. */
 async function fetchProfileWithRetry(
   supabaseClient: SupabaseClient,
   userId: string,
@@ -107,14 +87,18 @@ async function fetchProfileWithRetry(
   return null
 }
 
-/** Chama Edge Function para criar perfil e company sob demanda (quando webhook não rodou). */
+/** Chama Edge Function enviando o Bearer Token do Clerk para autenticação */
 async function syncProfile(
   supabaseClient: SupabaseClient,
   email: string,
-  fullName: string
+  fullName: string,
+  token: string
 ): Promise<{ companyId: string } | { error: string }> {
   const { data, error } = await supabaseClient.functions.invoke("sync-profile-client", {
     body: { email, fullName },
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   })
 
   if (error) {
@@ -122,32 +106,18 @@ async function syncProfile(
     if (error instanceof FunctionsHttpError) {
       try {
         const parsed = (await error.context.json()) as { error?: string }
-        if (parsed?.error && typeof parsed.error === "string") {
-          errMsg = parsed.error
-        }
-      } catch {
-        // fallback para error.message
-      }
+        if (parsed?.error) errMsg = parsed.error
+      } catch { /* fallback */ }
     }
     return { error: errMsg }
   }
 
   const body = data as { companyId?: string; error?: string } | null
-  const companyId = body?.companyId
-  if (companyId && typeof companyId === "string") {
-    return { companyId }
-  }
+  if (body?.companyId) return { companyId: body.companyId }
 
-  const errMsg = body?.error
-  return {
-    error:
-      errMsg && typeof errMsg === "string"
-        ? errMsg
-        : "Erro ao sincronizar perfil. Verifique se CLERK_SECRET_KEY está configurado no Supabase (Edge Functions > Secrets).",
-  }
+  return { error: body?.error || "Erro ao sincronizar perfil." }
 }
 
-/** Atualiza company com plan_type e status. */
 async function updateCompanyPlan(
   supabaseClient: SupabaseClient,
   companyId: string,
@@ -156,33 +126,27 @@ async function updateCompanyPlan(
   const { error } = await supabaseClient
     .from("companies")
     .update({ plan_type: planType, status: "active" })
-    .eq("id", String(companyId)) // Garantindo que o ID da empresa também seja tratado como texto
+    .eq("id", String(companyId))
 
   return { error: error ? new Error(error.message) : null }
 }
 
-/** Componente de loading respeitando design tokens do index.css. */
 function LoadingState({ message }: { message: string }) {
   return (
     <div className="flex min-h-[280px] flex-col items-center justify-center gap-4 p-8">
-      <Loader2
-        className="h-10 w-10 animate-spin text-primary"
-        aria-hidden
-      />
+      <Loader2 className="h-10 w-10 animate-spin text-primary" />
       <p className="text-sm font-medium text-foreground">{message}</p>
-      <p className="text-xs text-muted-foreground">Aguarde um momento…</p>
     </div>
   )
 }
 
 export function Planos() {
   const { user, isLoaded } = useUser()
+  const { getToken } = useAuth() // ESSENCIAL: Hook para pegar o JWT
   const supabaseClient = useSupabaseClient()
   const navigate = useNavigate()
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [status, setStatus] = useState<
-    "idle" | "loading-profile" | "ready" | "processing" | "error"
-  >("idle")
+  const [status, setStatus] = useState<"idle" | "loading-profile" | "ready" | "processing" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState<string>("")
 
   const loadProfile = useCallback(async () => {
@@ -194,10 +158,17 @@ export function Planos() {
       let id = await fetchProfileWithRetry(supabaseClient, user.id)
 
       if (!id) {
-        // Perfil não existe: tentar criar via Edge Function (fallback quando webhook não rodou)
         const primaryEmail = user.primaryEmailAddress?.emailAddress ?? ""
         const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim()
-        const result = await syncProfile(supabaseClient, primaryEmail, fullName)
+        
+        // Pega o token usando o template 'supabase' que você criou no painel do Clerk
+        const token = await getToken({ template: 'supabase' })
+        
+        if (!token) {
+          throw new Error("Não foi possível gerar o token de acesso. Tente fazer logout e login novamente.")
+        }
+
+        const result = await syncProfile(supabaseClient, primaryEmail, fullName, token)
 
         if ("companyId" in result) {
           id = result.companyId
@@ -211,17 +182,12 @@ export function Planos() {
       if (id) {
         setCompanyId(id)
         setStatus("ready")
-      } else {
-        setStatus("error")
-        setErrorMsg(
-          "Perfil ainda não encontrado. O sistema está finalizando sua configuração. Tente novamente em instantes."
-        )
       }
     } catch (err) {
       setStatus("error")
       setErrorMsg(err instanceof Error ? err.message : "Erro ao buscar perfil.")
     }
-  }, [user?.id, user?.primaryEmailAddress, user?.firstName, user?.lastName, supabaseClient])
+  }, [user, getToken, supabaseClient])
 
   useEffect(() => {
     if (!isLoaded) return
@@ -237,11 +203,7 @@ export function Planos() {
     setStatus("processing")
     setErrorMsg("")
 
-    const { error } = await updateCompanyPlan(
-      supabaseClient,
-      companyId,
-      planType
-    )
+    const { error } = await updateCompanyPlan(supabaseClient, companyId, planType)
 
     if (error) {
       setStatus("ready")
@@ -255,21 +217,15 @@ export function Planos() {
   if (!isLoaded || status === "loading-profile") {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-8">
-        <div className="w-full max-w-3xl">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl font-bold text-foreground">
-                Escolha seu plano
-              </CardTitle>
-              <CardDescription className="text-muted-foreground">
-                Verificando sua conta…
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <LoadingState message="Carregando sua conta…" />
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="w-full max-w-3xl">
+          <CardHeader>
+            <CardTitle>Escolha seu plano</CardTitle>
+            <CardDescription>Verificando sua conta…</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LoadingState message="Configurando seu acesso..." />
+          </CardContent>
+        </Card>
       </main>
     )
   }
@@ -278,86 +234,49 @@ export function Planos() {
     <main className="flex min-h-screen flex-col items-center bg-background px-4 py-8 sm:px-6 md:px-10">
       <div className="w-full max-w-5xl space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Escolha seu plano
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Selecione o plano ideal para sua empresa
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Escolha seu plano</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Selecione o plano ideal para sua empresa</p>
         </div>
 
         {errorMsg && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Erro de Configuração</AlertTitle>
+            <AlertTitle>Erro de Sincronização</AlertTitle>
             <AlertDescription>{errorMsg}</AlertDescription>
           </Alert>
         )}
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {PLANS.map((plan) => (
-            <Card
-              key={plan.type}
-              className={cn(
-                "flex flex-col transition-shadow hover:shadow-md",
-                plan.type === "pro" && "border-primary ring-2 ring-primary/20"
-              )}
-            >
+            <Card key={plan.type} className={cn("flex flex-col transition-shadow hover:shadow-md", plan.type === "pro" && "border-primary ring-2 ring-primary/20")}>
               <CardHeader>
-                <CardTitle className="text-xl font-semibold text-foreground">
-                  {plan.title}
-                </CardTitle>
-                <CardDescription className="text-muted-foreground">
-                  {plan.description}
-                </CardDescription>
+                <CardTitle className="text-xl font-semibold">{plan.title}</CardTitle>
+                <CardDescription>{plan.description}</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 space-y-4">
-                <p className="text-2xl font-bold text-foreground">
-                  {plan.price}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {plan.type === "enterprise" ? "" : "/mês"}
-                </p>
+                <p className="text-2xl font-bold">{plan.price}</p>
                 <ul className="space-y-2">
                   {plan.benefits.map((benefit) => (
-                    <li
-                      key={benefit}
-                      className="flex items-start gap-2 text-sm text-foreground"
-                    >
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <li key={benefit} className="flex items-start gap-2 text-sm">
+                      <Check className="mt-0.5 h-4 w-4 text-primary" />
                       <span>{benefit}</span>
                     </li>
                   ))}
                 </ul>
               </CardContent>
               <CardFooter>
-                <Button
-                  variant={plan.type === "pro" ? "default" : "secondary"}
-                  className="w-full"
+                <Button 
+                  variant={plan.type === "pro" ? "default" : "secondary"} 
+                  className="w-full" 
                   onClick={() => handleSelectPlan(plan.type)}
                   disabled={status === "processing" || status === "error"}
                 >
-                  {status === "processing" ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Processando…
-                    </>
-                  ) : (
-                    "Selecionar"
-                  )}
+                  {status === "processing" ? "Processando..." : "Selecionar"}
                 </Button>
               </CardFooter>
             </Card>
           ))}
         </div>
-
-        {status === "error" && (
-          <div className="flex justify-center">
-            <Button variant="outline" size="sm" onClick={loadProfile}>
-              Tentar novamente
-            </Button>
-          </div>
-        )}
       </div>
     </main>
   )

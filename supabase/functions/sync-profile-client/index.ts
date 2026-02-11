@@ -43,11 +43,26 @@ Deno.serve(async (req) => {
     )
   }
 
-  const clerkSecret = Deno.env.get("CLERK_SECRET_KEY")
+  const clerkSecret = Deno.env.get("CLERK_SECRET_KEY")?.trim()
   if (!clerkSecret) {
     console.error("[sync-profile-client] CLERK_SECRET_KEY não configurado")
     return new Response(
       JSON.stringify({ error: "Configuração do servidor inválida." }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    )
+  }
+  if (!clerkSecret.startsWith("sk_")) {
+    console.error(
+      "[sync-profile-client] CLERK_SECRET_KEY inválida: deve ser Secret Key (sk_test_... ou sk_live_...), não Publishable Key (pk_...)"
+    )
+    return new Response(
+      JSON.stringify({
+        error:
+          "No suitable key or wrong key type. Configure CLERK_SECRET_KEY (Secret Key, sk_...) no Supabase Edge Functions > Secrets.",
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -73,7 +88,24 @@ Deno.serve(async (req) => {
       fullName = [fn, ln].filter(Boolean).join(" ").trim() || null
     }
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
     console.error("[sync-profile-client] Token inválido:", err)
+    if (
+      errMsg.includes("No suitable key") ||
+      errMsg.includes("wrong key type") ||
+      errMsg.includes("signature")
+    ) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "No suitable key or wrong key type. Verifique se CLERK_SECRET_KEY no Supabase (Edge Functions > Secrets) é a Secret Key (sk_test_... ou sk_live_...), não a Publishable Key (pk_...).",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      )
+    }
     return new Response(
       JSON.stringify({
         error: "Token inválido ou expirado. Faça login novamente.",
