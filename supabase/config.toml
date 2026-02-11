@@ -399,6 +399,12 @@ entrypoint = "./functions/clerk-webhook/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/clerk-webhook/*.html" ]
 
+# clerk-invite-vendedor: envia convite Clerk com company_id no publicMetadata. Valida Clerk JWT.
+[functions.clerk-invite-vendedor]
+verify_jwt = false
+import_map = "./functions/clerk-invite-vendedor/deno.json"
+entrypoint = "./functions/clerk-invite-vendedor/index.ts"
+
 # sync-profile-client: usa Clerk JWT (não Supabase). Validação própria com verifyToken do Clerk.
 [functions.sync-profile-client]
 verify_jwt = false

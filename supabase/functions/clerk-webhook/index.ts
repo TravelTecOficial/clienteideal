@@ -13,6 +13,7 @@ interface ClerkUserData {
   primary_email_address_id?: string | null
   first_name?: string | null
   last_name?: string | null
+  public_metadata?: Record<string, unknown>
 }
 
 interface ClerkWebhookEvent {
@@ -93,11 +94,15 @@ Deno.serve(async (req) => {
     )
   }
 
-  const { id, email_addresses = [], primary_email_address_id, first_name, last_name } = evt.data
+  const { id, email_addresses = [], primary_email_address_id, first_name, last_name, public_metadata } = evt.data
   const primaryEmail = primary_email_address_id
     ? email_addresses.find((e) => e.id === primary_email_address_id)?.email_address
     : email_addresses[0]?.email_address
   const fullName = [first_name, last_name].filter(Boolean).join(" ").trim() || null
+
+  const invitedCompanyId = typeof public_metadata?.company_id === "string"
+    ? public_metadata.company_id
+    : null
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -112,33 +117,55 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
   try {
-    // 1. Criar company (necessária para o perfil)
-    const { data: company, error: companyError } = await supabase
-      .from("companies")
-      .insert({
-        name: fullName || "Minha Empresa",
-        slug: `company-${id.replace(/^user_/, "")}`,
-        plan_type: "free",
-        status: "trialing",
-      })
-      .select("id")
-      .single()
+    let companyId: string
 
-    if (companyError) {
-      console.error("[clerk-webhook] Erro ao criar company:", companyError)
-      return new Response(
-        JSON.stringify({ error: companyError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      )
+    if (invitedCompanyId) {
+      // Usuário convidado: usar company_id do publicMetadata (não criar nova company)
+      const { data: existingCompany, error: companyCheckError } = await supabase
+        .from("companies")
+        .select("id")
+        .eq("id", invitedCompanyId)
+        .maybeSingle()
+
+      if (companyCheckError || !existingCompany) {
+        console.error("[clerk-webhook] company_id do convite não encontrado:", invitedCompanyId)
+        return new Response(
+          JSON.stringify({ error: "Empresa do convite não encontrada." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
+      companyId = invitedCompanyId
+    } else {
+      // Self-signup: criar nova company
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .insert({
+          name: fullName || "Minha Empresa",
+          slug: `company-${id.replace(/^user_/, "")}`,
+          plan_type: "free",
+          status: "trialing",
+        })
+        .select("id")
+        .single()
+
+      if (companyError) {
+        console.error("[clerk-webhook] Erro ao criar company:", companyError)
+        return new Response(
+          JSON.stringify({ error: companyError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
+      companyId = company.id
     }
 
-    // 2. Criar profile vinculado à company
+    const role = invitedCompanyId ? "vendedor" : "admin"
+
     const { error: profileError } = await supabase.from("profiles").insert({
       id,
       email: primaryEmail ?? "",
       full_name: fullName,
-      company_id: company.id,
-      role: "admin",
+      company_id: companyId,
+      role,
     })
 
     if (profileError) {
@@ -149,9 +176,17 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log("[clerk-webhook] Perfil criado com sucesso:", { userId: id, companyId: company.id })
+    if (invitedCompanyId && primaryEmail) {
+      await supabase
+        .from("vendedores")
+        .update({ clerk_id: id })
+        .eq("email", primaryEmail.toLowerCase())
+        .eq("company_id", invitedCompanyId)
+    }
+
+    console.log("[clerk-webhook] Perfil criado com sucesso:", { userId: id, companyId, invited: !!invitedCompanyId })
     return new Response(
-      JSON.stringify({ success: true, userId: id, companyId: company.id }),
+      JSON.stringify({ success: true, userId: id, companyId }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   } catch (err) {

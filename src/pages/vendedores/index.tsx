@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { useUser } from "@clerk/clerk-react";
-import { Plus, Edit2, Loader2 } from "lucide-react";
+import { useUser, useAuth } from "@clerk/clerk-react";
+import { Plus, Edit2, Loader2, Mail } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -37,16 +37,19 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Dia da semana: 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex (ISO 8601) */
+/** Dia da semana: 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb (Date.getDay()) */
 const DIAS_SEMANA = [
+  { id: 0, label: "Domingo" },
   { id: 1, label: "Segunda" },
   { id: 2, label: "Terça" },
   { id: 3, label: "Quarta" },
   { id: 4, label: "Quinta" },
   { id: 5, label: "Sexta" },
+  { id: 6, label: "Sábado" },
 ] as const;
 
 interface VendedorRow {
@@ -56,6 +59,7 @@ interface VendedorRow {
   nome: string;
   celular: string | null;
   status: boolean | null;
+  clerk_id: string | null;
 }
 
 interface HorarioRow {
@@ -97,6 +101,7 @@ function timeToInput(value: string | null): string {
 
 export default function VendedoresPage() {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const supabase = useSupabaseClient();
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [vendedores, setVendedores] = useState<VendedorRow[]>([]);
@@ -104,6 +109,8 @@ export default function VendedoresPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [invitingEmail, setInvitingEmail] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [editingEmail, setEditingEmail] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -111,7 +118,11 @@ export default function VendedoresPage() {
     email: "",
     celular: "",
     status: true,
+    sendInvite: false,
   });
+  const [formDiasAtivos, setFormDiasAtivos] = useState<Record<number, boolean>>(
+    Object.fromEntries(DIAS_SEMANA.map((d) => [d.id, d.id >= 1 && d.id <= 5]))
+  );
   const [formHorarios, setFormHorarios] = useState<
     Record<number, { entrada: string; saida: string }>
   >(
@@ -134,7 +145,7 @@ export default function VendedoresPage() {
 
       const { data: vendData, error: vendErr } = await supabase
         .from("vendedores")
-        .select("id, email, company_id, nome, celular, status")
+        .select("id, email, company_id, nome, celular, status, clerk_id")
         .eq("company_id", cid)
         .order("nome");
 
@@ -188,7 +199,11 @@ export default function VendedoresPage() {
 
   const openNew = () => {
     setEditingEmail(null);
-    setForm({ nome: "", email: "", celular: "", status: true });
+    setInviteError(null);
+    setForm({ nome: "", email: "", celular: "", status: true, sendInvite: false });
+    setFormDiasAtivos(
+      Object.fromEntries(DIAS_SEMANA.map((d) => [d.id, d.id >= 1 && d.id <= 5]))
+    );
     setFormHorarios(
       Object.fromEntries(
         DIAS_SEMANA.map((d) => [d.id, { entrada: "08:00", saida: "18:00" }])
@@ -199,22 +214,27 @@ export default function VendedoresPage() {
 
   const openEdit = (v: VendedorRow) => {
     setEditingEmail(v.email);
+    setInviteError(null);
     setForm({
       nome: v.nome ?? "",
       email: v.email,
       celular: v.celular ?? "",
       status: v.status ?? true,
+      sendInvite: false,
     });
     const hrs = horarios[v.email] ?? [];
-    const next: Record<number, { entrada: string; saida: string }> = {};
+    const nextAtivos: Record<number, boolean> = {};
+    const nextHorarios: Record<number, { entrada: string; saida: string }> = {};
     for (const d of DIAS_SEMANA) {
       const h = hrs.find((x) => x.dia_semana === d.id);
-      next[d.id] = {
+      nextAtivos[d.id] = !!h;
+      nextHorarios[d.id] = {
         entrada: timeToInput(h?.entrada ?? null) || "08:00",
         saida: timeToInput(h?.saida ?? null) || "18:00",
       };
     }
-    setFormHorarios(next);
+    setFormDiasAtivos(nextAtivos);
+    setFormHorarios(nextHorarios);
     setIsModalOpen(true);
   };
 
@@ -242,27 +262,98 @@ export default function VendedoresPage() {
       }
 
       for (const d of DIAS_SEMANA) {
+        const ativo = formDiasAtivos[d.id];
         const h = formHorarios[d.id];
-        if (!h) continue;
-        const { error: horErr } = await supabase.from("horarios_vendedor").upsert(
-          {
-            vendedor_email: email,
-            company_id: companyId,
-            dia_semana: d.id,
-            entrada: h.entrada || null,
-            saida: h.saida || null,
-          },
-          { onConflict: "vendedor_email,dia_semana" }
-        );
-        if (horErr) {
-          console.error("Erro ao salvar horário:", horErr);
+        if (ativo && h) {
+          const { error: horErr } = await supabase.from("horarios_vendedor").upsert(
+            {
+              vendedor_email: email,
+              company_id: companyId,
+              dia_semana: d.id,
+              entrada: h.entrada || null,
+              saida: h.saida || null,
+            },
+            { onConflict: "vendedor_email,dia_semana" }
+          );
+          if (horErr) {
+            console.error("Erro ao salvar horário:", horErr);
+          }
+        } else {
+          const { error: delErr } = await supabase
+            .from("horarios_vendedor")
+            .delete()
+            .eq("vendedor_email", email)
+            .eq("company_id", companyId)
+            .eq("dia_semana", d.id);
+          if (delErr) {
+            console.error("Erro ao remover horário:", delErr);
+          }
         }
       }
 
       await loadCompanyAndData();
+
+      if (!editingEmail && form.sendInvite && email) {
+        setInviteError(null);
+        try {
+          const token = await getToken({ template: "supabase" }) ?? await getToken();
+          if (!token) {
+            setInviteError("Sessão expirada. Faça login novamente.");
+            return;
+          }
+          const { data, error } = await supabase.functions.invoke("clerk-invite-vendedor", {
+            body: { email },
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (error) {
+            setInviteError("Erro ao enviar convite. Tente novamente.");
+            return;
+          }
+          const err = (data as { error?: string })?.error;
+          if (err) {
+            setInviteError(err);
+            return;
+          }
+          await loadCompanyAndData();
+        } catch {
+          setInviteError("Erro ao enviar convite. Tente novamente.");
+          return;
+        }
+      }
+
       setIsModalOpen(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleInvite = async (v: VendedorRow) => {
+    setInviteError(null);
+    setInvitingEmail(v.email);
+    try {
+      const token = await getToken({ template: "supabase" }) ?? await getToken();
+      if (!token) {
+        setInviteError("Sessão expirada. Faça login novamente.");
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke("clerk-invite-vendedor", {
+        body: { email: v.email },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (error) {
+        setInviteError("Erro ao enviar convite. Tente novamente.");
+        return;
+      }
+      const err = (data as { error?: string })?.error;
+      if (err) {
+        setInviteError(err);
+        return;
+      }
+      await loadCompanyAndData();
+    } catch {
+      setInviteError("Erro ao enviar convite. Tente novamente.");
+    } finally {
+      setInvitingEmail(null);
     }
   };
 
@@ -326,6 +417,11 @@ export default function VendedoresPage() {
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
     <div className="space-y-6">
+          {inviteError && (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {inviteError}
+            </div>
+          )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
@@ -377,14 +473,32 @@ export default function VendedoresPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEdit(v)}
-                      aria-label={`Editar ${v.nome ?? v.email}`}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      {!v.clerk_id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleInvite(v)}
+                          disabled={!!invitingEmail}
+                          aria-label={`Convidar ${v.nome ?? v.email}`}
+                          title="Enviar convite por e-mail"
+                        >
+                          {invitingEmail === v.email ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Mail className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEdit(v)}
+                        aria-label={`Editar ${v.nome ?? v.email}`}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -400,7 +514,7 @@ export default function VendedoresPage() {
               {editingEmail ? "Editar Vendedor" : "Novo Vendedor"}
             </DialogTitle>
             <DialogDescription>
-              Preencha os dados e os horários de segunda a sexta.
+              Preencha os dados e configure os dias e horários de trabalho.
             </DialogDescription>
           </DialogHeader>
 
@@ -449,10 +563,25 @@ export default function VendedoresPage() {
               />
               <Label htmlFor="status">Ativo</Label>
             </div>
+            {!editingEmail && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="sendInvite"
+                  checked={form.sendInvite}
+                  onChange={(e) => setForm((f) => ({ ...f, sendInvite: e.target.checked }))}
+                  className="h-4 w-4 rounded border-input"
+                />
+                <Label htmlFor="sendInvite">Enviar convite por e-mail ao salvar</Label>
+              </div>
+            )}
 
             <div className="border-t border-border pt-4">
               <p className="mb-3 text-sm font-medium text-foreground">
-                Horários (Segunda a Sexta)
+                Dias e horários de trabalho
+              </p>
+              <p className="mb-4 text-xs text-muted-foreground">
+                Ative o slide para os dias em que o vendedor trabalha.
               </p>
               <div className="space-y-3">
                 {DIAS_SEMANA.map((d) => (
@@ -460,36 +589,49 @@ export default function VendedoresPage() {
                     key={d.id}
                     className="flex flex-wrap items-center gap-2 sm:gap-4"
                   >
-                    <span className="w-16 text-sm text-muted-foreground">{d.label}</span>
-                    <Input
-                      type="time"
-                      value={formHorarios[d.id]?.entrada ?? ""}
-                      onChange={(e) =>
-                        setFormHorarios((prev) => ({
-                          ...prev,
-                          [d.id]: {
-                            ...prev[d.id],
-                            entrada: e.target.value,
-                          },
-                        }))
-                      }
-                      className="w-28"
-                    />
-                    <span className="text-muted-foreground"> até </span>
-                    <Input
-                      type="time"
-                      value={formHorarios[d.id]?.saida ?? ""}
-                      onChange={(e) =>
-                        setFormHorarios((prev) => ({
-                          ...prev,
-                          [d.id]: {
-                            ...prev[d.id],
-                            saida: e.target.value,
-                          },
-                        }))
-                      }
-                      className="w-28"
-                    />
+                    <div className="flex w-24 items-center justify-between gap-2 sm:w-28">
+                      <span className="text-sm text-foreground">{d.label}</span>
+                      <Switch
+                        checked={formDiasAtivos[d.id] ?? false}
+                        onCheckedChange={(checked) =>
+                          setFormDiasAtivos((prev) => ({ ...prev, [d.id]: checked }))
+                        }
+                        aria-label={`Trabalha ${d.label}`}
+                      />
+                    </div>
+                    {formDiasAtivos[d.id] && (
+                      <>
+                        <Input
+                          type="time"
+                          value={formHorarios[d.id]?.entrada ?? ""}
+                          onChange={(e) =>
+                            setFormHorarios((prev) => ({
+                              ...prev,
+                              [d.id]: {
+                                ...prev[d.id],
+                                entrada: e.target.value,
+                              },
+                            }))
+                          }
+                          className="w-28"
+                        />
+                        <span className="text-muted-foreground"> até </span>
+                        <Input
+                          type="time"
+                          value={formHorarios[d.id]?.saida ?? ""}
+                          onChange={(e) =>
+                            setFormHorarios((prev) => ({
+                              ...prev,
+                              [d.id]: {
+                                ...prev[d.id],
+                                saida: e.target.value,
+                              },
+                            }))
+                          }
+                          className="w-28"
+                        />
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
