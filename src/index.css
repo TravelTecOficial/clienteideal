@@ -71,14 +71,15 @@
     --grey-700: 40 15% 20%;
     --grey-800: 40 20% 15%;
     --grey-900: 40 25% 10%;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar: verde primário (Olive Green) */
+    --sidebar-background: 82 20% 35%;       /* Mesmo verde do --primary */
+    --sidebar-foreground: 40 30% 98%;      /* Texto claro sobre verde */
+    --sidebar-primary: 82 20% 25%;         /* Verde mais escuro para ícones */
+    --sidebar-primary-foreground: 40 30% 98%;
+    --sidebar-accent: 82 20% 45%;          /* Verde mais claro no hover */
+    --sidebar-accent-foreground: 40 30% 98%;
+    --sidebar-border: 82 20% 28%;         /* Borda sutil em verde escuro */
+    --sidebar-ring: 82 20% 50%;
   }
 
   /* Modo Escuro (Invertendo para tons de Oliva Profundo) */
@@ -92,14 +93,15 @@
     --border: 25 15% 20%;
     --input: 25 15% 20%;
     --ring: 82 20% 50%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar dark: verde oliva escuro */
+    --sidebar-background: 82 20% 20%;
+    --sidebar-foreground: 40 30% 95%;
+    --sidebar-primary: 82 20% 30%;
+    --sidebar-primary-foreground: 40 30% 98%;
+    --sidebar-accent: 82 20% 28%;
+    --sidebar-accent-foreground: 40 30% 95%;
+    --sidebar-border: 82 20% 15%;
+    --sidebar-ring: 82 20% 50%;
   }
 }
 
