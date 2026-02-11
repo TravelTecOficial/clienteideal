@@ -122,6 +122,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/entrar" replace state={{ from: location }} />
   }
 
+  // Note: UI-level bypass. Update já foi validado em Planos antes da navegação.
+  if (location.state?.fromPlanSelection === true) {
+    return <>{children}</>
+  }
+
   if (planCheckStatus === "loading" || planCheckStatus === "idle") {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-background">
