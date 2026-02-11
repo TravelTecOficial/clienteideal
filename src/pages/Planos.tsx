@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useUser, useAuth } from "@clerk/clerk-react"
+import { isSaasAdmin } from "@/lib/use-saas-admin"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { FunctionsHttpError } from "@supabase/supabase-js"
 import { useSupabaseClient } from "@/lib/supabase-context"
@@ -198,6 +199,11 @@ export function Planos() {
     if (!isLoaded) return
     if (!user) {
       navigate("/entrar", { replace: true })
+      return
+    }
+    // Admin do SaaS → /admin. Note: UI-level check. API enforcement required.
+    if (isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
+      navigate("/admin", { replace: true })
       return
     }
     loadProfile()

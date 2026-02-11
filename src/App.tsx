@@ -1,6 +1,7 @@
 import { Suspense, Component, type ReactNode } from "react"
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { AdminPage } from "@/pages/AdminPage"
 import { DashboardPage } from "@/pages/DashboardPage"
 import { LoginPage } from "@/pages/LoginPage"
 import { SignupPage } from "@/pages/SignupPage"
@@ -77,6 +78,15 @@ function App() {
               <ProtectedRoute>
                 <DashboardPage />
               </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+
+        <Route
+          path="/admin"
+          element={
+            <SupabaseProvider>
+              <AdminPage />
             </SupabaseProvider>
           }
         />

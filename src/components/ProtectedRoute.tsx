@@ -3,6 +3,7 @@ import { useUser } from "@clerk/clerk-react"
 import { Navigate, useLocation } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { useSupabaseClient } from "@/lib/supabase-context"
+import { isSaasAdmin } from "@/lib/use-saas-admin"
 
 interface ProfileWithCompany {
   company_id: string | null
@@ -120,6 +121,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!isSignedIn) {
     return <Navigate to="/entrar" replace state={{ from: location }} />
+  }
+
+  // Admin do SaaS (publicMetadata.role === "admin") → /admin. Note: UI-level check. API enforcement required.
+  if (isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
+    return <Navigate to="/admin" replace />
   }
 
   // Note: UI-level bypass. Update já foi validado em Planos antes da navegação.
