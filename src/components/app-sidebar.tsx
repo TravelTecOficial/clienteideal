@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Link, useLocation } from "react-router-dom"
-import { Minus, Plus } from "lucide-react"
+import { useClerk } from "@clerk/clerk-react"
+import { LogOut, Minus, Plus } from "lucide-react"
 
 import { SearchForm } from "@/components/search-form"
 import {
@@ -11,6 +12,7 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
@@ -45,6 +47,7 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
+  const { signOut } = useClerk()
 
   const isActive = (url: string) => {
     if (url === "/dashboard") return location.pathname === "/dashboard"
@@ -108,6 +111,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={() => signOut({ redirectUrl: "/" })}>
+              <LogOut className="size-4" />
+              Sair
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )

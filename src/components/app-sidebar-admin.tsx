@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Link, useLocation } from "react-router-dom"
-import { Minus, Plus } from "lucide-react"
+import { useClerk } from "@clerk/clerk-react"
+import { LogOut, Minus, Plus } from "lucide-react"
 
 import {
   Collapsible,
@@ -10,6 +11,7 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
@@ -41,6 +43,7 @@ export function AppSidebarAdmin(
   props: React.ComponentProps<typeof Sidebar>
 ) {
   const location = useLocation()
+  const { signOut } = useClerk()
 
   const isActive = (url: string) => {
     if (url === "/admin") return location.pathname === "/admin"
@@ -103,6 +106,16 @@ export function AppSidebarAdmin(
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={() => signOut({ redirectUrl: "/" })}>
+              <LogOut className="size-4" />
+              Sair
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
