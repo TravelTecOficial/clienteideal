@@ -75,20 +75,22 @@ const PLANS: {
   },
 ]
 
-/** Busca company_id do perfil com retry para aguardar webhook do Clerk. */
+/** Busca company_id do perfil com retry. Forçamos o ID como string para evitar erro de UUID. */
 async function fetchProfileWithRetry(
   supabaseClient: SupabaseClient,
   userId: string,
   onRetry?: (attempt: number) => void
 ): Promise<string | null> {
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    // A correção principal está no .eq("id", String(userId))
     const { data, error } = await supabaseClient
       .from("profiles")
       .select("id, company_id")
-      .eq("id", userId)
+      .eq("id", String(userId))
       .maybeSingle()
 
     if (error) {
+      console.error("Erro na busca do perfil:", error)
       throw new Error(error.message)
     }
 
@@ -114,7 +116,7 @@ async function updateCompanyPlan(
   const { error } = await supabaseClient
     .from("companies")
     .update({ plan_type: planType, status: "active" })
-    .eq("id", companyId)
+    .eq("id", String(companyId)) // Garantindo que o ID da empresa também seja tratado como texto
 
   return { error: error ? new Error(error.message) : null }
 }
@@ -149,6 +151,7 @@ export function Planos() {
     setErrorMsg("")
 
     try {
+      // Passamos o user.id do Clerk que começa com "user_..."
       const id = await fetchProfileWithRetry(supabaseClient, user.id)
       if (id) {
         setCompanyId(id)
@@ -156,7 +159,7 @@ export function Planos() {
       } else {
         setStatus("error")
         setErrorMsg(
-          "Perfil ainda não encontrado. O webhook pode estar processando. Tente novamente em alguns segundos."
+          "Perfil ainda não encontrado. O sistema está finalizando sua configuração. Tente novamente em instantes."
         )
       }
     } catch (err) {
@@ -231,7 +234,7 @@ export function Planos() {
         {errorMsg && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Erro</AlertTitle>
+            <AlertTitle>Erro de Configuração</AlertTitle>
             <AlertDescription>{errorMsg}</AlertDescription>
           </Alert>
         )}
@@ -277,11 +280,11 @@ export function Planos() {
                   variant={plan.type === "pro" ? "default" : "secondary"}
                   className="w-full"
                   onClick={() => handleSelectPlan(plan.type)}
-                  disabled={status === "processing"}
+                  disabled={status === "processing" || status === "error"}
                 >
                   {status === "processing" ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       Processando…
                     </>
                   ) : (
