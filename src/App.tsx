@@ -18,6 +18,7 @@ import { AtendimentosPage } from "@/pages/AtendimentosPage"
 import { BaseConhecimentoPage } from "@/pages/BaseConhecimentoPage"
 import { ProdutosServicosPage } from "@/pages/ProdutosServicosPage"
 import { SupabaseProvider } from "@/lib/supabase-context"
+import { Toaster } from "@/components/ui/toast"
 import { StyleguideLayout } from "@/styleguide/StyleguideLayout"
 import { StyleguidePage } from "@/styleguide/StyleguidePage"
 import { componentShowcases, blockShowcases } from "@/styleguide/registry"
@@ -66,6 +67,7 @@ class ShowcaseErrorBoundary extends Component<{ children: ReactNode; fallback?: 
 function App() {
   return (
     <BrowserRouter>
+      <Toaster />
       <Routes>
         <Route path="/" element={<HomePage />} />
         

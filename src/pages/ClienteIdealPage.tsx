@@ -1,5 +1,5 @@
-import { PlaceholderPage } from "@/components/PlaceholderPage"
+import IdealCustomerPage from "@/pages/ideal-customer"
 
 export function ClienteIdealPage() {
-  return <PlaceholderPage title="Cliente Ideal" breadcrumb="Cliente Ideal" />
+  return <IdealCustomerPage />
 }
