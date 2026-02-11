@@ -43,36 +43,36 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar {...props}>
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild className="h-auto p-2">
-              <Link to="/dashboard" className="flex items-center justify-center">
-                <img
-                  src="/logo-cliente-ideal.png"
-                  alt="CLIENTE IDEAL Online"
-                  className="h-12 w-auto max-w-full object-contain"
-                />
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-      <div className="mx-2 flex flex-1 min-h-0 flex-col gap-2 rounded-lg border border-border bg-white p-2 shadow-sm">
+        <div className="mx-2 rounded-lg border border-border bg-white p-2 shadow-sm">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild className="h-auto p-2">
+                <Link to="/dashboard" className="flex items-center justify-center">
+                  <img
+                    src="/logo-cliente-ideal.png"
+                    alt="CLIENTE IDEAL Online"
+                    className="h-12 w-auto max-w-full object-contain"
+                  />
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
         <SearchForm />
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link to={item.url}>{item.title}</Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
-        </SidebarContent>
-      </div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarMenu>
+            {navItems.map((item) => (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                  <Link to={item.url}>{item.title}</Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
