@@ -85,3 +85,5 @@ npx supabase secrets set CLERK_WEBHOOK_SECRET=whsec_...
 
 # Realizar o deploy da Edge Function ignorando validação interna de JWT
 npx supabase functions deploy clerk-webhook --no-verify-jwt
+
+# testando
