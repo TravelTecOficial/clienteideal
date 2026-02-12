@@ -1,9 +1,14 @@
 import * as React from "react"
 import { Link, useLocation } from "react-router-dom"
 import { useClerk } from "@clerk/clerk-react"
-import { LogOut } from "lucide-react"
+import { LogOut, Minus, Plus } from "lucide-react"
 
 import { SearchForm } from "@/components/search-form"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import {
   Sidebar,
   SidebarContent,
@@ -13,10 +18,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-// Menu flat: 11 itens ligados às rotas existentes
+// Itens simples (link direto)
 const navItems = [
   { title: "Home", url: "/dashboard" },
   { title: "Cliente Ideal", url: "/dashboard/cliente-ideal" },
@@ -26,10 +34,18 @@ const navItems = [
   { title: "Agenda", url: "/dashboard/agenda" },
   { title: "Atendimentos", url: "/dashboard/atendimentos" },
   { title: "Base de conhecimento", url: "/dashboard/base-conhecimento" },
-  { title: "Usuários", url: "/admin" },
   { title: "Produtos & Serviços", url: "/dashboard/items" },
   { title: "Perfil", url: "/dashboard/perfil" },
 ]
+
+// Menu Usuários: subitens (Vendedores integrado ao Clerk + Usuários do sistema)
+const usuariosNav = {
+  title: "Usuários",
+  items: [
+    { title: "Vendedores", url: "/dashboard/vendedores" },
+    { title: "Usuários do sistema", url: "/admin" },
+  ],
+}
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
@@ -70,6 +86,39 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
+            <Collapsible
+              defaultOpen={location.pathname.startsWith("/dashboard/vendedores") || location.pathname.startsWith("/admin")}
+              className="group/collapsible"
+            >
+              <SidebarMenuItem>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton
+                    isActive={
+                      location.pathname.startsWith("/dashboard/vendedores") ||
+                      (location.pathname === "/admin")
+                    }
+                  >
+                    {usuariosNav.title}{" "}
+                    <Plus className="ml-auto group-data-[state=open]/collapsible:hidden" />
+                    <Minus className="ml-auto group-data-[state=closed]/collapsible:hidden" />
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <SidebarMenuSub>
+                    {usuariosNav.items.map((subItem) => (
+                      <SidebarMenuSubItem key={subItem.title}>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={isActive(subItem.url)}
+                        >
+                          <Link to={subItem.url}>{subItem.title}</Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              </SidebarMenuItem>
+            </Collapsible>
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
