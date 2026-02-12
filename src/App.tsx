@@ -1,5 +1,5 @@
 import { Suspense, Component, type ReactNode } from "react"
-import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { AdminPage } from "@/pages/admin/AdminPage"
 import { AdminConfigPage } from "@/pages/admin/AdminConfigPage"
@@ -22,27 +22,7 @@ import { Toaster } from "@/components/ui/toast"
 import { StyleguideLayout } from "@/styleguide/StyleguideLayout"
 import { StyleguidePage } from "@/styleguide/StyleguidePage"
 import { componentShowcases, blockShowcases } from "@/styleguide/registry"
-
-function HomePage() {
-  return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="flex justify-end items-center gap-2 px-4 py-4 sm:px-6 lg:px-8">
-        <Link
-          to="/entrar"
-          className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          Entrar
-        </Link>
-        <Link
-          to="/cadastrar"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90"
-        >
-          Cadastrar
-        </Link>
-      </header>
-    </main>
-  )
-}
+import { LandingPage } from "@/pages/LandingPage"
 
 function ShowcaseFallback() {
   return <div className="flex min-h-[200px] items-center justify-center p-8 text-muted-foreground">Carregando…</div>
@@ -69,7 +49,7 @@ function App() {
     <BrowserRouter>
       <Toaster />
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<LandingPage />} />
         
         {/* Note o /* necessário para o Clerk funcionar em sub-rotas */}
         <Route path="/entrar/*" element={<LoginPage />} />
