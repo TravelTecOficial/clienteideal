@@ -660,7 +660,7 @@ export default function OportunidadesPage() {
           onDragEnd={handleDragEnd}
           onDragStart={handleDragStart}
         >
-          <div className="flex-1 flex gap-3 overflow-x-auto pb-4 custom-scrollbar min-h-0">
+          <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
             {STAGES.map((stage) => {
               const opps = opportunitiesByStage[stage.id];
               const sum = stageSums[stage.id];
@@ -673,7 +673,7 @@ export default function OportunidadesPage() {
               return (
                 <div
                   key={stage.id}
-                  className="min-w-[180px] w-[180px] flex flex-col gap-3 flex-shrink-0"
+                  className="min-w-0 flex-1 flex flex-col gap-3"
                 >
                   <div className="flex flex-col px-2">
                     <div className="flex justify-between items-center">
