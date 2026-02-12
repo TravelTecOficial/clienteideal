@@ -178,7 +178,11 @@ export default function QualificacaoPage() {
 
   // Buscar qualificações
   const loadQualificacoes = useCallback(async () => {
-    if (!effectiveCompanyId) return;
+    if (!effectiveCompanyId) {
+      setIsFetching(false);
+      setQualificacoes([]);
+      return;
+    }
     setIsFetching(true);
     try {
       const { data, error } = await supabase
@@ -196,6 +200,7 @@ export default function QualificacaoPage() {
         title: "Erro",
         description: "Falha ao carregar qualificações.",
       });
+      setQualificacoes([]);
     } finally {
       setIsFetching(false);
     }
@@ -299,7 +304,7 @@ export default function QualificacaoPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
+    <div className="p-8 max-w-5xl mx-auto space-y-8 min-h-[400px]">
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">
