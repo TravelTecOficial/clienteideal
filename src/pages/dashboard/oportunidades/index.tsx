@@ -660,18 +660,24 @@ export default function OportunidadesPage() {
           onDragEnd={handleDragEnd}
           onDragStart={handleDragStart}
         >
-          <div className="flex-1 flex gap-4 overflow-x-auto pb-4 custom-scrollbar min-h-0">
+          <div className="flex-1 flex gap-3 overflow-x-auto pb-4 custom-scrollbar min-h-0">
             {STAGES.map((stage) => {
               const opps = opportunitiesByStage[stage.id];
               const sum = stageSums[stage.id];
+              const stageLabelClass =
+                stage.id === "ganho"
+                  ? "font-bold text-sm text-success"
+                  : stage.id === "perdido"
+                    ? "font-bold text-sm text-destructive"
+                    : "font-bold text-sm text-slate-700";
               return (
                 <div
                   key={stage.id}
-                  className="min-w-[300px] w-[300px] flex flex-col gap-3 flex-shrink-0"
+                  className="min-w-[180px] w-[180px] flex flex-col gap-3 flex-shrink-0"
                 >
                   <div className="flex flex-col px-2">
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-sm text-slate-700">
+                      <span className={stageLabelClass}>
                         {stage.label}
                       </span>
                       <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
@@ -704,7 +710,7 @@ export default function OportunidadesPage() {
 
           <DragOverlay>
             {activeOpp ? (
-              <div className="bg-white p-4 rounded-xl border shadow-lg w-[280px]">
+              <div className="bg-white p-4 rounded-xl border shadow-lg w-[180px]">
                 <h3 className="font-bold text-slate-800 text-sm">
                   {activeOpp.title}
                 </h3>
@@ -734,17 +740,17 @@ export default function OportunidadesPage() {
                 : "Nenhuma oportunidade. Use o botão acima para criar."}
             </div>
           ) : (
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[200px]">Título</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Estágio</TableHead>
-                  <TableHead>Vendedor</TableHead>
-                  <TableHead>Produto</TableHead>
-                  <TableHead>Cliente Ideal</TableHead>
-                  <TableHead>Data Prevista</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="w-[25%] min-w-[120px]">Título</TableHead>
+                  <TableHead className="w-[12%] min-w-[80px]">Valor</TableHead>
+                  <TableHead className="w-[14%] min-w-[100px]">Estágio</TableHead>
+                  <TableHead className="w-[14%] min-w-[80px]">Vendedor</TableHead>
+                  <TableHead className="w-[14%] min-w-[80px]">Produto</TableHead>
+                  <TableHead className="w-[14%] min-w-[80px]">Cliente Ideal</TableHead>
+                  <TableHead className="w-[10%] min-w-[70px]">Data Prevista</TableHead>
+                  <TableHead className="w-[7%] min-w-[60px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -753,7 +759,18 @@ export default function OportunidadesPage() {
                     <TableCell className="font-medium">{opp.title}</TableCell>
                     <TableCell>{formatCurrency(opp.value)}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{STAGES.find((s) => s.id === opp.stage)?.label ?? opp.stage}</Badge>
+                      <Badge
+                        variant="secondary"
+                        className={
+                          opp.stage === "ganho"
+                            ? "text-success bg-success/10"
+                            : opp.stage === "perdido"
+                              ? "text-destructive bg-destructive/10"
+                              : ""
+                        }
+                      >
+                        {STAGES.find((s) => s.id === opp.stage)?.label ?? opp.stage}
+                      </Badge>
                     </TableCell>
                     <TableCell>{getSellerName(opp.seller_id) ?? "-"}</TableCell>
                     <TableCell>{getProductName(opp.product_id) ?? "-"}</TableCell>
