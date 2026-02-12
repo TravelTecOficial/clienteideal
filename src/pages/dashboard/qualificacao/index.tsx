@@ -304,18 +304,13 @@ export default function QualificacaoPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8 min-h-[400px]">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">
-            Configurar Qualificador
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Defina as perguntas e critérios de pontuação para as Personas.
-          </p>
-        </div>
-        <Button variant="default" className="gap-2" onClick={handleOpenModal} disabled={!effectiveCompanyId}>
-          <Plus className="h-4 w-4" /> Qualificação
+    <div className="p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Configurar Qualificador
+        </h1>
+        <Button size="sm" onClick={handleOpenModal} disabled={!effectiveCompanyId}>
+          <Plus className="mr-2 h-4 w-4" /> Qualificação
         </Button>
       </div>
 
