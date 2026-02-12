@@ -8,14 +8,40 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // --- Interfaces ---
 interface ProfileRow {
   company_id: string | null;
+}
+
+interface Qualificacao {
+  id: string;
+  pergunta: string;
+  peso: number;
+  resposta_fria: string;
+  resposta_morna: string;
+  resposta_quente: string;
+  ideal_customer_id: string | null;
+  ideal_customers?: { profile_name: string | null } | null;
 }
 
 // --- Helpers ---
@@ -94,9 +120,12 @@ export default function QualificacaoPage() {
   const supabase = useSupabaseClient();
   const { toast } = useToast();
 
+  const [qualificacoes, setQualificacoes] = useState<Qualificacao[]>([]);
   const [personas, setPersonas] = useState<{ id: string; profile_name: string }[]>([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [isFetching, setIsFetching] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const effectiveCompanyId = companyId ?? organization?.id ?? null;
 
@@ -147,6 +176,65 @@ export default function QualificacaoPage() {
     loadPersonas();
   }, [loadPersonas]);
 
+  // Buscar qualificações
+  const loadQualificacoes = useCallback(async () => {
+    if (!effectiveCompanyId) return;
+    setIsFetching(true);
+    try {
+      const { data, error } = await supabase
+        .from("qualificacoes")
+        .select("id, pergunta, peso, resposta_fria, resposta_morna, resposta_quente, ideal_customer_id, ideal_customers(profile_name)")
+        .eq("company_id", effectiveCompanyId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setQualificacoes((data as Qualificacao[]) ?? []);
+    } catch (err) {
+      console.error("Erro ao carregar qualificações:", err);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Falha ao carregar qualificações.",
+      });
+    } finally {
+      setIsFetching(false);
+    }
+  }, [effectiveCompanyId, supabase, toast]);
+
+  useEffect(() => {
+    loadQualificacoes();
+  }, [loadQualificacoes]);
+
+  async function handleDelete(q: Qualificacao) {
+    if (!userId) return;
+    const confirmed = window.confirm(
+      `Excluir a qualificação "${q.pergunta}"? Esta ação não pode ser desfeita.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from("qualificacoes")
+        .delete()
+        .eq("id", q.id)
+        .eq("company_id", effectiveCompanyId ?? "");
+
+      if (error) throw error;
+
+      toast({
+        title: "Qualificação excluída",
+        description: "A qualificação foi removida.",
+      });
+      loadQualificacoes();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao excluir",
+        description: err instanceof Error ? err.message : "Erro desconhecido",
+      });
+    }
+  }
+
   async function onSubmit(values: FormValues) {
     if (!effectiveCompanyId || !userId) {
       toast({
@@ -179,6 +267,8 @@ export default function QualificacaoPage() {
         description: "Qualificação salva com sucesso.",
       });
       form.reset();
+      setIsModalOpen(false);
+      loadQualificacoes();
     } catch (err) {
       toast({
         variant: "destructive",
@@ -196,6 +286,18 @@ export default function QualificacaoPage() {
     { id: "quente" as const, label: "Quente (10pts)", dotClass: "bg-destructive" },
   ];
 
+  const handleOpenModal = () => {
+    form.reset({
+      pergunta: "",
+      peso: "1",
+      ideal_customer_id: "",
+      resposta_fria: "",
+      resposta_morna: "",
+      resposta_quente: "",
+    });
+    setIsModalOpen(true);
+  };
+
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8">
       <div className="flex justify-between items-start">
@@ -207,18 +309,82 @@ export default function QualificacaoPage() {
             Defina as perguntas e critérios de pontuação para as Personas.
           </p>
         </div>
-        <Button variant="default" className="gap-2">
-          <Plus className="h-4 w-4" /> Adicionar Pergunta
+        <Button variant="default" className="gap-2" onClick={handleOpenModal} disabled={!effectiveCompanyId}>
+          <Plus className="h-4 w-4" /> Qualificação
         </Button>
       </div>
 
-      <form
-        onSubmit={form.handleSubmit(onSubmit)}
-        className="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
-      >
-        <div className="p-8 space-y-10">
-          {/* Persona e Peso */}
-          <div className="flex gap-6">
+      {/* Listagem de qualificações */}
+      <div className="border border-border rounded-md">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-foreground">Pergunta</TableHead>
+              <TableHead className="text-foreground">Persona</TableHead>
+              <TableHead className="text-foreground">Peso</TableHead>
+              <TableHead className="text-right text-foreground">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isFetching ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-10">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                </TableCell>
+              </TableRow>
+            ) : qualificacoes.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  className="text-center py-10 text-muted-foreground"
+                >
+                  Nenhuma qualificação encontrada. Clique em &quot;+ Qualificação&quot; para adicionar.
+                </TableCell>
+              </TableRow>
+            ) : (
+              qualificacoes.map((q) => (
+                <TableRow key={q.id}>
+                  <TableCell className="font-medium text-foreground">
+                    {q.pergunta}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {q.ideal_customers?.profile_name ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-foreground">{q.peso}x</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDelete(q)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Modal Novo/Editar Qualificação */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">
+              Nova Qualificação
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Preencha os campos para cadastrar uma nova pergunta de qualificação.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-6 pt-4"
+          >
+            {/* Persona e Peso */}
+            <div className="flex gap-6">
             <div className="flex-1 space-y-2">
               <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
                 Vincular ao Cliente Ideal (Persona)
@@ -295,29 +461,30 @@ export default function QualificacaoPage() {
             ))}
           </div>
 
-          {/* Botões */}
-          <div className="pt-8 border-t border-border flex justify-end items-center gap-4">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => form.reset()}
-              className="text-muted-foreground font-semibold hover:text-foreground"
-            >
-              Descartar alterações
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 h-11 rounded-xl font-bold"
-            >
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              Salvar Qualificação
-            </Button>
-          </div>
-        </div>
-      </form>
+            {/* Botões */}
+            <div className="pt-6 border-t border-border flex justify-end items-center gap-4">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsModalOpen(false)}
+                className="text-muted-foreground font-semibold hover:text-foreground"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={loading}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 h-11 rounded-xl font-bold"
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Salvar Qualificação
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
