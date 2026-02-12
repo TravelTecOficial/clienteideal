@@ -1,6 +1,31 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth, useOrganization } from "@clerk/clerk-react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { useSupabaseClient } from "@/lib/supabase-context";
+
+// --- Helpers ---
+interface ProfileRow {
+  company_id: string | null;
+}
+
+async function fetchCompanyId(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("company_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Erro ao buscar company_id:", error);
+    return null;
+  }
+  const profile = data as ProfileRow | null;
+  return profile?.company_id ?? null;
+}
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -63,11 +88,22 @@ export default function IdealCustomerPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
+  const [companyId, setCompanyId] = useState<string | null>(null);
   const [clientes, setClientes] = useState<IdealCustomerRow[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const companyId = organization?.id ?? null;
+  const effectiveCompanyId = companyId ?? organization?.id ?? null;
+
+  // Buscar company_id do perfil (como nas outras páginas do dashboard)
+  useEffect(() => {
+    async function init() {
+      if (!userId) return;
+      const cid = await fetchCompanyId(supabase, userId);
+      setCompanyId(cid);
+    }
+    init();
+  }, [userId, supabase]);
 
   const form = useForm<IdealCustomerFormValues>({
     resolver: zodResolver(idealCustomerSchema),
@@ -81,13 +117,17 @@ export default function IdealCustomerPage() {
   });
 
   const loadClientes = useCallback(async () => {
-    if (!companyId) return;
+    if (!effectiveCompanyId) {
+      setIsFetching(false);
+      setClientes([]);
+      return;
+    }
     setIsFetching(true);
     try {
       const { data, error } = await supabase
         .from("ideal_customers")
         .select("id, profile_name, job_title, location")
-        .eq("company_id", companyId)
+        .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -102,7 +142,7 @@ export default function IdealCustomerPage() {
     } finally {
       setIsFetching(false);
     }
-  }, [companyId, supabase, toast]);
+  }, [effectiveCompanyId, supabase, toast]);
 
   useEffect(() => {
     loadClientes();
@@ -168,7 +208,7 @@ export default function IdealCustomerPage() {
   };
 
   async function onSubmit(values: IdealCustomerFormValues) {
-    if (!companyId || !userId) return;
+    if (!effectiveCompanyId || !userId) return;
 
     setIsLoading(true);
     try {
@@ -188,7 +228,7 @@ export default function IdealCustomerPage() {
         common_objections: values.common_objections?.trim() || null,
         target_product: values.target_product?.trim() || null,
         user_id: userId,
-        company_id: companyId,
+        company_id: effectiveCompanyId,
         updated_at: new Date().toISOString(),
       };
 
@@ -197,7 +237,7 @@ export default function IdealCustomerPage() {
           .from("ideal_customers")
           .update(payload)
           .eq("id", editingId)
-          .eq("company_id", companyId);
+          .eq("company_id", effectiveCompanyId);
 
         if (error) throw error;
         toast({
@@ -231,7 +271,7 @@ export default function IdealCustomerPage() {
   }
 
   async function handleDelete(c: IdealCustomerRow) {
-    if (!companyId) return;
+    if (!effectiveCompanyId) return;
     const confirmed = window.confirm(
       `Excluir o cliente ideal "${c.profile_name ?? "Sem nome"}"? Esta ação não pode ser desfeita.`
     );
@@ -242,7 +282,7 @@ export default function IdealCustomerPage() {
         .from("ideal_customers")
         .delete()
         .eq("id", c.id)
-        .eq("company_id", companyId);
+        .eq("company_id", effectiveCompanyId);
 
       if (error) throw error;
       toast({
@@ -270,7 +310,7 @@ export default function IdealCustomerPage() {
             Cadastre e gerencie os perfis de clientes ideais para a IA.
           </p>
         </div>
-        <Button onClick={handleOpenNew} disabled={!companyId}>
+        <Button onClick={handleOpenNew} disabled={!effectiveCompanyId}>
           <Plus className="mr-2 h-4 w-4" /> Novo Cliente Ideal
         </Button>
       </div>
