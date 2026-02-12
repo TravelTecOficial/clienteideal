@@ -1,4 +1,16 @@
-# React + TypeScript + Vite
+# Cliente Ideal Online v1.0.0
+
+Plataforma SaaS de qualificação de leads e gestão comercial.
+
+## Documentação
+
+Para documentação completa do sistema, consulte: **[docs/DOCUMENTACAO_SISTEMA_V1.md](./docs/DOCUMENTACAO_SISTEMA_V1.md)**
+
+---
+
+## Stack
+
+React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
