@@ -315,7 +315,7 @@ export default function QualificacaoPage() {
       </div>
 
       {/* Listagem de qualificações */}
-      <div className="border border-border rounded-md">
+      <div className="border border-border rounded-md bg-white">
         <Table>
           <TableHeader>
             <TableRow>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useUser, useAuth } from "@clerk/clerk-react";
-import { Plus, Edit2, Loader2, Mail } from "lucide-react";
+import { Plus, Edit2, Loader2, Mail, User, Clock } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -17,6 +17,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -472,7 +473,7 @@ export default function VendedoresPage() {
         </Button>
       </div>
 
-      <div className="rounded-lg border border-border bg-card">
+      <div className="rounded-md border border-border bg-white">
         <Table>
           <TableHeader>
             <TableRow>
@@ -566,69 +567,80 @@ export default function VendedoresPage() {
             </div>
           )}
 
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="nome">Nome</Label>
-              <Input
-                id="nome"
-                value={form.nome}
-                onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
-                placeholder="Nome completo"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">E-mail</Label>
-              <Input
-                id="email"
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="vendedor@empresa.com"
-                disabled={!!editingEmail}
-              />
-              {editingEmail && (
-                <p className="text-xs text-muted-foreground">
-                  E-mail não pode ser alterado (âncora do registro).
-                </p>
-              )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="celular">Celular</Label>
-              <Input
-                id="celular"
-                value={form.celular}
-                onChange={(e) => setForm((f) => ({ ...f, celular: e.target.value }))}
-                placeholder="(11) 99999-9999"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="status"
-                checked={form.status}
-                onChange={(e) => setForm((f) => ({ ...f, status: e.target.checked }))}
-                className="h-4 w-4 rounded border-input"
-              />
-              <Label htmlFor="status">Ativo</Label>
-            </div>
-            {!editingEmail && (
+          <Tabs defaultValue="dados" className="w-full py-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="dados" className="gap-2">
+                <User className="h-4 w-4" /> Dados
+              </TabsTrigger>
+              <TabsTrigger value="horarios" className="gap-2">
+                <Clock className="h-4 w-4" /> Horários
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="dados" className="space-y-4 pt-4">
+              <div className="grid gap-2">
+                <Label htmlFor="nome">Nome</Label>
+                <Input
+                  id="nome"
+                  value={form.nome}
+                  onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
+                  placeholder="Nome completo"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="email">E-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="vendedor@empresa.com"
+                  disabled={!!editingEmail}
+                />
+                {editingEmail && (
+                  <p className="text-xs text-muted-foreground">
+                    E-mail não pode ser alterado (âncora do registro).
+                  </p>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="celular">Celular</Label>
+                <Input
+                  id="celular"
+                  value={form.celular}
+                  onChange={(e) => setForm((f) => ({ ...f, celular: e.target.value }))}
+                  placeholder="(11) 99999-9999"
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  id="sendInvite"
-                  checked={form.sendInvite}
-                  onChange={(e) => setForm((f) => ({ ...f, sendInvite: e.target.checked }))}
+                  id="status"
+                  checked={form.status}
+                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.checked }))}
                   className="h-4 w-4 rounded border-input"
                 />
-                <Label htmlFor="sendInvite">Enviar convite por e-mail ao salvar</Label>
+                <Label htmlFor="status">Ativo</Label>
               </div>
-            )}
+              {!editingEmail && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="sendInvite"
+                    checked={form.sendInvite}
+                    onChange={(e) => setForm((f) => ({ ...f, sendInvite: e.target.checked }))}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  <Label htmlFor="sendInvite">Enviar convite por e-mail ao salvar</Label>
+                </div>
+              )}
+            </TabsContent>
 
-            <div className="border-t border-border pt-4">
-              <p className="mb-3 text-sm font-medium text-foreground">
+            <TabsContent value="horarios" className="space-y-4 pt-4">
+              <p className="text-sm font-medium text-foreground">
                 Dias e horários de trabalho
               </p>
-              <p className="mb-4 text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Ative o slide para os dias em que o vendedor trabalha.
               </p>
               <div className="space-y-3">
@@ -683,8 +695,8 @@ export default function VendedoresPage() {
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsModalOpen(false)}>

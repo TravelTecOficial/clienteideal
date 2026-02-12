@@ -276,7 +276,7 @@ export default function AgendaPage() {
         </div>
       </div>
 
-      <Card className="border-none shadow-sm bg-background">
+      <Card className="border border-border rounded-md bg-white shadow-sm">
         <CardContent className="p-0">
           {isFetching ? (
             <div className="flex items-center justify-center py-16">

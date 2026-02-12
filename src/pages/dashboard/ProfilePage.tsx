@@ -143,7 +143,7 @@ export function ProfilePage() {
           </Breadcrumb>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
-          <Card className="border-border bg-card">
+          <Card className="border border-border rounded-md bg-white shadow-sm">
             <CardHeader>
               <CardTitle className="text-foreground">Meu perfil</CardTitle>
               <CardDescription className="text-muted-foreground">

@@ -504,7 +504,7 @@ function ItemsTable({
   onDelete: (item: Item) => void;
 }) {
   return (
-    <div className="border border-border rounded-md">
+    <div className="border border-border rounded-md bg-white">
       <Table>
         <TableHeader>
           <TableRow>
