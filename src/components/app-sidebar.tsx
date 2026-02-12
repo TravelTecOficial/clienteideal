@@ -27,7 +27,7 @@ const navItems = [
   { title: "Atendimentos", url: "/dashboard/atendimentos" },
   { title: "Base de conhecimento", url: "/dashboard/base-conhecimento" },
   { title: "Usuários", url: "/admin" },
-  { title: "Produtos & Serviços", url: "/dashboard/produtos-servicos" },
+  { title: "Produtos & Serviços", url: "/dashboard/items" },
   { title: "Perfil", url: "/dashboard/perfil" },
 ]
 

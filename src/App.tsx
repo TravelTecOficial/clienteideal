@@ -1,5 +1,5 @@
 import { Suspense, Component, type ReactNode } from "react"
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { AdminPage } from "@/pages/admin/AdminPage"
 import { AdminConfigPage } from "@/pages/admin/AdminConfigPage"
@@ -185,7 +185,7 @@ function App() {
           }
         />
         <Route
-          path="/dashboard/produtos-servicos"
+          path="/dashboard/items"
           element={
             <SupabaseProvider>
               <ProtectedRoute>
@@ -193,6 +193,10 @@ function App() {
               </ProtectedRoute>
             </SupabaseProvider>
           }
+        />
+        <Route
+          path="/dashboard/produtos-servicos"
+          element={<Navigate to="/dashboard/items" replace />}
         />
 
         <Route
