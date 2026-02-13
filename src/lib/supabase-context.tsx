@@ -18,8 +18,11 @@ interface SupabaseProviderProps {
 }
 
 /**
- * Provider que cria um cliente Supabase autenticado com o token do Clerk.
- * Deve ser usado dentro de ClerkProvider para que RLS funcione com auth.uid().
+ * Provider que cria um cliente Supabase autenticado com o JWT do Clerk.
+ * Usa o token de sessão padrão (Third-Party Auth). O token precisa ter claim role: "authenticated".
+ * Configure em Clerk: Sessions > Customize session token > { "role": "authenticated" }
+ * Configure em Supabase: Authentication > Third-Party Auth > Add Clerk (domain: artistic-stingray-67.clerk.accounts.dev)
+ * RLS usa auth.jwt() ->> 'sub' para validar o usuário.
  */
 export function SupabaseProvider({ children }: SupabaseProviderProps) {
   const { getToken } = useAuth()
@@ -28,8 +31,9 @@ export function SupabaseProvider({ children }: SupabaseProviderProps) {
   const client = useMemo(() => {
     if (!clientRef.current) {
       clientRef.current = createSupabaseClient(async () => {
-        const token = await getToken({ template: "supabase" })
-        return token ?? (await getToken()) ?? null
+        // Token de sessão (sem template) = Supabase Third-Party Auth valida via JWKS do Clerk
+        const token = await getToken()
+        return token ?? null
       })
     }
     return clientRef.current

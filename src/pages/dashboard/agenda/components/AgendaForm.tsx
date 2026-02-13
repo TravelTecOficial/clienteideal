@@ -16,8 +16,23 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+function getMinDateTime(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const h = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d}T${h}:${min}`;
+}
+
 const agendaFormSchema = z.object({
-  data_hora: z.string().min(1, "Data/hora obrigatória"),
+  data_hora: z
+    .string()
+    .min(1, "Data/hora obrigatória")
+    .refine((val) => new Date(val) >= new Date(), {
+      message: "Data/hora não pode ser anterior a agora",
+    }),
   tipo_reuniao: z.string().min(2, "Tipo de reunião obrigatório"),
   vendedor_id: z.string().optional(),
   status: z.enum(["Pendente", "Confirmado", "Cancelado", "Finalizado"]),
@@ -26,9 +41,9 @@ const agendaFormSchema = z.object({
 
 export type AgendaFormValues = z.infer<typeof agendaFormSchema>;
 
-export interface ProfileOption {
+export interface VendedorOption {
   id: string;
-  full_name: string | null;
+  nome: string;
 }
 
 const STATUS_OPTIONS: { value: AgendaFormValues["status"]; label: string }[] = [
@@ -42,14 +57,14 @@ interface AgendaFormProps {
   onSubmit: (values: AgendaFormValues) => void | Promise<void>;
   defaultValues?: Partial<AgendaFormValues>;
   isSaving: boolean;
-  profiles: ProfileOption[];
+  vendedores: VendedorOption[];
 }
 
 export function AgendaForm({
   onSubmit,
   defaultValues,
   isSaving,
-  profiles,
+  vendedores,
 }: AgendaFormProps) {
   const form = useForm<AgendaFormValues>({
     resolver: zodResolver(agendaFormSchema),
@@ -73,6 +88,7 @@ export function AgendaForm({
         <Input
           id="data_hora"
           type="datetime-local"
+          min={getMinDateTime()}
           {...form.register("data_hora")}
         />
         {form.formState.errors.data_hora && (
@@ -109,9 +125,9 @@ export function AgendaForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Nenhum</SelectItem>
-            {profiles.map((profile) => (
-              <SelectItem key={profile.id} value={profile.id}>
-                {profile.full_name ?? profile.id}
+            {vendedores.map((v) => (
+              <SelectItem key={v.id} value={v.id}>
+                {v.nome}
               </SelectItem>
             ))}
           </SelectContent>

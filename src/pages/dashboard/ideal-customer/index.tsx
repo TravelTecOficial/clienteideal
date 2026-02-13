@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useAuth, useOrganization } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useSupabaseClient } from "@/lib/supabase-context";
 
@@ -83,7 +83,6 @@ interface IdealCustomerRow {
 
 export default function IdealCustomerPage() {
   const { userId } = useAuth();
-  const { organization } = useOrganization();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -93,7 +92,7 @@ export default function IdealCustomerPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const effectiveCompanyId = companyId ?? organization?.id ?? null;
+  const effectiveCompanyId = companyId;
 
   // Buscar company_id do perfil (como nas outras páginas do dashboard)
   useEffect(() => {
@@ -229,7 +228,6 @@ export default function IdealCustomerPage() {
         target_product: values.target_product?.trim() || null,
         user_id: userId,
         company_id: effectiveCompanyId,
-        updated_at: new Date().toISOString(),
       };
 
       if (editingId) {

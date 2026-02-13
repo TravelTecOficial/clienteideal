@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth, useOrganization } from "@clerk/clerk-react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { Button } from "@/components/ui/button";
@@ -25,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Trash2 } from "lucide-react";
+import { Plus, Loader2, Trash2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // --- Interfaces ---
@@ -33,15 +30,21 @@ interface ProfileRow {
   company_id: string | null;
 }
 
-interface Qualificacao {
+interface Qualificador {
+  id: string;
+  nome: string;
+  ideal_customer_id: string | null;
+  ideal_customers?: { profile_name: string | null } | null;
+  perguntas_count?: number;
+}
+
+interface PerguntaLocal {
   id: string;
   pergunta: string;
   peso: number;
   resposta_fria: string;
   resposta_morna: string;
   resposta_quente: string;
-  ideal_customer_id: string | null;
-  ideal_customers?: { profile_name: string | null } | null;
 }
 
 // --- Helpers ---
@@ -63,17 +66,9 @@ async function fetchCompanyId(
   return profile?.company_id ?? null;
 }
 
-// --- Schema ---
-const formSchema = z.object({
-  pergunta: z.string().min(5, "A pergunta deve ser mais descritiva"),
-  peso: z.string(),
-  ideal_customer_id: z.string().min(1, "Selecione um Cliente Ideal"),
-  resposta_fria: z.string().min(1, "Campo obrigatório"),
-  resposta_morna: z.string().min(1, "Campo obrigatório"),
-  resposta_quente: z.string().min(1, "Campo obrigatório"),
-});
-
-type FormValues = z.infer<typeof formSchema>;
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 11);
+}
 
 // --- Select estilizado (native) ---
 function StyledSelect({
@@ -114,32 +109,33 @@ function StyledSelect({
   );
 }
 
+const respostasConfig = [
+  { id: "fria" as const, label: "Frio (1pt)", dotClass: "bg-info" },
+  { id: "morna" as const, label: "Morno (5pts)", dotClass: "bg-warning" },
+  { id: "quente" as const, label: "Quente (10pts)", dotClass: "bg-destructive" },
+];
+
 export default function QualificacaoPage() {
   const { userId } = useAuth();
-  const { organization } = useOrganization();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
 
-  const [qualificacoes, setQualificacoes] = useState<Qualificacao[]>([]);
+  const [qualificadores, setQualificadores] = useState<Qualificador[]>([]);
   const [personas, setPersonas] = useState<{ id: string; profile_name: string }[]>([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const effectiveCompanyId = companyId ?? organization?.id ?? null;
+  // Modal state: nome + persona + loop de perguntas
+  const [nome, setNome] = useState("");
+  const [idealCustomerId, setIdealCustomerId] = useState("");
+  const [perguntas, setPerguntas] = useState<PerguntaLocal[]>([
+    { id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" },
+  ]);
+  const [qualificadorIdToEdit, setQualificadorIdToEdit] = useState<string | null>(null);
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      pergunta: "",
-      peso: "1",
-      ideal_customer_id: "",
-      resposta_fria: "",
-      resposta_morna: "",
-      resposta_quente: "",
-    },
-  });
+  const effectiveCompanyId = companyId;
 
   // Buscar company_id
   useEffect(() => {
@@ -176,50 +172,75 @@ export default function QualificacaoPage() {
     loadPersonas();
   }, [loadPersonas]);
 
-  // Buscar qualificações
-  const loadQualificacoes = useCallback(async () => {
+  // Buscar qualificadores
+  const loadQualificadores = useCallback(async () => {
     if (!effectiveCompanyId) {
       setIsFetching(false);
-      setQualificacoes([]);
+      setQualificadores([]);
       return;
     }
     setIsFetching(true);
     try {
-      const { data, error } = await supabase
-        .from("qualificacoes")
-        .select("id, pergunta, peso, resposta_fria, resposta_morna, resposta_quente, ideal_customer_id, ideal_customers(profile_name)")
+      const { data: qualData, error: qualError } = await supabase
+        .from("qualificadores")
+        .select("id, nome, ideal_customer_id, ideal_customers(profile_name)")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setQualificacoes((data as Qualificacao[]) ?? []);
+      if (qualError) throw qualError;
+
+      const qualList = (qualData ?? []) as Qualificador[];
+      if (qualList.length === 0) {
+        setQualificadores([]);
+        return;
+      }
+
+      const ids = qualList.map((q) => q.id);
+      const { data: pergData } = await supabase
+        .from("qualificacao_perguntas")
+        .select("qualificador_id")
+        .in("qualificador_id", ids);
+
+      const countByQual: Record<string, number> = {};
+      ids.forEach((id) => { countByQual[id] = 0; });
+      (pergData ?? []).forEach((p: { qualificador_id: string }) => {
+        countByQual[p.qualificador_id] = (countByQual[p.qualificador_id] ?? 0) + 1;
+      });
+
+      const withCount = qualList.map((q) => ({
+        ...q,
+        perguntas_count: countByQual[q.id] ?? 0,
+      }));
+
+      setQualificadores(withCount);
     } catch (err) {
-      console.error("Erro ao carregar qualificações:", err);
+      console.error("Erro ao carregar qualificadores:", err);
+      const msg = err instanceof Error ? err.message : "Erro desconhecido";
       toast({
         variant: "destructive",
         title: "Erro",
-        description: "Falha ao carregar qualificações.",
+        description: `Falha ao carregar qualificadores. ${msg}`,
       });
-      setQualificacoes([]);
+      setQualificadores([]);
     } finally {
       setIsFetching(false);
     }
   }, [effectiveCompanyId, supabase, toast]);
 
   useEffect(() => {
-    loadQualificacoes();
-  }, [loadQualificacoes]);
+    loadQualificadores();
+  }, [loadQualificadores]);
 
-  async function handleDelete(q: Qualificacao) {
+  async function handleDelete(q: Qualificador) {
     if (!userId) return;
     const confirmed = window.confirm(
-      `Excluir a qualificação "${q.pergunta}"? Esta ação não pode ser desfeita.`
+      `Excluir o qualificador "${q.nome}"? Esta ação não pode ser desfeita.`
     );
     if (!confirmed) return;
 
     try {
       const { error } = await supabase
-        .from("qualificacoes")
+        .from("qualificadores")
         .delete()
         .eq("id", q.id)
         .eq("company_id", effectiveCompanyId ?? "");
@@ -227,10 +248,10 @@ export default function QualificacaoPage() {
       if (error) throw error;
 
       toast({
-        title: "Qualificação excluída",
-        description: "A qualificação foi removida.",
+        title: "Qualificador excluído",
+        description: "O qualificador foi removido.",
       });
-      loadQualificacoes();
+      loadQualificadores();
     } catch (err) {
       toast({
         variant: "destructive",
@@ -240,7 +261,45 @@ export default function QualificacaoPage() {
     }
   }
 
-  async function onSubmit(values: FormValues) {
+  function addPergunta() {
+    setPerguntas((prev) => [
+      ...prev,
+      { id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" },
+    ]);
+  }
+
+  function removePergunta(id: string) {
+    if (perguntas.length <= 1) return;
+    setPerguntas((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function updatePergunta(id: string, field: keyof PerguntaLocal, value: string | number) {
+    setPerguntas((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, [field]: value } : p))
+    );
+  }
+
+  function validateForm(): string | null {
+    const nomeTrim = nome.trim();
+    if (!nomeTrim || nomeTrim.length < 3) {
+      return "O nome do qualificador deve ter pelo menos 3 caracteres.";
+    } else if (perguntas.every((p) => !p.pergunta.trim())) {
+      return "Adicione pelo menos uma pergunta.";
+    }
+    for (let i = 0; i < perguntas.length; i++) {
+      const p = perguntas[i];
+      if (!p.pergunta.trim()) {
+        return `A pergunta ${i + 1} está vazia. Preencha ou remova.`;
+      }
+      const hasResposta = p.resposta_fria.trim() || p.resposta_morna.trim() || p.resposta_quente.trim();
+      if (!hasResposta) {
+        return `A pergunta ${i + 1} precisa de pelo menos uma resposta (Fria, Morna ou Quente).`;
+      }
+    }
+    return null;
+  }
+
+  async function handleSubmit() {
     if (!effectiveCompanyId || !userId) {
       toast({
         variant: "destructive",
@@ -250,58 +309,190 @@ export default function QualificacaoPage() {
       return;
     }
 
+    const err = validateForm();
+    if (err) {
+      toast({
+        variant: "destructive",
+        title: "Dados inválidos",
+        description: err,
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const pesoInt = parseInt(values.peso, 10) || 1;
+      let qualificadorId: string;
 
-      const { error } = await supabase.from("qualificacoes").insert({
-        company_id: effectiveCompanyId,
-        user_id: userId,
-        ideal_customer_id: values.ideal_customer_id || null,
-        pergunta: values.pergunta.trim(),
-        peso: pesoInt,
-        resposta_fria: values.resposta_fria.trim(),
-        resposta_morna: values.resposta_morna.trim(),
-        resposta_quente: values.resposta_quente.trim(),
-      });
+      if (qualificadorIdToEdit) {
+        const { error: errUpdate } = await supabase
+          .from("qualificadores")
+          .update({
+            nome: nome.trim(),
+            ideal_customer_id: idealCustomerId || null,
+          })
+          .eq("id", qualificadorIdToEdit)
+          .eq("company_id", effectiveCompanyId);
 
-      if (error) throw error;
+        if (errUpdate) throw errUpdate;
+        qualificadorId = qualificadorIdToEdit;
+
+        const { error: errDel } = await supabase
+          .from("qualificacao_perguntas")
+          .delete()
+          .eq("qualificador_id", qualificadorIdToEdit);
+
+        if (errDel) throw errDel;
+      } else {
+        const { data: qualificador, error: errQual } = await supabase
+          .from("qualificadores")
+          .insert({
+            company_id: effectiveCompanyId,
+            user_id: userId,
+            nome: nome.trim(),
+            ideal_customer_id: idealCustomerId || null,
+          })
+          .select("id")
+          .single();
+
+        if (errQual || !qualificador) {
+          throw errQual ?? new Error("Falha ao criar qualificador");
+        }
+        qualificadorId = qualificador.id;
+      }
+
+      const perguntasValidas = perguntas.filter(
+        (p) => p.pergunta.trim() && (p.resposta_fria.trim() || p.resposta_morna.trim() || p.resposta_quente.trim())
+      );
+
+      for (let i = 0; i < perguntasValidas.length; i++) {
+        const p = perguntasValidas[i];
+        const { data: pergunta, error: errPerg } = await supabase
+          .from("qualificacao_perguntas")
+          .insert({
+            qualificador_id: qualificadorId,
+            pergunta: p.pergunta.trim(),
+            peso: Math.min(3, Math.max(1, p.peso)),
+            ordem: i + 1,
+          })
+          .select("id")
+          .single();
+
+        if (errPerg || !pergunta) {
+          throw new Error(errPerg?.message ?? `Falha ao criar pergunta ${i + 1}`);
+        }
+
+        const respostas: { pergunta_id: string; resposta_texto: string; tipo: "fria" | "morna" | "quente" }[] = [];
+        if (p.resposta_fria.trim()) respostas.push({ pergunta_id: pergunta.id, resposta_texto: p.resposta_fria.trim(), tipo: "fria" });
+        if (p.resposta_morna.trim()) respostas.push({ pergunta_id: pergunta.id, resposta_texto: p.resposta_morna.trim(), tipo: "morna" });
+        if (p.resposta_quente.trim()) respostas.push({ pergunta_id: pergunta.id, resposta_texto: p.resposta_quente.trim(), tipo: "quente" });
+
+        if (respostas.length > 0) {
+          const { error: errResp } = await supabase.from("qualificacao_respostas").insert(respostas);
+          if (errResp) {
+            throw new Error(errResp.message ?? `Falha ao salvar respostas da pergunta ${i + 1}`);
+          }
+        }
+      }
 
       toast({
-        title: "Sucesso!",
-        description: "Qualificação salva com sucesso.",
+        title: qualificadorIdToEdit ? "Qualificador atualizado" : "Qualificador salvo",
+        description: qualificadorIdToEdit
+          ? "O qualificador foi atualizado com sucesso."
+          : "O qualificador foi criado com sucesso.",
       });
-      form.reset();
+
+      setQualificadorIdToEdit(null);
+      setNome("");
+      setIdealCustomerId("");
+      setPerguntas([
+        { id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" },
+      ]);
       setIsModalOpen(false);
-      loadQualificacoes();
+      loadQualificadores();
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao salvar dados.";
       toast({
         variant: "destructive",
         title: "Erro",
-        description: err instanceof Error ? err.message : "Falha ao salvar dados.",
+        description: msg,
       });
     } finally {
       setLoading(false);
     }
   }
 
-  const respostasConfig = [
-    { id: "fria" as const, label: "Frio (1pt)", dotClass: "bg-info" },
-    { id: "morna" as const, label: "Morno (5pts)", dotClass: "bg-warning" },
-    { id: "quente" as const, label: "Quente (10pts)", dotClass: "bg-destructive" },
-  ];
-
   const handleOpenModal = () => {
-    form.reset({
-      pergunta: "",
-      peso: "1",
-      ideal_customer_id: "",
-      resposta_fria: "",
-      resposta_morna: "",
-      resposta_quente: "",
-    });
+    setQualificadorIdToEdit(null);
+    setNome("");
+    setIdealCustomerId("");
+    setPerguntas([
+      { id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" },
+    ]);
     setIsModalOpen(true);
   };
+
+  async function handleOpenEdit(q: Qualificador) {
+    if (!q.id) return;
+    setLoading(true);
+    try {
+      const { data: qualData, error: qualErr } = await supabase
+        .from("qualificadores")
+        .select("id, nome, ideal_customer_id")
+        .eq("id", q.id)
+        .single();
+
+      if (qualErr || !qualData) {
+        throw qualErr ?? new Error("Qualificador não encontrado");
+      }
+
+      const { data: pergData } = await supabase
+        .from("qualificacao_perguntas")
+        .select("id, pergunta, peso, ordem")
+        .eq("qualificador_id", q.id)
+        .order("ordem", { ascending: true });
+
+      const perguntasComRespostas: PerguntaLocal[] = [];
+
+      for (const perg of pergData ?? []) {
+        const { data: respData } = await supabase
+          .from("qualificacao_respostas")
+          .select("tipo, resposta_texto")
+          .eq("pergunta_id", perg.id);
+
+        const respMap: Record<string, string> = {};
+        (respData ?? []).forEach((r: { tipo: string; resposta_texto: string }) => {
+          respMap[r.tipo] = r.resposta_texto;
+        });
+
+        perguntasComRespostas.push({
+          id: generateId(),
+          pergunta: perg.pergunta ?? "",
+          peso: perg.peso ?? 1,
+          resposta_fria: respMap.fria ?? "",
+          resposta_morna: respMap.morna ?? "",
+          resposta_quente: respMap.quente ?? "",
+        });
+      }
+
+      setQualificadorIdToEdit(qualData.id);
+      setNome(qualData.nome ?? "");
+      setIdealCustomerId(qualData.ideal_customer_id ?? "");
+      setPerguntas(
+        perguntasComRespostas.length > 0
+          ? perguntasComRespostas
+          : [{ id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" }]
+      );
+      setIsModalOpen(true);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: err instanceof Error ? err.message : "Falha ao carregar qualificador.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -310,18 +501,18 @@ export default function QualificacaoPage() {
           Configurar Qualificador
         </h1>
         <Button size="sm" onClick={handleOpenModal} disabled={!effectiveCompanyId}>
-          <Plus className="mr-2 h-4 w-4" /> Qualificação
+          <Plus className="mr-2 h-4 w-4" /> Criar qualificador
         </Button>
       </div>
 
-      {/* Listagem de qualificações */}
+      {/* Listagem de qualificadores */}
       <div className="border border-border rounded-md bg-white">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-foreground">Pergunta</TableHead>
+              <TableHead className="text-foreground">Nome</TableHead>
               <TableHead className="text-foreground">Persona</TableHead>
-              <TableHead className="text-foreground">Peso</TableHead>
+              <TableHead className="text-foreground">Perguntas</TableHead>
               <TableHead className="text-right text-foreground">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -332,34 +523,44 @@ export default function QualificacaoPage() {
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
-            ) : qualificacoes.length === 0 ? (
+            ) : qualificadores.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={4}
                   className="text-center py-10 text-muted-foreground"
                 >
-                  Nenhuma qualificação encontrada. Clique em &quot;+ Qualificação&quot; para adicionar.
+                  Nenhum qualificador encontrado. Clique em &quot;Criar qualificador&quot; para adicionar.
                 </TableCell>
               </TableRow>
             ) : (
-              qualificacoes.map((q) => (
+              qualificadores.map((q) => (
                 <TableRow key={q.id}>
-                  <TableCell className="font-medium text-foreground">
-                    {q.pergunta}
-                  </TableCell>
+                  <TableCell className="font-medium text-foreground">{q.nome}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {q.ideal_customers?.profile_name ?? "—"}
                   </TableCell>
-                  <TableCell className="text-foreground">{q.peso}x</TableCell>
+                  <TableCell className="text-foreground">{q.perguntas_count ?? 0}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDelete(q)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="hover:bg-muted"
+                        onClick={() => handleOpenEdit(q)}
+                        title="Editar"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDelete(q)}
+                        title="Excluir"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -368,98 +569,124 @@ export default function QualificacaoPage() {
         </Table>
       </div>
 
-      {/* Modal Novo/Editar Qualificação */}
+      {/* Modal Criar Qualificador */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-foreground">
-              Nova Qualificação
+              {qualificadorIdToEdit ? "Editar qualificador" : "Criar qualificador"}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Preencha os campos para cadastrar uma nova pergunta de qualificação.
+              Informe o nome e cadastre as perguntas com até 3 respostas cada (fria, morna, quente).
             </DialogDescription>
           </DialogHeader>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-6 pt-4"
-          >
-            {/* Persona e Peso */}
+
+          <div className="space-y-6 pt-4">
+            {/* Nome e Persona */}
             <div className="flex gap-6">
-            <div className="flex-1 space-y-2">
-              <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-                Vincular ao Cliente Ideal (Persona)
-              </Label>
-              <StyledSelect
-                value={form.watch("ideal_customer_id")}
-                onChange={(v) => form.setValue("ideal_customer_id", v)}
-                options={personas.map((p) => ({ value: p.id, label: p.profile_name }))}
-                placeholder="Selecione a Persona..."
-              />
-              {form.formState.errors.ideal_customer_id && (
-                <p className="text-sm text-destructive">
-                  {form.formState.errors.ideal_customer_id.message}
-                </p>
-              )}
-            </div>
-
-            <div className="w-32 space-y-2">
-              <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-                Peso
-              </Label>
-              <StyledSelect
-                value={form.watch("peso")}
-                onChange={(v) => form.setValue("peso", v)}
-                options={[
-                  { value: "1", label: "1x" },
-                  { value: "2", label: "2x" },
-                  { value: "3", label: "3x" },
-                ]}
-              />
-            </div>
-          </div>
-
-          {/* Pergunta - Estilo Ghost */}
-          <div className="space-y-2">
-            <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-              Pergunta
-            </Label>
-            <Input
-              {...form.register("pergunta")}
-              placeholder="Ex: Qual é a sua renda mensal?"
-              className="border-0 border-b border-input rounded-none px-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary text-lg font-medium h-auto py-2"
-            />
-            {form.formState.errors.pergunta && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.pergunta.message}
-              </p>
-            )}
-          </div>
-
-          {/* Respostas Frio, Morno, Quente */}
-          <div className="space-y-5">
-            {respostasConfig.map((item) => (
-              <div key={item.id} className="flex items-center gap-6">
-                <div className="flex items-center gap-3 min-w-[140px]">
-                  <div className={cn("w-2.5 h-2.5 rounded-full", item.dotClass)} />
-                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                    {item.label}
-                  </span>
-                </div>
-                <div className="flex-1">
-                  <Input
-                    {...form.register(`resposta_${item.id}`)}
-                    placeholder="Ex: Defina o critério para este nível..."
-                    className="rounded-xl border-input h-12 focus-visible:shadow-md focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
-                  />
-                  {form.formState.errors[`resposta_${item.id}`] && (
-                    <p className="text-sm text-destructive mt-1">
-                      {form.formState.errors[`resposta_${item.id}`]?.message}
-                    </p>
-                  )}
-                </div>
+              <div className="flex-1 space-y-2">
+                <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+                  Nome do qualificador
+                </Label>
+                <Input
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  placeholder="Ex: Qualificador de vendas B2B"
+                  className="border-input"
+                />
               </div>
-            ))}
-          </div>
+              <div className="flex-1 space-y-2">
+                <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+                  Persona (opcional)
+                </Label>
+                <StyledSelect
+                  value={idealCustomerId}
+                  onChange={setIdealCustomerId}
+                  options={personas.map((p) => ({ value: p.id, label: p.profile_name }))}
+                  placeholder="Selecione..."
+                />
+              </div>
+            </div>
+
+            {/* Loop de perguntas */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+                  Perguntas e respostas
+                </Label>
+                <Button type="button" variant="outline" size="sm" onClick={addPergunta}>
+                  <Plus className="mr-2 h-4 w-4" /> Adicionar outra pergunta
+                </Button>
+              </div>
+
+              {perguntas.map((p, idx) => (
+                <div
+                  key={p.id}
+                  className="rounded-lg border border-border p-4 space-y-4 bg-muted/30"
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Pergunta {idx + 1}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive h-8 shrink-0"
+                      onClick={() => removePergunta(p.id)}
+                      disabled={perguntas.length <= 1}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Input
+                      value={p.pergunta}
+                      onChange={(e) => updatePergunta(p.id, "pergunta", e.target.value)}
+                      placeholder="Ex: Qual é a sua renda mensal?"
+                      className="border-0 border-b border-input rounded-none px-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary text-lg font-medium h-auto py-2"
+                    />
+                  </div>
+
+                  <div className="flex gap-4 items-center">
+                    <div className="w-24 shrink-0">
+                      <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+                        Peso
+                      </Label>
+                      <StyledSelect
+                        value={String(p.peso)}
+                        onChange={(v) => updatePergunta(p.id, "peso", parseInt(v, 10) || 1)}
+                        options={[
+                          { value: "1", label: "1x" },
+                          { value: "2", label: "2x" },
+                          { value: "3", label: "3x" },
+                        ]}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {respostasConfig.map((item) => (
+                      <div key={item.id} className="flex items-center gap-4">
+                        <div className="flex items-center gap-3 min-w-[140px]">
+                          <div className={cn("w-2.5 h-2.5 rounded-full", item.dotClass)} />
+                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                            {item.label}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <Input
+                            value={p[`resposta_${item.id}`]}
+                            onChange={(e) => updatePergunta(p.id, `resposta_${item.id}` as keyof PerguntaLocal, e.target.value)}
+                            placeholder="Opcional"
+                            className="rounded-xl border-input h-10 focus-visible:ring-2 focus-visible:ring-primary/20"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
 
             {/* Botões */}
             <div className="pt-6 border-t border-border flex justify-end items-center gap-4">
@@ -472,17 +699,18 @@ export default function QualificacaoPage() {
                 Cancelar
               </Button>
               <Button
-                type="submit"
+                type="button"
+                onClick={handleSubmit}
                 disabled={loading}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 h-11 rounded-xl font-bold"
               >
                 {loading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                Salvar Qualificação
+                {qualificadorIdToEdit ? "Salvar alterações" : "Salvar qualificador"}
               </Button>
             </div>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

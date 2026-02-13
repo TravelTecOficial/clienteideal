@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
-import { useAuth, useOrganization } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { History, Info, Loader2 } from "lucide-react";
@@ -159,7 +159,6 @@ function renderHistorico(historico: unknown): ReactNode {
 
 export default function AtendimentoPageContent() {
   const { userId } = useAuth();
-  const { organization } = useOrganization();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
 
@@ -170,7 +169,7 @@ export default function AtendimentoPageContent() {
   const [selectedAtendimento, setSelectedAtendimento] = useState<Atendimento | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  const effectiveCompanyId = companyId ?? organization?.id ?? null;
+  const effectiveCompanyId = companyId;
 
   const vendedorMap = useCallback(() => {
     const map = new Map<string, string>();

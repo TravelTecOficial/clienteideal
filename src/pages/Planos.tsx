@@ -119,6 +119,60 @@ async function syncProfile(
   return { error: body?.error || "Erro ao sincronizar perfil." }
 }
 
+/**
+ * Fallback para localhost: cria company e profile diretamente via Supabase
+ * quando sync-profile-client falha (ex: CLERK_SECRET_KEY não configurado).
+ * Usa RLS com JWT do Clerk (template supabase).
+ */
+async function syncProfileDirect(
+  supabaseClient: SupabaseClient,
+  userId: string,
+  email: string,
+  fullName: string
+): Promise<{ companyId: string } | { error: string }> {
+  const companyId = `company-${userId.replace(/^user_/, "")}`
+  const { error: companyError } = await supabaseClient
+    .from("companies")
+    .upsert(
+      {
+        id: companyId,
+        name: fullName || "Minha Empresa",
+        slug: `company-${userId.replace(/^user_/, "")}`,
+        plan_type: "free",
+        status: "trialing",
+      },
+      { onConflict: "id" }
+    )
+
+  if (companyError) {
+    return { error: companyError.message }
+  }
+
+  const { error: profileError } = await supabaseClient.from("profiles").upsert(
+    {
+      id: userId,
+      email: email || "",
+      full_name: fullName,
+      company_id: companyId,
+      role: "admin",
+    },
+    { onConflict: "id" }
+  )
+
+  if (profileError) {
+    const isDuplicateEmail =
+      profileError.code === "23505" &&
+      String(profileError.message).includes("profiles_email_key")
+    return {
+      error: isDuplicateEmail
+        ? "Este e-mail já está vinculado a outra conta."
+        : profileError.message,
+    }
+  }
+
+  return { companyId }
+}
+
 async function updateCompanyPlan(
   supabaseClient: SupabaseClient,
   companyId: string,
@@ -166,21 +220,47 @@ export function Planos() {
       if (!id) {
         const primaryEmail = user.primaryEmailAddress?.emailAddress ?? ""
         const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim()
-        
-        // Pega o token usando o template 'supabase' que você criou no painel do Clerk
-        const token = await getToken({ template: 'supabase' })
-        
-        if (!token) {
-          throw new Error("Não foi possível gerar o token de acesso. Tente fazer logout e login novamente.")
-        }
 
-        const result = await syncProfile(supabaseClient, primaryEmail, fullName, token)
+        let result: { companyId?: string; error?: string }
+
+        // Em localhost: tenta criar perfil diretamente PRIMEIRO (usa JWT template supabase + RLS)
+        // Dispensa CLERK_SECRET_KEY na Edge Function durante o desenvolvimento
+        if (isLocalhost()) {
+          const directResult = await syncProfileDirect(supabaseClient, user.id, primaryEmail, fullName)
+          if ("companyId" in directResult) {
+            result = directResult
+          } else {
+            // Fallback: Edge Function (requer CLERK_SECRET_KEY configurada)
+            const token = await getToken()
+            if (!token) {
+              throw new Error("Não foi possível gerar o token de acesso. Tente fazer logout e login novamente.")
+            }
+            result = await syncProfile(supabaseClient, primaryEmail, fullName, token)
+          }
+        } else {
+          const token = await getToken()
+          if (!token) {
+            throw new Error("Não foi possível gerar o token de acesso. Tente fazer logout e login novamente.")
+          }
+          result = await syncProfile(supabaseClient, primaryEmail, fullName, token)
+        }
 
         if ("companyId" in result) {
           id = result.companyId
+          // Em localhost: após sync bem-sucedido, vai direto ao dashboard
+          if (id && isLocalhost()) {
+            setCompanyId(id)
+            setStatus("ready")
+            navigate("/dashboard", { replace: true, state: { fromPlanSelection: true } })
+            return
+          }
         } else {
           setStatus("error")
-          setErrorMsg(result.error)
+          const baseMsg = result.error ?? "Erro ao sincronizar perfil."
+          const extraHint = isLocalhost()
+            ? " Em localhost você usa pk_test_...; o Supabase precisa de sk_test_... (não sk_live_). Troque a chave no Supabase."
+            : ""
+          setErrorMsg(baseMsg + extraHint)
           return
         }
       }
@@ -254,7 +334,29 @@ export function Planos() {
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Erro de Sincronização</AlertTitle>
-            <AlertDescription>{errorMsg}</AlertDescription>
+            <AlertDescription className="space-y-2">
+              <span>{errorMsg}</span>
+              {isLocalhost() && (
+                <div className="mt-2 flex flex-col gap-1 text-sm">
+                  <a
+                    href="https://dashboard.clerk.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium underline underline-offset-4 hover:no-underline"
+                  >
+                    1. Clerk → API Keys → Reveal Secret Key (sk_test_...)
+                  </a>
+                  <a
+                    href={`https://supabase.com/dashboard/project/${(import.meta.env.VITE_SUPABASE_URL ?? "").replace("https://", "").replace(".supabase.co", "") || "mrkvvgofjyvlutqpvedt"}/settings/functions`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium underline underline-offset-4 hover:no-underline"
+                  >
+                    2. Supabase → Edge Functions Secrets → Add CLERK_SECRET_KEY
+                  </a>
+                </div>
+              )}
+            </AlertDescription>
           </Alert>
         )}
 

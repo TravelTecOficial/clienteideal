@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -47,26 +49,22 @@ const opportunityFormSchema = z.object({
     "ganho",
     "perdido",
   ]),
-  ideal_customer_id: z.string().optional(),
+  lead_id: z.string().optional(),
   product_id: z.string().optional(),
   seller_id: z.string().optional(),
 });
 
 export type OpportunityFormValues = z.infer<typeof opportunityFormSchema>;
 
-export interface ProfileOption {
-  id: string;
-  full_name: string | null;
-}
-
-export interface IdealCustomerOption {
-  id: string;
-  profile_name: string | null;
-}
-
-export interface ProductOption {
+export interface LeadOption {
   id: string;
   name: string;
+}
+
+export interface ItemOption {
+  id: string;
+  name: string;
+  type: "product" | "service";
 }
 
 interface OpportunityFormProps {
@@ -75,9 +73,15 @@ interface OpportunityFormProps {
   isEditing?: boolean;
   isSaving: boolean;
   onCancel?: () => void;
-  profiles: ProfileOption[];
-  idealCustomers: IdealCustomerOption[];
-  products: ProductOption[];
+  leads: LeadOption[];
+  vendedores: VendedorOption[];
+  items: ItemOption[];
+  onNewLead?: () => void;
+}
+
+export interface VendedorOption {
+  id: string;
+  nome: string;
 }
 
 export function OpportunityForm({
@@ -86,9 +90,10 @@ export function OpportunityForm({
   isEditing = false,
   isSaving,
   onCancel,
-  profiles,
-  idealCustomers,
-  products,
+  leads,
+  vendedores,
+  items,
+  onNewLead,
 }: OpportunityFormProps) {
   const form = useForm<OpportunityFormValues>({
     resolver: zodResolver(opportunityFormSchema),
@@ -97,7 +102,7 @@ export function OpportunityForm({
       value: 0,
       expected_closing_date: "",
       stage: "novo",
-      ideal_customer_id: "",
+      lead_id: "",
       product_id: "",
       seller_id: "",
       ...defaultValues,
@@ -172,29 +177,36 @@ export function OpportunityForm({
       </div>
 
       <div className="space-y-2">
-        <Label>Cliente Ideal (ICP)</Label>
-        <Select
-          value={form.watch("ideal_customer_id") || "none"}
-          onValueChange={(v: string) =>
-            form.setValue("ideal_customer_id", v === "none" ? "" : v)
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Selecione um perfil..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Nenhum</SelectItem>
-            {idealCustomers.map((ic) => (
-              <SelectItem key={ic.id} value={ic.id}>
-                {ic.profile_name ?? "Sem nome"}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label>Lead</Label>
+        <div className="flex gap-2">
+          <Select
+            value={form.watch("lead_id") || "none"}
+            onValueChange={(v: string) =>
+              form.setValue("lead_id", v === "none" ? "" : v)
+            }
+          >
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="Selecione um lead..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Nenhum</SelectItem>
+              {leads.map((l) => (
+                <SelectItem key={l.id} value={l.id}>
+                  {l.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {onNewLead && (
+            <Button type="button" variant="outline" size="icon" onClick={onNewLead} title="Novo Lead">
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2">
-        <Label>Produto</Label>
+        <Label>Produto ou Serviço</Label>
         <Select
           value={form.watch("product_id") || "none"}
           onValueChange={(v: string) =>
@@ -202,15 +214,30 @@ export function OpportunityForm({
           }
         >
           <SelectTrigger>
-            <SelectValue placeholder="Selecione um produto..." />
+            <SelectValue placeholder="Selecione um produto ou serviço..." />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Nenhum</SelectItem>
-            {products.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel>Produtos</SelectLabel>
+              {items
+                .filter((i) => i.type === "product")
+                .map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+            </SelectGroup>
+            <SelectGroup>
+              <SelectLabel>Serviços</SelectLabel>
+              {items
+                .filter((i) => i.type === "service")
+                .map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
       </div>
@@ -228,9 +255,9 @@ export function OpportunityForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Nenhum</SelectItem>
-            {profiles.map((profile) => (
-              <SelectItem key={profile.id} value={profile.id}>
-                {profile.full_name ?? profile.id}
+            {vendedores.map((v) => (
+              <SelectItem key={v.id} value={v.id}>
+                {v.nome}
               </SelectItem>
             ))}
           </SelectContent>

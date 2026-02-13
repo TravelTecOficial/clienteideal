@@ -50,6 +50,7 @@ const navItems = [
   { title: "Atendimentos", url: "/dashboard/atendimentos", icon: Headphones },
   { title: "Base de conhecimento", url: "/dashboard/base-conhecimento", icon: BookOpen },
   { title: "Produtos & Serviços", url: "/dashboard/items", icon: Package },
+  { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
   { title: "Perfil", url: "/dashboard/perfil", icon: UserCircle },
 ]
 

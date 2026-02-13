@@ -17,6 +17,7 @@ import { AgendaPage } from "@/pages/dashboard/AgendaPage"
 import { AtendimentosPage } from "@/pages/dashboard/AtendimentosPage"
 import { BaseConhecimentoPage } from "@/pages/dashboard/BaseConhecimentoPage"
 import { ProdutosServicosPage } from "@/pages/dashboard/ProdutosServicosPage"
+import { ConfiguracoesPage } from "@/pages/dashboard/ConfiguracoesPage"
 import { SupabaseProvider } from "@/lib/supabase-context"
 import { Toaster } from "@/components/ui/toast"
 import { StyleguideLayout } from "@/styleguide/StyleguideLayout"
@@ -170,6 +171,16 @@ function App() {
             <SupabaseProvider>
               <ProtectedRoute>
                 <ProdutosServicosPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/configuracoes"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <ConfiguracoesPage />
               </ProtectedRoute>
             </SupabaseProvider>
           }

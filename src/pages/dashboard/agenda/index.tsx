@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth, useOrganization } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Calendar, dateFnsLocalizer } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/table";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
-import { AgendaForm, type AgendaFormValues, type ProfileOption } from "./components/AgendaForm";
+import { AgendaForm, type AgendaFormValues, type VendedorOption } from "./components/AgendaForm";
 
 // --- Interfaces ---
 interface ProfileRow {
@@ -90,33 +90,33 @@ function getStatusBadgeClass(status: string): string {
 
 export default function AgendaPage() {
   const { userId } = useAuth();
-  const { organization } = useOrganization();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
 
   const [agenda, setAgenda] = useState<AgendaItem[]>([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [view, setView] = useState<"table" | "calendar">("table");
 
   // Note: UI-level check only. API enforcement required.
-  const effectiveCompanyId = companyId ?? organization?.id ?? null;
+  const effectiveCompanyId = companyId;
 
-  const loadProfiles = useCallback(async () => {
+  const loadVendedores = useCallback(async () => {
     if (!effectiveCompanyId) return;
     try {
       const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("company_id", effectiveCompanyId);
+        .from("vendedores")
+        .select("id, nome")
+        .eq("company_id", effectiveCompanyId)
+        .eq("status", true);
 
       if (error) throw error;
-      setProfiles((data as ProfileOption[]) ?? []);
+      setVendedores((data as VendedorOption[]) ?? []);
     } catch (err) {
-      console.error("Erro ao carregar perfis:", err);
+      console.error("Erro ao carregar vendedores:", err);
     }
   }, [effectiveCompanyId, supabase]);
 
@@ -159,21 +159,21 @@ export default function AgendaPage() {
   }, [userId, supabase]);
 
   useEffect(() => {
-    loadProfiles();
-  }, [loadProfiles]);
+    loadVendedores();
+  }, [loadVendedores]);
 
   useEffect(() => {
     loadAgenda();
   }, [loadAgenda]);
 
-  const profileMap = useCallback(
-    () => new Map(profiles.map((p) => [p.id, p.full_name ?? ""])),
-    [profiles]
+  const vendedorMap = useCallback(
+    () => new Map(vendedores.map((v) => [v.id, v.nome])),
+    [vendedores]
   );
 
   const getVendedorName = (vendedorId: string | null | undefined) => {
     if (!vendedorId) return "-";
-    return profileMap().get(vendedorId) ?? "-";
+    return vendedorMap().get(vendedorId) ?? "-";
   };
 
   const calendarEvents = agenda.map((item) => {
@@ -268,7 +268,7 @@ export default function AgendaPage() {
               </DialogHeader>
               <AgendaForm
                 onSubmit={onSubmit}
-                profiles={profiles}
+                vendedores={vendedores}
                 isSaving={isSaving}
               />
             </DialogContent>

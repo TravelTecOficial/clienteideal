@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth, useOrganization } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -66,14 +66,7 @@ interface Lead {
   phone: string | null;
   external_id: string | null;
   status: "Novo" | "Em Contato" | "Qualificado" | "Perdido";
-  ideal_customer_id?: string | null;
-  ideal_customers?: { profile_name: string | null } | null;
   seller_id?: string | null;
-}
-
-interface IdealCustomerOption {
-  id: string;
-  profile_name: string | null;
 }
 
 interface VendedorOption {
@@ -106,7 +99,6 @@ const leadFormSchema = z.object({
   email: z.string().optional(),
   phone: z.string().optional(),
   external_id: z.string().optional(),
-  ideal_customer_id: z.string().optional(),
   status: z.enum(["Novo", "Em Contato", "Qualificado", "Perdido"]),
   seller_id: z.string().optional(),
 });
@@ -122,13 +114,11 @@ const STATUS_OPTIONS = [
 
 export default function LeadsPage() {
   const { userId } = useAuth();
-  const { organization } = useOrganization();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [idealCustomers, setIdealCustomers] = useState<IdealCustomerOption[]>([]);
   const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
@@ -137,7 +127,7 @@ export default function LeadsPage() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  const effectiveCompanyId = companyId ?? organization?.id ?? null;
+  const effectiveCompanyId = companyId;
 
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadFormSchema),
@@ -146,7 +136,6 @@ export default function LeadsPage() {
       email: "",
       phone: "",
       external_id: "",
-      ideal_customer_id: "",
       status: "Novo",
       seller_id: "",
     },
@@ -159,7 +148,6 @@ export default function LeadsPage() {
       email: "",
       phone: "",
       external_id: "",
-      ideal_customer_id: "",
       status: "Novo",
       seller_id: "",
     },
@@ -174,22 +162,6 @@ export default function LeadsPage() {
     }
     init();
   }, [userId, supabase]);
-
-  // Buscar ideal_customers
-  const loadIdealCustomers = useCallback(async () => {
-    if (!effectiveCompanyId) return;
-    try {
-      const { data, error } = await supabase
-        .from("ideal_customers")
-        .select("id, profile_name")
-        .eq("company_id", effectiveCompanyId);
-
-      if (error) throw error;
-      setIdealCustomers((data as IdealCustomerOption[]) ?? []);
-    } catch (err) {
-      console.error("Erro ao carregar clientes ideais:", err);
-    }
-  }, [effectiveCompanyId, supabase]);
 
   // Buscar vendedores
   const loadVendedores = useCallback(async () => {
@@ -219,9 +191,7 @@ export default function LeadsPage() {
     try {
       const { data, error } = await supabase
         .from("leads")
-        .select(
-          "id, name, email, phone, external_id, status, ideal_customer_id, seller_id, ideal_customers(profile_name)"
-        )
+        .select("id, name, email, phone, external_id, status, seller_id")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -239,10 +209,6 @@ export default function LeadsPage() {
       setIsFetching(false);
     }
   }, [effectiveCompanyId, supabase, toast]);
-
-  useEffect(() => {
-    loadIdealCustomers();
-  }, [loadIdealCustomers]);
 
   useEffect(() => {
     loadVendedores();
@@ -306,7 +272,6 @@ export default function LeadsPage() {
         email: values.email?.trim() || null,
         phone: values.phone?.trim() || null,
         external_id: values.external_id?.trim() || null,
-        ideal_customer_id: values.ideal_customer_id || null,
         seller_id: values.seller_id || null,
         status: values.status,
       });
@@ -323,16 +288,22 @@ export default function LeadsPage() {
         email: "",
         phone: "",
         external_id: "",
-        ideal_customer_id: "",
         status: "Novo",
         seller_id: "",
       });
       loadLeads();
     } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : (err && typeof err === "object" && "message" in err)
+            ? String((err as { message: unknown }).message)
+            : "Erro desconhecido";
+      console.error("Erro ao criar lead:", err);
       toast({
         variant: "destructive",
         title: "Erro ao criar",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
+        description: msg,
       });
     } finally {
       setIsSaving(false);
@@ -347,7 +318,6 @@ export default function LeadsPage() {
       email: lead.email ?? "",
       phone: lead.phone ?? "",
       external_id: lead.external_id ?? "",
-      ideal_customer_id: lead.ideal_customer_id ?? "",
       status: lead.status,
       seller_id: lead.seller_id ?? "",
     });
@@ -365,7 +335,6 @@ export default function LeadsPage() {
           email: values.email?.trim() || null,
           phone: values.phone?.trim() || null,
           external_id: values.external_id?.trim() || null,
-          ideal_customer_id: values.ideal_customer_id || null,
           seller_id: values.seller_id || null,
           status: values.status,
         })
@@ -428,7 +397,7 @@ export default function LeadsPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Leads</h2>
           <p className="text-muted-foreground">
-            Gerencie seus leads e vincule-os aos perfis de clientes ideais.
+            Gerencie seus leads e atribua vendedores.
           </p>
         </div>
 
@@ -498,31 +467,6 @@ export default function LeadsPage() {
                     {...form.register("phone")}
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Perfil de Cliente Ideal (ICP)</Label>
-                <Select
-                  value={form.watch("ideal_customer_id") || "none"}
-                  onValueChange={(v: string) =>
-                    form.setValue(
-                      "ideal_customer_id",
-                      v === "none" ? "" : v
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um perfil..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {idealCustomers.map((ic) => (
-                      <SelectItem key={ic.id} value={ic.id}>
-                        {ic.profile_name ?? "Sem nome"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -614,7 +558,6 @@ export default function LeadsPage() {
             <TableRow>
               <TableHead className="w-[250px]">Lead</TableHead>
               <TableHead>External ID</TableHead>
-              <TableHead>Cliente Ideal</TableHead>
               <TableHead>Vendedor</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -623,13 +566,13 @@ export default function LeadsPage() {
           <TableBody>
             {isFetching ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                   Carregando...
                 </TableCell>
               </TableRow>
             ) : filteredLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                   {searchQuery
                     ? "Nenhum lead encontrado para a busca."
                     : "Nenhum lead encontrado. Use o botão acima para cadastrar."}
@@ -648,17 +591,6 @@ export default function LeadsPage() {
                   </TableCell>
                   <TableCell className="font-mono text-xs text-gray-500">
                     {lead.external_id || "-"}
-                  </TableCell>
-                  <TableCell>
-                    {lead.ideal_customers?.profile_name ? (
-                      <Badge variant="secondary">
-                        {lead.ideal_customers.profile_name}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-gray-400 italic">
-                        Não vinculado
-                      </span>
-                    )}
                   </TableCell>
                   <TableCell className="text-sm">
                     {getSellerName(lead.seller_id) ? (
@@ -764,28 +696,6 @@ export default function LeadsPage() {
                   {...editForm.register("phone")}
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Perfil de Cliente Ideal (ICP)</Label>
-              <Select
-                value={editForm.watch("ideal_customer_id") || "none"}
-                onValueChange={(v: string) =>
-                  editForm.setValue("ideal_customer_id", v === "none" ? "" : v)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um perfil..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {idealCustomers.map((ic) => (
-                    <SelectItem key={ic.id} value={ic.id}>
-                      {ic.profile_name ?? "Sem nome"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

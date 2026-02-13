@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth, useOrganization } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -81,7 +81,6 @@ type ItemFormInput = z.input<typeof itemFormSchema>;
 // --- Componente Principal ---
 export default function ItemsPage() {
   const { userId } = useAuth();
-  const { organization } = useOrganization();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
 
@@ -105,7 +104,7 @@ export default function ItemsPage() {
     },
   });
 
-  const effectiveCompanyId = companyId ?? organization?.id ?? null;
+  const effectiveCompanyId = companyId;
 
   const loadItems = useCallback(async () => {
     if (!effectiveCompanyId) return;

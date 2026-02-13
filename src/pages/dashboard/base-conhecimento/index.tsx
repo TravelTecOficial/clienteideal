@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth, useOrganization } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -98,7 +98,6 @@ function getTrainingTypeLabel(value: string): string {
 
 export default function BaseConhecimento() {
   const { userId } = useAuth();
-  const { organization } = useOrganization();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
 
@@ -111,7 +110,7 @@ export default function BaseConhecimento() {
   const [description, setDescription] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const effectiveCompanyId = companyId ?? organization?.id ?? null;
+  const effectiveCompanyId = companyId;
 
   const loadFiles = useCallback(async () => {
     if (!effectiveCompanyId) {

@@ -16,9 +16,9 @@ export const SUPABASE_URL = supabaseUrl
 export type GetTokenFn = () => Promise<string | null>
 
 /**
- * Cria cliente Supabase que envia o JWT do Clerk em cada requisição.
- * Necessário para RLS funcionar com auth.uid() = Clerk user ID.
- * Use getToken({ template: 'supabase' }) se tiver template configurado no Clerk.
+ * Cria cliente Supabase que injeta o JWT do Clerk em cada requisição.
+ * O token (template "supabase") é enviado em Authorization: Bearer <jwt>.
+ * RLS policies usam auth.jwt() ->> 'sub' para validar o usuário.
  */
 export function createSupabaseClient(getToken: GetTokenFn): SupabaseClient {
   return createClient(supabaseUrl, supabaseAnonKey, {

@@ -1,9 +1,28 @@
 import { useEffect, useState, useCallback, type ReactNode } from "react"
-import { useUser } from "@clerk/clerk-react"
+import { useUser, useAuth } from "@clerk/clerk-react"
 import { Navigate, useLocation } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { useSupabaseClient } from "@/lib/supabase-context"
 import { isSaasAdmin, isLocalhost } from "@/lib/use-saas-admin"
+
+const PLAN_CHECK_KEY = "plan_check_passed"
+const PLAN_CHECK_TTL_MS = 10 * 60 * 1000 // 10 min
+
+function getPlanCheckPassed(): boolean {
+  if (typeof sessionStorage === "undefined") return false
+  const stored = sessionStorage.getItem(PLAN_CHECK_KEY)
+  if (!stored) return false
+  const ts = parseInt(stored, 10)
+  return !isNaN(ts) && Date.now() - ts < PLAN_CHECK_TTL_MS
+}
+
+function setPlanCheckPassed(): void {
+  sessionStorage?.setItem(PLAN_CHECK_KEY, String(Date.now()))
+}
+
+function clearPlanCheckPassed(): void {
+  sessionStorage?.removeItem(PLAN_CHECK_KEY)
+}
 
 interface ProfileWithCompany {
   company_id: string | null
@@ -39,6 +58,7 @@ function LoadingState() {
  */
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isLoaded, isSignedIn, user } = useUser()
+  const { getToken } = useAuth()
   const supabase = useSupabaseClient()
   const location = useLocation()
   const [planCheckStatus, setPlanCheckStatus] = useState<
@@ -50,10 +70,21 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       if (!user?.id) return
       setPlanCheckStatus("loading")
 
-      const maxRetries = location.state?.fromPlanSelection ? 3 : 0
-      const retryDelay = 400
+      const maxRetries = location.state?.fromPlanSelection ? 5 : 3
+      const retryDelay = 500
 
       try {
+        // Garantir que o JWT do Clerk (template supabase) está pronto antes de consultar
+        const token = await getToken()
+        if (!token) {
+          if (retryCount < maxRetries) {
+            await new Promise((r) => setTimeout(r, retryDelay))
+            return fetchAndCheckPlan(retryCount + 1)
+          }
+          setPlanCheckStatus("blocked")
+          return
+        }
+
         const { data, error } = await supabase
           .from("profiles")
           .select("company_id, companies(plan_type)")
@@ -80,6 +111,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           planType.toLowerCase() !== "none"
 
         if (hasValidPlan) {
+          setPlanCheckPassed()
           setPlanCheckStatus("allowed")
           return
         }
@@ -97,7 +129,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         setPlanCheckStatus("blocked")
       }
     },
-    [user?.id, supabase, location.state?.fromPlanSelection]
+    [user?.id, supabase, location.state?.fromPlanSelection, getToken]
   )
 
   useEffect(() => {
@@ -120,6 +152,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!isSignedIn) {
+    clearPlanCheckPassed()
     return <Navigate to="/entrar" replace state={{ from: location }} />
   }
 
@@ -131,6 +164,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Note: UI-level bypass. Update já foi validado em Planos antes da navegação.
   if (location.state?.fromPlanSelection === true) {
+    setPlanCheckPassed()
+    return <>{children}</>
+  }
+
+  // Bypass temporário: se já passou recentemente (ex: navegação dentro do dashboard), evita re-fetch
+  if (location.pathname.startsWith("/dashboard") && getPlanCheckPassed()) {
     return <>{children}</>
   }
 

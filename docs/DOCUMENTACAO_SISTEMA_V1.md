@@ -172,13 +172,15 @@ Usado em **Qualificador**, **Leads** e **Oportunidades** para vincular perguntas
 
 **Rota:** `/dashboard/qualificador`
 
-Cria perguntas de qualificação com:
-- **Pergunta** (texto)
-- **Peso** (0–100)
-- **Cliente Ideal** (vinculado)
-- **Respostas:** Fria, Morna, Quente
+Cria **qualificadores** (entidades com nome) que agrupam múltiplas perguntas. Cada pergunta pode ter até 3 respostas (fria, morna, quente).
 
-Cada qualificação pertence a uma empresa e a um perfil de cliente ideal.
+**Fluxo de criação:**
+1. Informar **nome** do qualificador e **Persona** (opcional)
+2. Entrar em loop: adicionar pergunta + até 3 respostas (fria, morna, quente)
+3. Botão "Adicionar outra pergunta" para incluir mais perguntas
+4. "Salvar qualificador" persiste tudo em uma única transação
+
+Cada qualificador pertence a uma empresa e pode ser vinculado a um perfil de cliente ideal.
 
 ---
 
@@ -280,7 +282,9 @@ Cadastro de produtos e serviços:
 | `profiles` | Usuários (id = Clerk user ID, company_id, role) |
 | `companies` | Empresas (id, name, slug, plan_type, status) |
 | `ideal_customers` | Perfis de cliente ideal |
-| `qualificacoes` | Perguntas de qualificação |
+| `qualificadores` | Qualificadores (nome, persona) |
+| `qualificacao_perguntas` | Perguntas de cada qualificador |
+| `qualificacao_respostas` | Respostas (fria/morna/quente) por pergunta |
 | `leads` | Leads |
 | `opportunities` | Oportunidades |
 | `agenda` | Reuniões |
@@ -300,7 +304,9 @@ companies (id TEXT PK, name, slug, plan_type, status)
 
 ideal_customers (id, company_id, profile_name, ...)
 
-qualificacoes (id, company_id, ideal_customer_id, pergunta, peso, ...)
+qualificadores (id, company_id, nome, ideal_customer_id, ...)
+  └── qualificacao_perguntas (id, qualificador_id, pergunta, peso, ordem)
+        └── qualificacao_respostas (id, pergunta_id, resposta_texto, tipo: fria|morna|quente)
 
 leads (id, company_id, ideal_customer_id, seller_id, status, ...)
 

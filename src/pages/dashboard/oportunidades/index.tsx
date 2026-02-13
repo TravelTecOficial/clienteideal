@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth, useOrganization } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import {
   DndContext,
   DragEndEvent,
@@ -56,12 +56,13 @@ import {
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
 
+import { useNavigate } from "react-router-dom";
 import {
   OpportunityForm,
   type OpportunityFormValues,
-  type ProfileOption,
-  type IdealCustomerOption,
-  type ProductOption,
+  type LeadOption,
+  type VendedorOption,
+  type ItemOption,
 } from "./opportunity-form";
 
 type OpportunityStage =
@@ -80,8 +81,8 @@ interface Opportunity {
   stage: OpportunityStage;
   seller_id: string | null;
   product_id: string | null;
-  ideal_customer_id: string | null;
-  ideal_customers?: { profile_name: string | null } | null;
+  lead_id: string | null;
+  leads?: { name: string | null } | null;
 }
 
 interface ProfileRow {
@@ -249,15 +250,15 @@ function DraggableKanbanCard({
 
 export default function OportunidadesPage() {
   const { userId } = useAuth();
-  const { organization } = useOrganization();
+  const navigate = useNavigate();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
 
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
-  const [idealCustomers, setIdealCustomers] = useState<IdealCustomerOption[]>([]);
-  const [products, setProducts] = useState<ProductOption[]>([]);
+  const [leads, setLeads] = useState<LeadOption[]>([]);
+  const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
+  const [items, setItems] = useState<ItemOption[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -267,7 +268,7 @@ export default function OportunidadesPage() {
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const effectiveCompanyId = companyId ?? organization?.id ?? null;
+  const effectiveCompanyId = companyId;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -284,54 +285,57 @@ export default function OportunidadesPage() {
     init();
   }, [userId, supabase]);
 
-  const loadProfiles = useCallback(async () => {
+  const loadLeads = useCallback(async () => {
     if (!effectiveCompanyId) return;
     try {
       const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("company_id", effectiveCompanyId);
+        .from("leads")
+        .select("id, name")
+        .eq("company_id", effectiveCompanyId)
+        .order("name");
 
       if (error) throw error;
-      setProfiles((data as ProfileOption[]) ?? []);
+      setLeads((data as LeadOption[]) ?? []);
     } catch (err) {
-      console.error("Erro ao carregar perfis:", err);
+      console.error("Erro ao carregar leads:", err);
     }
   }, [effectiveCompanyId, supabase]);
 
-  const loadIdealCustomers = useCallback(async () => {
+  const loadVendedores = useCallback(async () => {
     if (!effectiveCompanyId) return;
     try {
       const { data, error } = await supabase
-        .from("ideal_customers")
-        .select("id, profile_name")
-        .eq("company_id", effectiveCompanyId);
+        .from("vendedores")
+        .select("id, nome")
+        .eq("company_id", effectiveCompanyId)
+        .eq("status", true);
 
       if (error) throw error;
-      setIdealCustomers((data as IdealCustomerOption[]) ?? []);
+      setVendedores((data as VendedorOption[]) ?? []);
     } catch (err) {
-      console.error("Erro ao carregar clientes ideais:", err);
+      console.error("Erro ao carregar vendedores:", err);
     }
   }, [effectiveCompanyId, supabase]);
 
-  const loadProducts = useCallback(async () => {
+  const loadItems = useCallback(async () => {
     if (!effectiveCompanyId) return;
     try {
       const { data, error } = await supabase
         .from("items")
-        .select("id, name")
+        .select("id, name, type")
         .eq("company_id", effectiveCompanyId)
-        .eq("type", "product");
+        .in("type", ["product", "service"]);
 
       if (error) throw error;
-      setProducts(
-        (data ?? []).map((r: { id: string; name: string }) => ({
+      setItems(
+        (data ?? []).map((r: { id: string; name: string; type: string }) => ({
           id: r.id,
           name: r.name ?? "",
+          type: r.type === "service" ? "service" : "product",
         }))
       );
     } catch (err) {
-      console.error("Erro ao carregar produtos:", err);
+      console.error("Erro ao carregar produtos e serviços:", err);
     }
   }, [effectiveCompanyId, supabase]);
 
@@ -345,7 +349,7 @@ export default function OportunidadesPage() {
     try {
       const { data, error } = await supabase
         .from("opportunities")
-        .select("id, title, value, expected_closing_date, stage, seller_id, product_id, ideal_customer_id, ideal_customers(profile_name)")
+        .select("id, title, value, expected_closing_date, stage, seller_id, product_id, lead_id, leads(name)")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -365,31 +369,31 @@ export default function OportunidadesPage() {
   }, [effectiveCompanyId, supabase, toast]);
 
   useEffect(() => {
-    loadProfiles();
-  }, [loadProfiles]);
+    loadLeads();
+  }, [loadLeads]);
   useEffect(() => {
-    loadIdealCustomers();
-  }, [loadIdealCustomers]);
+    loadVendedores();
+  }, [loadVendedores]);
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    loadItems();
+  }, [loadItems]);
   useEffect(() => {
     loadOpportunities();
   }, [loadOpportunities]);
 
-  const profileMap = useCallback(
-    () => new Map(profiles.map((p) => [p.id, p.full_name ?? ""])),
-    [profiles]
+  const vendedorMap = useCallback(
+    () => new Map(vendedores.map((v) => [v.id, v.nome])),
+    [vendedores]
   );
-  const productMap = useCallback(
-    () => new Map(products.map((p) => [p.id, p.name])),
-    [products]
+  const itemMap = useCallback(
+    () => new Map(items.map((i) => [i.id, i.name])),
+    [items]
   );
 
   const getSellerName = (sellerId: string | null | undefined) =>
-    sellerId ? profileMap().get(sellerId) ?? null : null;
-  const getProductName = (productId: string | null | undefined) =>
-    productId ? productMap().get(productId) ?? null : null;
+    sellerId ? vendedorMap().get(sellerId) ?? null : null;
+  const getItemName = (itemId: string | null | undefined) =>
+    itemId ? itemMap().get(itemId) ?? null : null;
 
   const filteredOpportunities = searchTerm.trim()
     ? opportunities.filter((o) =>
@@ -483,7 +487,7 @@ export default function OportunidadesPage() {
         value: Number(values.value) || 0,
         expected_closing_date: values.expected_closing_date || null,
         stage: values.stage,
-        ideal_customer_id: values.ideal_customer_id || null,
+        lead_id: values.lead_id || null,
         product_id: values.product_id || null,
         seller_id: values.seller_id || null,
       });
@@ -522,7 +526,7 @@ export default function OportunidadesPage() {
           value: Number(values.value) || 0,
           expected_closing_date: values.expected_closing_date || null,
           stage: values.stage,
-          ideal_customer_id: values.ideal_customer_id || null,
+          lead_id: values.lead_id || null,
           product_id: values.product_id || null,
           seller_id: values.seller_id || null,
         })
@@ -611,9 +615,13 @@ export default function OportunidadesPage() {
               onSubmit={onSubmitCreate}
               isSaving={isSaving}
               onCancel={() => setIsCreateDialogOpen(false)}
-              profiles={profiles}
-              idealCustomers={idealCustomers}
-              products={products}
+              leads={leads}
+              vendedores={vendedores}
+              items={items}
+              onNewLead={() => {
+                setIsCreateDialogOpen(false);
+                navigate("/dashboard/leads");
+              }}
             />
           </DialogContent>
         </Dialog>
@@ -747,8 +755,8 @@ export default function OportunidadesPage() {
                   <TableHead className="w-[12%] min-w-[80px]">Valor</TableHead>
                   <TableHead className="w-[14%] min-w-[100px]">Estágio</TableHead>
                   <TableHead className="w-[14%] min-w-[80px]">Vendedor</TableHead>
-                  <TableHead className="w-[14%] min-w-[80px]">Produto</TableHead>
-                  <TableHead className="w-[14%] min-w-[80px]">Cliente Ideal</TableHead>
+                  <TableHead className="w-[14%] min-w-[80px]">Produto/Serviço</TableHead>
+                  <TableHead className="w-[14%] min-w-[80px]">Lead</TableHead>
                   <TableHead className="w-[10%] min-w-[70px]">Data Prevista</TableHead>
                   <TableHead className="w-[7%] min-w-[60px] text-right">Ações</TableHead>
                 </TableRow>
@@ -773,9 +781,9 @@ export default function OportunidadesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>{getSellerName(opp.seller_id) ?? "-"}</TableCell>
-                    <TableCell>{getProductName(opp.product_id) ?? "-"}</TableCell>
+                    <TableCell>{getItemName(opp.product_id) ?? "-"}</TableCell>
                     <TableCell>
-                      {opp.ideal_customers?.profile_name ?? "-"}
+                      {opp.leads?.name ?? "-"}
                     </TableCell>
                     <TableCell>{formatDate(opp.expected_closing_date)}</TableCell>
                     <TableCell className="text-right">
@@ -828,7 +836,7 @@ export default function OportunidadesPage() {
                 expected_closing_date:
                   editingOpportunity.expected_closing_date ?? "",
                 stage: editingOpportunity.stage,
-                ideal_customer_id: editingOpportunity.ideal_customer_id ?? "",
+                lead_id: editingOpportunity.lead_id ?? "",
                 product_id: editingOpportunity.product_id ?? "",
                 seller_id: editingOpportunity.seller_id ?? "",
               }}
@@ -838,9 +846,14 @@ export default function OportunidadesPage() {
                 setIsEditDialogOpen(false);
                 setEditingOpportunity(null);
               }}
-              profiles={profiles}
-              idealCustomers={idealCustomers}
-              products={products}
+              leads={leads}
+              vendedores={vendedores}
+              items={items}
+              onNewLead={() => {
+                setIsEditDialogOpen(false);
+                setEditingOpportunity(null);
+                navigate("/dashboard/leads");
+              }}
             />
           )}
         </DialogContent>
