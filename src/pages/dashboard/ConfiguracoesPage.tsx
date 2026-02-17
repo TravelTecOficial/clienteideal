@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { Plus, Loader2, Check, Database, Megaphone } from "lucide-react";
+import { Plus, Loader2, Check, Database, Megaphone, MessageSquare, Layers, Smartphone } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -52,8 +53,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useEvolutionProxy } from "@/hooks/use-evolution-proxy";
 
 // --- Interfaces ---
 interface ProfileRow {
@@ -63,6 +67,12 @@ interface ProfileRow {
 interface CompanyRow {
   celular_atendimento: string | null;
   email_atendimento: string | null;
+  estancia_whatsapp: string | null;
+  n8n_chat_webhook_url: string | null;
+  segment_type: string | null;
+  evolution_api_url: string | null;
+  evolution_api_key: string | null;
+  evolution_instance_name: string | null;
 }
 
 interface Pagamento {
@@ -70,6 +80,22 @@ interface Pagamento {
   data: string;
   plataforma: string;
   valor: number;
+}
+
+interface PersonaOption {
+  id: string;
+  profile_name: string | null;
+}
+
+interface PromptAtendimentoRow {
+  id: string;
+  nome_atendente: string | null;
+  principais_instrucoes: string | null;
+  papel: string | null;
+  tom_voz: string | null;
+  persona_id: string | null;
+  criatividade_temperatura: number | null;
+  max_tokens: number | null;
 }
 
 // --- Helpers ---
@@ -110,6 +136,10 @@ const dadosFormSchema = z.object({
   email_atendimento: z
     .union([z.string().email("E-mail inválido"), z.literal("")])
     .optional(),
+  estancia_whatsapp: z.string().optional(),
+  n8n_chat_webhook_url: z
+    .union([z.literal(""), z.string().url("URL inválida")])
+    .optional(),
 });
 
 const pagamentoFormSchema = z.object({
@@ -123,8 +153,34 @@ const pagamentoFormSchema = z.object({
     .pipe(z.number().min(0, "O valor deve ser maior ou igual a zero")),
 });
 
+const promptAtendimentoFormSchema = z.object({
+  nome_atendente: z.string().optional(),
+  principais_instrucoes: z.string().optional(),
+  papel: z.string().optional(),
+  tom_voz: z.string().optional(),
+  persona_id: z.string().optional(),
+  criatividade_temperatura: z
+    .union([z.number(), z.string()])
+    .transform((v) => (typeof v === "string" ? parseInt(v, 10) || 5 : v))
+    .pipe(z.number().min(1, "Mínimo 1").max(10, "Máximo 10")),
+  max_tokens: z
+    .union([z.number(), z.string()])
+    .transform((v) => (typeof v === "string" ? parseInt(v, 10) || 1024 : v))
+    .pipe(z.number().min(1, "Mínimo 1")),
+});
+
+const evolutionFormSchema = z.object({
+  evolution_api_url: z
+    .union([z.literal(""), z.string().url("URL inválida")])
+    .optional(),
+  evolution_api_key: z.string().optional(),
+  evolution_instance_name: z.string().optional(),
+});
+
 type DadosFormValues = z.infer<typeof dadosFormSchema>;
 type PagamentoFormValues = z.infer<typeof pagamentoFormSchema>;
+type PromptAtendimentoFormValues = z.infer<typeof promptAtendimentoFormSchema>;
+type EvolutionFormValues = z.infer<typeof evolutionFormSchema>;
 
 const PLATAFORMA_OPTIONS = [
   { value: "Google Ads", label: "Google Ads" },
@@ -144,12 +200,26 @@ export function ConfiguracoesPage() {
   const [isFetchingPagamentos, setIsFetchingPagamentos] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSavingPagamento, setIsSavingPagamento] = useState(false);
+  const [personas, setPersonas] = useState<PersonaOption[]>([]);
+  const [isFetchingPrompt, setIsFetchingPrompt] = useState(true);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [segmentType, setSegmentType] = useState<string>("produtos");
+  const [isFetchingSegment, setIsFetchingSegment] = useState(true);
+  const [isSavingSegment, setIsSavingSegment] = useState(false);
+  const [isFetchingEvolution, setIsFetchingEvolution] = useState(true);
+  const [isSavingEvolution, setIsSavingEvolution] = useState(false);
+  const [qrCodeBase64, setQrCodeBase64] = useState<string | null>(null);
+  const [connectionState, setConnectionState] = useState<string | null>(null);
+
+  const { execute: executeEvolutionProxy } = useEvolutionProxy();
 
   const dadosForm = useForm<DadosFormValues>({
     resolver: zodResolver(dadosFormSchema),
     defaultValues: {
       celular_atendimento: "",
       email_atendimento: "",
+      estancia_whatsapp: "",
+      n8n_chat_webhook_url: "",
     },
   });
 
@@ -159,6 +229,28 @@ export function ConfiguracoesPage() {
       data: "",
       plataforma: undefined,
       valor: 0,
+    },
+  });
+
+  const promptForm = useForm<PromptAtendimentoFormValues>({
+    resolver: zodResolver(promptAtendimentoFormSchema),
+    defaultValues: {
+      nome_atendente: "",
+      principais_instrucoes: "",
+      papel: "",
+      tom_voz: "",
+      persona_id: "",
+      criatividade_temperatura: 5,
+      max_tokens: 1024,
+    },
+  });
+
+  const evolutionForm = useForm<EvolutionFormValues>({
+    resolver: zodResolver(evolutionFormSchema),
+    defaultValues: {
+      evolution_api_url: "",
+      evolution_api_key: "",
+      evolution_instance_name: "",
     },
   });
 
@@ -176,13 +268,15 @@ export function ConfiguracoesPage() {
   const loadDados = useCallback(async () => {
     if (!companyId) {
       setIsFetchingDados(false);
+      setIsFetchingSegment(false);
       return;
     }
     setIsFetchingDados(true);
+    setIsFetchingSegment(true);
     try {
       const { data, error } = await supabase
         .from("companies")
-        .select("celular_atendimento, email_atendimento")
+        .select("celular_atendimento, email_atendimento, estancia_whatsapp, n8n_chat_webhook_url, segment_type")
         .eq("id", companyId)
         .maybeSingle();
 
@@ -191,7 +285,10 @@ export function ConfiguracoesPage() {
       dadosForm.reset({
         celular_atendimento: row?.celular_atendimento ?? "",
         email_atendimento: row?.email_atendimento ?? "",
+        estancia_whatsapp: row?.estancia_whatsapp ?? "",
+        n8n_chat_webhook_url: row?.n8n_chat_webhook_url ?? "",
       });
+      setSegmentType(row?.segment_type === "consorcio" ? "consorcio" : "produtos");
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
       toast({
@@ -201,6 +298,7 @@ export function ConfiguracoesPage() {
       });
     } finally {
       setIsFetchingDados(false);
+      setIsFetchingSegment(false);
     }
   }, [companyId, supabase, toast, dadosForm]);
 
@@ -242,6 +340,106 @@ export function ConfiguracoesPage() {
     loadPagamentos();
   }, [loadPagamentos]);
 
+  // Carregar personas (ideal_customers) para o select
+  const loadPersonas = useCallback(async () => {
+    if (!companyId) return;
+    try {
+      const { data, error } = await supabase
+        .from("ideal_customers")
+        .select("id, profile_name")
+        .eq("company_id", companyId)
+        .order("profile_name");
+
+      if (error) throw error;
+      setPersonas((data as PersonaOption[]) ?? []);
+    } catch (err) {
+      console.error("Erro ao carregar personas:", err);
+      setPersonas([]);
+    }
+  }, [companyId, supabase]);
+
+  // Carregar prompt de atendimento
+  const loadPromptAtendimento = useCallback(async () => {
+    if (!companyId) {
+      setIsFetchingPrompt(false);
+      return;
+    }
+    setIsFetchingPrompt(true);
+    try {
+      const { data, error } = await supabase
+        .from("prompt_atendimento")
+        .select("id, nome_atendente, principais_instrucoes, papel, tom_voz, persona_id, criatividade_temperatura, max_tokens")
+        .eq("company_id", companyId)
+        .maybeSingle();
+
+      if (error) throw error;
+      const row = data as PromptAtendimentoRow | null;
+      promptForm.reset({
+        nome_atendente: row?.nome_atendente ?? "",
+        principais_instrucoes: row?.principais_instrucoes ?? "",
+        papel: row?.papel ?? "",
+        tom_voz: row?.tom_voz ?? "",
+        persona_id: row?.persona_id ?? "",
+        criatividade_temperatura: row?.criatividade_temperatura ?? 5,
+        max_tokens: row?.max_tokens ?? 1024,
+      });
+    } catch (err) {
+      console.error("Erro ao carregar prompt de atendimento:", err);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Falha ao carregar configurações do prompt.",
+      });
+    } finally {
+      setIsFetchingPrompt(false);
+    }
+  }, [companyId, supabase, toast, promptForm]);
+
+  useEffect(() => {
+    loadPersonas();
+  }, [loadPersonas]);
+
+  useEffect(() => {
+    loadPromptAtendimento();
+  }, [loadPromptAtendimento]);
+
+  // Carregar configuração Evolution API (não carrega API key por segurança)
+  const loadEvolution = useCallback(async () => {
+    if (!companyId) {
+      setIsFetchingEvolution(false);
+      return;
+    }
+    setIsFetchingEvolution(true);
+    try {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("evolution_api_url, evolution_instance_name")
+        .eq("id", companyId)
+        .maybeSingle();
+
+      if (error) throw error;
+      const row = data as { evolution_api_url: string | null; evolution_instance_name: string | null } | null;
+      evolutionForm.reset({
+        evolution_api_url: row?.evolution_api_url ?? "",
+        evolution_api_key: "", // Nunca carregado por segurança
+        evolution_instance_name: row?.evolution_instance_name ?? "",
+      });
+    } catch (err) {
+      console.error("Erro ao carregar Evolution API:", err);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Falha ao carregar configuração da Evolution API.",
+      });
+    } finally {
+      setIsFetchingEvolution(false);
+    }
+  }, [companyId, supabase, toast, evolutionForm]);
+
+  useEffect(() => {
+    loadEvolution();
+  }, [loadEvolution]);
+
   // Salvar dados (aba Dados)
   async function onDadosSubmit(values: DadosFormValues) {
     if (!companyId) {
@@ -259,6 +457,8 @@ export function ConfiguracoesPage() {
         .update({
           celular_atendimento: values.celular_atendimento?.trim() || null,
           email_atendimento: values.email_atendimento?.trim() || null,
+          estancia_whatsapp: values.estancia_whatsapp?.trim() || null,
+          n8n_chat_webhook_url: values.n8n_chat_webhook_url?.trim() || null,
         })
         .eq("id", companyId);
 
@@ -272,7 +472,7 @@ export function ConfiguracoesPage() {
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
+        description: getErrorMessage(err),
       });
     } finally {
       setIsSavingDados(false);
@@ -315,10 +515,204 @@ export function ConfiguracoesPage() {
       toast({
         variant: "destructive",
         title: "Erro ao cadastrar",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
+        description: getErrorMessage(err),
       });
     } finally {
       setIsSavingPagamento(false);
+    }
+  }
+
+  // Salvar prompt de atendimento
+  async function onPromptAtendimentoSubmit(values: PromptAtendimentoFormValues) {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Empresa não identificada.",
+      });
+      return;
+    }
+    setIsSavingPrompt(true);
+    try {
+      const payload = {
+        company_id: companyId,
+        nome_atendente: values.nome_atendente?.trim() || null,
+        principais_instrucoes: values.principais_instrucoes?.trim() || null,
+        papel: values.papel?.trim() || null,
+        tom_voz: values.tom_voz?.trim() || null,
+        persona_id: values.persona_id?.trim() || null,
+        criatividade_temperatura: values.criatividade_temperatura ?? 5,
+        max_tokens: values.max_tokens ?? 1024,
+      };
+
+      const { data: existing } = await supabase
+        .from("prompt_atendimento")
+        .select("id")
+        .eq("company_id", companyId)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from("prompt_atendimento")
+          .update({
+            nome_atendente: payload.nome_atendente,
+            principais_instrucoes: payload.principais_instrucoes,
+            papel: payload.papel,
+            tom_voz: payload.tom_voz,
+            persona_id: payload.persona_id,
+            criatividade_temperatura: payload.criatividade_temperatura,
+            max_tokens: payload.max_tokens,
+          })
+          .eq("company_id", companyId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("prompt_atendimento")
+          .insert(payload);
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: "Prompt salvo",
+        description: "As configurações do prompt de atendimento foram atualizadas.",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  }
+
+  // Salvar segmento (aba Segmento)
+  async function onSegmentSubmit() {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Empresa não identificada.",
+      });
+      return;
+    }
+    setIsSavingSegment(true);
+    try {
+      const { error } = await supabase
+        .from("companies")
+        .update({ segment_type: segmentType })
+        .eq("id", companyId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Segmento salvo",
+        description: "O tipo de segmento foi atualizado. O menu será atualizado.",
+      });
+      window.dispatchEvent(new CustomEvent("segment-type-changed"));
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSavingSegment(false);
+    }
+  }
+
+  // Salvar credenciais Evolution API
+  async function onEvolutionSubmit(values: EvolutionFormValues) {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Empresa não identificada.",
+      });
+      return;
+    }
+    setIsSavingEvolution(true);
+    try {
+      const payload: Record<string, string | null> = {
+        evolution_api_url: values.evolution_api_url?.trim() || null,
+        evolution_instance_name: values.evolution_instance_name?.trim() || null,
+      };
+      if (values.evolution_api_key?.trim()) {
+        payload.evolution_api_key = values.evolution_api_key.trim();
+      }
+      const { error } = await supabase
+        .from("companies")
+        .update(payload)
+        .eq("id", companyId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Credenciais salvas",
+        description: "As configurações da Evolution API foram atualizadas.",
+      });
+      evolutionForm.reset({
+        ...evolutionForm.getValues(),
+        evolution_api_key: "", // Limpa o campo após salvar (nunca persistir no estado do form)
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSavingEvolution(false);
+    }
+  }
+
+  // Ações Evolution API via Edge Function
+  async function handleEvolutionAction(
+    action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout"
+  ) {
+    const instanceName = evolutionForm.getValues("evolution_instance_name")?.trim();
+    const { data, error } = await executeEvolutionProxy(action, {
+      instanceName: instanceName || undefined,
+    });
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: error,
+      });
+      return;
+    }
+    const res = data as Record<string, unknown> | null;
+    if (action === "connect" && res) {
+      const base64 = (res.base64 ?? res.code ?? res.pairingCode) as string | undefined;
+      if (base64) {
+        const src = typeof base64 === "string" && base64.startsWith("data:")
+          ? base64
+          : `data:image/png;base64,${base64}`;
+        setQrCodeBase64(src);
+      } else {
+        setQrCodeBase64(null);
+        toast({
+          variant: "destructive",
+          title: "QR Code não retornado",
+          description: "A Evolution API não retornou o QR Code. Verifique se a instância existe.",
+        });
+      }
+    }
+    if (action === "connectionState" && res) {
+      const state = (res.state ?? res.instance?.state ?? res) as string | Record<string, unknown>;
+      setConnectionState(typeof state === "string" ? state : JSON.stringify(state));
+    }
+    if (action === "logout") {
+      setQrCodeBase64(null);
+      setConnectionState(null);
+      toast({
+        title: "Desconectado",
+        description: "A instância foi desconectada com sucesso.",
+      });
     }
   }
 
@@ -348,12 +742,21 @@ export function ConfiguracoesPage() {
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           <Tabs defaultValue="dados" className="w-full">
-            <TabsList className="grid w-full max-w-[400px] grid-cols-2">
+            <TabsList className="grid w-full max-w-[1000px] grid-cols-5">
               <TabsTrigger value="dados" className="gap-2">
                 <Database className="h-4 w-4" /> Dados
               </TabsTrigger>
+              <TabsTrigger value="segmento" className="gap-2">
+                <Layers className="h-4 w-4" /> Segmento
+              </TabsTrigger>
+              <TabsTrigger value="evolution" className="gap-2">
+                <Smartphone className="h-4 w-4" /> Evolution API
+              </TabsTrigger>
               <TabsTrigger value="anuncios" className="gap-2">
                 <Megaphone className="h-4 w-4" /> Anúncios
+              </TabsTrigger>
+              <TabsTrigger value="prompt-atendimento" className="gap-2">
+                <MessageSquare className="h-4 w-4" /> Prompt Atendimento
               </TabsTrigger>
             </TabsList>
 
@@ -362,7 +765,8 @@ export function ConfiguracoesPage() {
                 <CardHeader>
                   <CardTitle>Dados do atendimento</CardTitle>
                   <CardDescription>
-                    Celular e e-mail para contato de atendimento.
+                    Celular, e-mail e Estância Whatsapp para contato de
+                    atendimento.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -413,9 +817,427 @@ export function ConfiguracoesPage() {
                           </p>
                         )}
                       </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="estancia_whatsapp">
+                          Estância Whatsapp
+                        </Label>
+                        <Input
+                          id="estancia_whatsapp"
+                          type="text"
+                          placeholder="Ex: nome-da-instancia"
+                          {...dadosForm.register("estancia_whatsapp")}
+                        />
+                        {dadosForm.formState.errors.estancia_whatsapp && (
+                          <p className="text-xs text-destructive">
+                            {
+                              dadosForm.formState.errors.estancia_whatsapp
+                                .message
+                            }
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="n8n_chat_webhook_url">
+                          Webhook N8N (Chat de Conhecimento)
+                        </Label>
+                        <Input
+                          id="n8n_chat_webhook_url"
+                          type="url"
+                          placeholder="https://seu-n8n.com/webhook/consulta-chat"
+                          {...dadosForm.register("n8n_chat_webhook_url")}
+                        />
+                        {dadosForm.formState.errors.n8n_chat_webhook_url && (
+                          <p className="text-xs text-destructive">
+                            {
+                              dadosForm.formState.errors.n8n_chat_webhook_url
+                                .message
+                            }
+                          </p>
+                        )}
+                      </div>
                       <div className="sm:col-span-2">
                         <Button type="submit" disabled={isSavingDados}>
                           {isSavingDados ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Salvando…
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-4 w-4" />
+                              Salvar
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="segmento" className="space-y-4 pt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tipo de Segmento</CardTitle>
+                  <CardDescription>
+                    Defina o foco do seu negócio. Isso altera os módulos exibidos no menu lateral.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isFetchingSegment ? (
+                    <div className="flex min-h-[120px] items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <RadioGroup
+                        value={segmentType}
+                        onValueChange={setSegmentType}
+                        className="flex flex-col gap-4"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="produtos" id="segment-produtos" />
+                          <Label htmlFor="segment-produtos" className="cursor-pointer font-normal">
+                            Produtos e Serviços
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="consorcio" id="segment-consorcio" />
+                          <Label htmlFor="segment-consorcio" className="cursor-pointer font-normal">
+                            Consórcios
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                      <Button
+                        type="button"
+                        onClick={onSegmentSubmit}
+                        disabled={isSavingSegment}
+                      >
+                        {isSavingSegment ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Salvando…
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-4 w-4" />
+                            Salvar
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="evolution" className="space-y-4 pt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Evolution API (WhatsApp)</CardTitle>
+                  <CardDescription>
+                    Configure a conexão com a Evolution API hospedada na sua VPS.
+                    Crie uma instância e conecte via QR Code.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isFetchingEvolution ? (
+                    <div className="flex min-h-[120px] items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <form
+                        onSubmit={evolutionForm.handleSubmit(onEvolutionSubmit)}
+                        className="grid gap-4 sm:grid-cols-2"
+                      >
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="evolution_api_url">
+                            URL da Evolution API
+                          </Label>
+                          <Input
+                            id="evolution_api_url"
+                            type="url"
+                            placeholder="https://evolution.sua-vps.com"
+                            {...evolutionForm.register("evolution_api_url")}
+                          />
+                          {evolutionForm.formState.errors.evolution_api_url && (
+                            <p className="text-xs text-destructive">
+                              {
+                                evolutionForm.formState.errors.evolution_api_url
+                                  .message
+                              }
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="evolution_api_key">
+                            API Key
+                          </Label>
+                          <Input
+                            id="evolution_api_key"
+                            type="password"
+                            placeholder="••••••••"
+                            autoComplete="off"
+                            {...evolutionForm.register("evolution_api_key")}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Deixe em branco para manter a chave atual.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="evolution_instance_name">
+                            Nome da instância
+                          </Label>
+                          <Input
+                            id="evolution_instance_name"
+                            type="text"
+                            placeholder="minha-empresa-whatsapp"
+                            {...evolutionForm.register("evolution_instance_name")}
+                          />
+                        </div>
+                        <div className="flex items-end sm:col-span-2">
+                          <Button type="submit" disabled={isSavingEvolution}>
+                            {isSavingEvolution ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Salvando…
+                              </>
+                            ) : (
+                              <>
+                                <Check className="h-4 w-4" />
+                                Salvar credenciais
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </form>
+
+                      <Separator />
+
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-medium">Ações</h4>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleEvolutionAction("create")}
+                          >
+                            Criar instância
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleEvolutionAction("connect")}
+                            disabled={!evolutionForm.watch("evolution_instance_name")?.trim()}
+                          >
+                            Conectar / Gerar QR Code
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleEvolutionAction("connectionState")}
+                            disabled={!evolutionForm.watch("evolution_instance_name")?.trim()}
+                          >
+                            Verificar conexão
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleEvolutionAction("logout")}
+                            disabled={
+                              !evolutionForm.watch("evolution_instance_name")?.trim() ||
+                              connectionState !== "open"
+                            }
+                          >
+                            Desconectar
+                          </Button>
+                        </div>
+                      </div>
+
+                      {qrCodeBase64 && connectionState !== "open" && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">
+                            Escaneie com WhatsApp no celular
+                          </p>
+                          <div className="flex justify-center rounded-lg border bg-muted/50 p-4">
+                            <img
+                              src={qrCodeBase64}
+                              alt="QR Code para conectar WhatsApp"
+                              className="h-64 w-64 object-contain"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {connectionState && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Estado da conexão</p>
+                          <p className="rounded-md bg-muted p-3 text-sm">
+                            {connectionState}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="prompt-atendimento" className="space-y-4 pt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Prompt de Atendimento</CardTitle>
+                  <CardDescription>
+                    Configure o comportamento da IA no atendimento: nome, papel,
+                    tom de voz, persona e parâmetros de geração.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isFetchingPrompt ? (
+                    <div className="flex min-h-[200px] items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <form
+                      onSubmit={promptForm.handleSubmit(onPromptAtendimentoSubmit)}
+                      className="grid gap-4 sm:grid-cols-2"
+                    >
+                      <div className="space-y-2">
+                        <Label htmlFor="nome_atendente">Nome do atendente</Label>
+                        <Input
+                          id="nome_atendente"
+                          type="text"
+                          placeholder="Ex: Assistente de Vendas"
+                          {...promptForm.register("nome_atendente")}
+                        />
+                        {promptForm.formState.errors.nome_atendente && (
+                          <p className="text-xs text-destructive">
+                            {promptForm.formState.errors.nome_atendente.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="principais_instrucoes">
+                          Principais instruções
+                        </Label>
+                        <Textarea
+                          id="principais_instrucoes"
+                          placeholder="Descreva as principais instruções para o atendente..."
+                          rows={4}
+                          className="resize-none"
+                          {...promptForm.register("principais_instrucoes")}
+                        />
+                        {promptForm.formState.errors.principais_instrucoes && (
+                          <p className="text-xs text-destructive">
+                            {
+                              promptForm.formState.errors.principais_instrucoes
+                                .message
+                            }
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="papel">Papel</Label>
+                        <Input
+                          id="papel"
+                          type="text"
+                          placeholder="Ex: Consultor de vendas"
+                          {...promptForm.register("papel")}
+                        />
+                        {promptForm.formState.errors.papel && (
+                          <p className="text-xs text-destructive">
+                            {promptForm.formState.errors.papel.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="tom_voz">Tom de voz</Label>
+                        <Input
+                          id="tom_voz"
+                          type="text"
+                          placeholder="Ex: Amigável e profissional"
+                          {...promptForm.register("tom_voz")}
+                        />
+                        {promptForm.formState.errors.tom_voz && (
+                          <p className="text-xs text-destructive">
+                            {promptForm.formState.errors.tom_voz.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Persona (Cliente Ideal)</Label>
+                        <Select
+                          value={
+                            promptForm.watch("persona_id") || "__none__"
+                          }
+                          onValueChange={(v) =>
+                            promptForm.setValue(
+                              "persona_id",
+                              v === "__none__" ? "" : v
+                            )
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione uma persona" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Nenhuma</SelectItem>
+                            {personas.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.profile_name ?? "Sem nome"}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {promptForm.formState.errors.persona_id && (
+                          <p className="text-xs text-destructive">
+                            {promptForm.formState.errors.persona_id.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="criatividade_temperatura">
+                          Criatividade/Temperatura (1-10)
+                        </Label>
+                        <Input
+                          id="criatividade_temperatura"
+                          type="number"
+                          min={1}
+                          max={10}
+                          placeholder="5"
+                          {...promptForm.register("criatividade_temperatura")}
+                        />
+                        {promptForm.formState.errors.criatividade_temperatura && (
+                          <p className="text-xs text-destructive">
+                            {
+                              promptForm.formState.errors
+                                .criatividade_temperatura?.message
+                            }
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="max_tokens">
+                          Tamanho da resposta (max tokens)
+                        </Label>
+                        <Input
+                          id="max_tokens"
+                          type="number"
+                          min={1}
+                          placeholder="1024"
+                          {...promptForm.register("max_tokens")}
+                        />
+                        {promptForm.formState.errors.max_tokens && (
+                          <p className="text-xs text-destructive">
+                            {promptForm.formState.errors.max_tokens.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Button type="submit" disabled={isSavingPrompt}>
+                          {isSavingPrompt ? (
                             <>
                               <Loader2 className="h-4 w-4 animate-spin" />
                               Salvando…
@@ -557,7 +1379,7 @@ export function ConfiguracoesPage() {
                   </Dialog>
                 </div>
 
-                <div className="rounded-md border">
+                <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                   {isFetchingPagamentos ? (
                     <div className="flex min-h-[200px] items-center justify-center p-8">
                       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

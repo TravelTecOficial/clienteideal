@@ -16,9 +16,12 @@ import {
   Package,
   UserCircle,
   Settings,
+  HandCoins,
+  MessageSquare,
 } from "lucide-react"
 
 import { SearchForm } from "@/components/search-form"
+import { useSegmentType } from "@/hooks/use-segment-type"
 import {
   Collapsible,
   CollapsibleContent,
@@ -39,8 +42,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-// Itens simples (link direto)
-const navItems = [
+// Itens simples (link direto) - Produtos & Serviços e Consórcios são mutuamente exclusivos por segment_type
+const navItemsBase = [
   { title: "Home", url: "/dashboard", icon: LayoutDashboard },
   { title: "Cliente Ideal", url: "/dashboard/cliente-ideal", icon: User },
   { title: "Qualificador", url: "/dashboard/qualificador", icon: Target },
@@ -49,7 +52,9 @@ const navItems = [
   { title: "Agenda", url: "/dashboard/agenda", icon: Calendar },
   { title: "Atendimentos", url: "/dashboard/atendimentos", icon: Headphones },
   { title: "Base de conhecimento", url: "/dashboard/base-conhecimento", icon: BookOpen },
-  { title: "Produtos & Serviços", url: "/dashboard/items", icon: Package },
+  { title: "Chat de conhecimento", url: "/dashboard/chat-conhecimento", icon: MessageSquare },
+  { title: "Produtos & Serviços", url: "/dashboard/items", icon: Package, segmentFilter: "produtos" as const },
+  { title: "Consórcios", url: "/dashboard/consorcio", icon: HandCoins, segmentFilter: "consorcio" as const },
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
   { title: "Perfil", url: "/dashboard/perfil", icon: UserCircle },
 ]
@@ -67,7 +72,14 @@ const usuariosNav = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { signOut } = useClerk()
+  const { segmentType } = useSegmentType()
   const UsuariosIcon = usuariosNav.icon
+
+  const navItems = navItemsBase.filter((item) => {
+    const filter = (item as { segmentFilter?: "produtos" | "consorcio" }).segmentFilter
+    if (!filter) return true
+    return segmentType === filter
+  })
 
   const isActive = (url: string) => {
     if (url === "/dashboard") return location.pathname === "/dashboard"

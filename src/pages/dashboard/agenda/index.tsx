@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { AgendaForm, type AgendaFormValues, type VendedorOption } from "./components/AgendaForm";
 
@@ -75,7 +76,7 @@ const localizer = dateFnsLocalizer({
 
 function formatDataHora(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleString("pt-BR");
+  return d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
 function getStatusBadgeClass(status: string): string {
@@ -88,6 +89,22 @@ function getStatusBadgeClass(status: string): string {
   return classes[status] ?? "";
 }
 
+function toDateTimeLocal(iso: string): string {
+  const d = new Date(iso);
+  const formatter = new Intl.DateTimeFormat("fr-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
 export default function AgendaPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
@@ -97,8 +114,10 @@ export default function AgendaPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<AgendaItem | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [view, setView] = useState<"table" | "calendar">("table");
 
   // Note: UI-level check only. API enforcement required.
@@ -222,11 +241,78 @@ export default function AgendaPage() {
       toast({
         variant: "destructive",
         title: "Erro ao criar",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
+        description: getErrorMessage(err),
       });
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function onUpdate(values: AgendaFormValues) {
+    if (!selectedItem) return;
+    setIsSaving(true);
+    try {
+      const dataHoraIso = new Date(values.data_hora).toISOString();
+      const { error } = await supabase
+        .from("agenda")
+        .update({
+          data_hora: dataHoraIso,
+          tipo_reuniao: values.tipo_reuniao.trim(),
+          vendedor_id: values.vendedor_id || null,
+          status: values.status,
+          descricao: values.descricao?.trim() || null,
+        })
+        .eq("id", selectedItem.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Agendamento atualizado",
+        description: "As alterações foram salvas com sucesso.",
+      });
+      setSelectedItem(null);
+      loadAgenda();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao atualizar",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleCancelAgenda() {
+    if (!selectedItem) return;
+    setIsCancelling(true);
+    try {
+      const { error } = await supabase
+        .from("agenda")
+        .update({ status: "Cancelado" })
+        .eq("id", selectedItem.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Agendamento cancelado",
+        description: "O agendamento foi cancelado com sucesso.",
+      });
+      setSelectedItem(null);
+      loadAgenda();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao cancelar",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
+  function openEditModal(item: AgendaItem) {
+    setSelectedItem(item);
   }
 
   return (
@@ -302,7 +388,11 @@ export default function AgendaPage() {
                     </TableRow>
                   ) : (
                     agenda.map((item) => (
-                      <TableRow key={item.id}>
+                      <TableRow
+                        key={item.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => openEditModal(item)}
+                      >
                         <TableCell className="font-medium">
                           {formatDataHora(item.data_hora)}
                         </TableCell>
@@ -334,11 +424,47 @@ export default function AgendaPage() {
                 views={["month", "week", "day", "agenda"]}
                 defaultView="month"
                 style={{ height: "100%" }}
+                onSelectEvent={(event) => {
+                  const item = agenda.find((a) => a.id === event.id);
+                  if (item) openEditModal(item);
+                }}
               />
             </div>
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={selectedItem !== null}
+        onOpenChange={(open) => !open && setSelectedItem(null)}
+      >
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Editar Agendamento</DialogTitle>
+            <DialogDescription>
+              Altere as informações da reunião ou cancele o agendamento.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedItem && (
+            <AgendaForm
+              key={selectedItem.id}
+              mode="edit"
+              onSubmit={onUpdate}
+              defaultValues={{
+                data_hora: toDateTimeLocal(selectedItem.data_hora),
+                tipo_reuniao: selectedItem.tipo_reuniao,
+                vendedor_id: selectedItem.vendedor_id || "",
+                status: selectedItem.status,
+                descricao: selectedItem.descricao || "",
+              }}
+              vendedores={vendedores}
+              isSaving={isSaving}
+              onCancelAgenda={handleCancelAgenda}
+              isCancelling={isCancelling}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

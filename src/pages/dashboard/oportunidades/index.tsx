@@ -54,7 +54,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useSegmentType } from "@/hooks/use-segment-type";
 
 import { useNavigate } from "react-router-dom";
 import {
@@ -82,7 +84,9 @@ interface Opportunity {
   seller_id: string | null;
   product_id: string | null;
   lead_id: string | null;
+  sinopse: string | null;
   leads?: { name: string | null } | null;
+  vendedores?: { nome: string | null } | null;
 }
 
 interface ProfileRow {
@@ -253,6 +257,7 @@ export default function OportunidadesPage() {
   const navigate = useNavigate();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const { segmentType } = useSegmentType();
 
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -349,7 +354,7 @@ export default function OportunidadesPage() {
     try {
       const { data, error } = await supabase
         .from("opportunities")
-        .select("id, title, value, expected_closing_date, stage, seller_id, product_id, lead_id, leads(name)")
+        .select("id, title, value, expected_closing_date, stage, seller_id, product_id, lead_id, sinopse, leads(name), vendedores!seller_id(nome)")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -392,6 +397,9 @@ export default function OportunidadesPage() {
 
   const getSellerName = (sellerId: string | null | undefined) =>
     sellerId ? vendedorMap().get(sellerId) ?? null : null;
+
+  const getSellerDisplayName = (opp: Opportunity) =>
+    opp.vendedores?.nome ?? getSellerName(opp.seller_id) ?? null;
   const getItemName = (itemId: string | null | undefined) =>
     itemId ? itemMap().get(itemId) ?? null : null;
 
@@ -460,7 +468,7 @@ export default function OportunidadesPage() {
       toast({
         variant: "destructive",
         title: "Erro",
-        description: err instanceof Error ? err.message : "Erro ao mover.",
+        description: getErrorMessage(err, "Erro ao mover."),
       });
     }
   }
@@ -480,7 +488,7 @@ export default function OportunidadesPage() {
     }
     setIsSaving(true);
     try {
-      const { error } = await supabase.from("opportunities").insert({
+      const payload: Record<string, unknown> = {
         company_id: effectiveCompanyId,
         user_id: userId,
         title: values.title.trim(),
@@ -488,9 +496,15 @@ export default function OportunidadesPage() {
         expected_closing_date: values.expected_closing_date || null,
         stage: values.stage,
         lead_id: values.lead_id || null,
-        product_id: values.product_id || null,
         seller_id: values.seller_id || null,
-      });
+      };
+      if (segmentType === "consorcio") {
+        payload.sinopse = values.sinopse || null;
+        payload.product_id = null;
+      } else {
+        payload.product_id = values.product_id || null;
+      }
+      const { error } = await supabase.from("opportunities").insert(payload);
 
       if (error) throw error;
       toast({
@@ -503,7 +517,7 @@ export default function OportunidadesPage() {
       toast({
         variant: "destructive",
         title: "Erro ao criar",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
+        description: getErrorMessage(err),
       });
     } finally {
       setIsSaving(false);
@@ -519,17 +533,23 @@ export default function OportunidadesPage() {
     if (!editingOpportunity || !effectiveCompanyId) return;
     setIsSaving(true);
     try {
+      const payload: Record<string, unknown> = {
+        title: values.title.trim(),
+        value: Number(values.value) || 0,
+        expected_closing_date: values.expected_closing_date || null,
+        stage: values.stage,
+        lead_id: values.lead_id || null,
+        seller_id: values.seller_id || null,
+      };
+      if (segmentType === "consorcio") {
+        payload.sinopse = values.sinopse || null;
+        payload.product_id = null;
+      } else {
+        payload.product_id = values.product_id || null;
+      }
       const { error } = await supabase
         .from("opportunities")
-        .update({
-          title: values.title.trim(),
-          value: Number(values.value) || 0,
-          expected_closing_date: values.expected_closing_date || null,
-          stage: values.stage,
-          lead_id: values.lead_id || null,
-          product_id: values.product_id || null,
-          seller_id: values.seller_id || null,
-        })
+        .update(payload)
         .eq("id", editingOpportunity.id)
         .eq("company_id", effectiveCompanyId);
 
@@ -545,7 +565,7 @@ export default function OportunidadesPage() {
       toast({
         variant: "destructive",
         title: "Erro ao atualizar",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
+        description: getErrorMessage(err),
       });
     } finally {
       setIsSaving(false);
@@ -571,7 +591,7 @@ export default function OportunidadesPage() {
       toast({
         variant: "destructive",
         title: "Erro ao excluir",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
+        description: getErrorMessage(err),
       });
     }
   }
@@ -618,6 +638,7 @@ export default function OportunidadesPage() {
               leads={leads}
               vendedores={vendedores}
               items={items}
+              segmentType={segmentType === "consorcio" ? "consorcio" : "produtos"}
               onNewLead={() => {
                 setIsCreateDialogOpen(false);
                 navigate("/dashboard/leads");
@@ -705,7 +726,7 @@ export default function OportunidadesPage() {
                       <DraggableKanbanCard
                         key={opp.id}
                         opportunity={opp}
-                        sellerName={getSellerName(opp.seller_id)}
+                        sellerName={getSellerDisplayName(opp)}
                         onEdit={() => handleEditClick(opp)}
                         onDelete={() => handleDelete(opp)}
                       />
@@ -726,8 +747,8 @@ export default function OportunidadesPage() {
                   {formatCurrency(activeOpp.value)}
                 </p>
                 <div className="mt-2 text-[10px] text-slate-500">
-                  {getSellerName(activeOpp.seller_id) && (
-                    <span>Vendedor: {getSellerName(activeOpp.seller_id)}</span>
+                  {getSellerDisplayName(activeOpp) && (
+                    <span>Vendedor: {getSellerDisplayName(activeOpp)}</span>
                   )}
                 </div>
               </div>
@@ -755,7 +776,9 @@ export default function OportunidadesPage() {
                   <TableHead className="w-[12%] min-w-[80px]">Valor</TableHead>
                   <TableHead className="w-[14%] min-w-[100px]">Estágio</TableHead>
                   <TableHead className="w-[14%] min-w-[80px]">Vendedor</TableHead>
-                  <TableHead className="w-[14%] min-w-[80px]">Produto/Serviço</TableHead>
+                  <TableHead className="w-[14%] min-w-[80px]">
+                {segmentType === "consorcio" ? "Sinopse" : "Produto/Serviço"}
+              </TableHead>
                   <TableHead className="w-[14%] min-w-[80px]">Lead</TableHead>
                   <TableHead className="w-[10%] min-w-[70px]">Data Prevista</TableHead>
                   <TableHead className="w-[7%] min-w-[60px] text-right">Ações</TableHead>
@@ -780,8 +803,12 @@ export default function OportunidadesPage() {
                         {STAGES.find((s) => s.id === opp.stage)?.label ?? opp.stage}
                       </Badge>
                     </TableCell>
-                    <TableCell>{getSellerName(opp.seller_id) ?? "-"}</TableCell>
-                    <TableCell>{getItemName(opp.product_id) ?? "-"}</TableCell>
+                    <TableCell>{getSellerDisplayName(opp) ?? "-"}</TableCell>
+                    <TableCell>
+                      {segmentType === "consorcio"
+                        ? (opp.sinopse ?? "-")
+                        : (getItemName(opp.product_id) ?? "-")}
+                    </TableCell>
                     <TableCell>
                       {opp.leads?.name ?? "-"}
                     </TableCell>
@@ -839,6 +866,7 @@ export default function OportunidadesPage() {
                 lead_id: editingOpportunity.lead_id ?? "",
                 product_id: editingOpportunity.product_id ?? "",
                 seller_id: editingOpportunity.seller_id ?? "",
+                sinopse: editingOpportunity.sinopse ?? "",
               }}
               isEditing
               isSaving={isSaving}
@@ -849,6 +877,7 @@ export default function OportunidadesPage() {
               leads={leads}
               vendedores={vendedores}
               items={items}
+              segmentType={segmentType === "consorcio" ? "consorcio" : "produtos"}
               onNewLead={() => {
                 setIsEditDialogOpen(false);
                 setEditingOpportunity(null);

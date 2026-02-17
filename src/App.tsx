@@ -16,8 +16,11 @@ import { OportunidadesPage } from "@/pages/dashboard/OportunidadesPage"
 import { AgendaPage } from "@/pages/dashboard/AgendaPage"
 import { AtendimentosPage } from "@/pages/dashboard/AtendimentosPage"
 import { BaseConhecimentoPage } from "@/pages/dashboard/BaseConhecimentoPage"
+import { ChatConhecimentoPage } from "@/pages/dashboard/ChatConhecimentoPage"
 import { ProdutosServicosPage } from "@/pages/dashboard/ProdutosServicosPage"
 import { ConfiguracoesPage } from "@/pages/dashboard/ConfiguracoesPage"
+import ConsorcioPage from "@/pages/dashboard/consorcio"
+import { IndicadoresPage } from "@/pages/dashboard/IndicadoresPage"
 import { SupabaseProvider } from "@/lib/supabase-context"
 import { Toaster } from "@/components/ui/toast"
 import { StyleguideLayout } from "@/styleguide/StyleguideLayout"
@@ -166,6 +169,16 @@ function App() {
           }
         />
         <Route
+          path="/dashboard/chat-conhecimento"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <ChatConhecimentoPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
           path="/dashboard/items"
           element={
             <SupabaseProvider>
@@ -181,6 +194,26 @@ function App() {
             <SupabaseProvider>
               <ProtectedRoute>
                 <ConfiguracoesPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/consorcio"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <ConsorcioPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/indicadores"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <IndicadoresPage />
               </ProtectedRoute>
             </SupabaseProvider>
           }

@@ -12,6 +12,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 /** URL do projeto Supabase (para chamadas diretas a Edge Functions). */
 export const SUPABASE_URL = supabaseUrl
 
+/** Chave anon do Supabase (para invocar Edge Functions sem JWT de usuário no header). */
+export const SUPABASE_ANON_KEY = supabaseAnonKey
+
 /** Tipo para criar cliente com token do Clerk (para RLS). */
 export type GetTokenFn = () => Promise<string | null>
 

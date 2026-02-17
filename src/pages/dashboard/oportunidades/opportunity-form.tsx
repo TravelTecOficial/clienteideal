@@ -7,6 +7,7 @@ import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -52,6 +53,7 @@ const opportunityFormSchema = z.object({
   lead_id: z.string().optional(),
   product_id: z.string().optional(),
   seller_id: z.string().optional(),
+  sinopse: z.string().optional(),
 });
 
 export type OpportunityFormValues = z.infer<typeof opportunityFormSchema>;
@@ -77,6 +79,7 @@ interface OpportunityFormProps {
   vendedores: VendedorOption[];
   items: ItemOption[];
   onNewLead?: () => void;
+  segmentType?: "produtos" | "consorcio";
 }
 
 export interface VendedorOption {
@@ -94,6 +97,7 @@ export function OpportunityForm({
   vendedores,
   items,
   onNewLead,
+  segmentType = "produtos",
 }: OpportunityFormProps) {
   const form = useForm<OpportunityFormValues>({
     resolver: zodResolver(opportunityFormSchema),
@@ -105,6 +109,7 @@ export function OpportunityForm({
       lead_id: "",
       product_id: "",
       seller_id: "",
+      sinopse: "",
       ...defaultValues,
     },
   });
@@ -205,42 +210,55 @@ export function OpportunityForm({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>Produto ou Serviço</Label>
-        <Select
-          value={form.watch("product_id") || "none"}
-          onValueChange={(v: string) =>
-            form.setValue("product_id", v === "none" ? "" : v)
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Selecione um produto ou serviço..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Nenhum</SelectItem>
-            <SelectGroup>
-              <SelectLabel>Produtos</SelectLabel>
-              {items
-                .filter((i) => i.type === "product")
-                .map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-            </SelectGroup>
-            <SelectGroup>
-              <SelectLabel>Serviços</SelectLabel>
-              {items
-                .filter((i) => i.type === "service")
-                .map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </div>
+      {segmentType === "consorcio" ? (
+        <div className="space-y-2">
+          <Label htmlFor="sinopse">Sinopse</Label>
+          <Textarea
+            id="sinopse"
+            placeholder="Descreva a oportunidade de consórcio..."
+            rows={4}
+            className="resize-none"
+            {...form.register("sinopse")}
+          />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label>Produto ou Serviço</Label>
+          <Select
+            value={form.watch("product_id") || "none"}
+            onValueChange={(v: string) =>
+              form.setValue("product_id", v === "none" ? "" : v)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione um produto ou serviço..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Nenhum</SelectItem>
+              <SelectGroup>
+                <SelectLabel>Produtos</SelectLabel>
+                {items
+                  .filter((i) => i.type === "product")
+                  .map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+              </SelectGroup>
+              <SelectGroup>
+                <SelectLabel>Serviços</SelectLabel>
+                {items
+                  .filter((i) => i.type === "service")
+                  .map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>Atribuir Vendedor</Label>

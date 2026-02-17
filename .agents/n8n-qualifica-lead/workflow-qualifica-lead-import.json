@@ -1,0 +1,303 @@
+{
+  "name": "[SUB-WORKFLOW] - Qualificar Lead (SDR)",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "trigger-1",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "resposta",
+              "value": "={{ $json.resposta ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "company_id",
+              "value": "={{ $json.company_id ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true
+      },
+      "id": "edit-1",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "v_qualificacao_sdr",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "company_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.company_id }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase-config",
+      "name": "Supabase Config",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "leads_sessao",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "remote_jid",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase-sessao",
+      "name": "Supabase Sessao",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        440,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "outputDataFrom": "input1"
+      },
+      "id": "merge-1",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 1,
+        "keep": "firstItems"
+      },
+      "id": "limit-1",
+      "name": "Limit",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const PONTOS={quente:10,morno:5,frio:1};const REGUA={quente:70,morno:35};function normalizarJid(id){if(!id)return'';const s=String(id).trim();return s.includes('@')?s.split('@')[0]:s}function opts(str){return(str||'').split(/\\s*\\|\\s*/).map(s=>s.toLowerCase().trim()).filter(Boolean)}function classificarResposta(resposta,q,m,f){const r=(resposta||'').toLowerCase().trim();if(!r)return'morno';const match=a=>a.some(o=>r.includes(o)||o.includes(r));if(opts(q).length&&match(opts(q)))return'quente';if(opts(m).length&&match(opts(m)))return'morno';if(opts(f).length&&match(opts(f)))return'frio';return'morno'}function classificarScore(s){if(s>=REGUA.quente)return'Quente';if(s>=REGUA.morno)return'Morno';return'Frio'};const item=($('Edit Fields').first()||$input.first()).json;const id=normalizarJid(item.id||item.remote_jid);const resposta=(item.resposta||'').trim();const companyId=item.company_id||'';if(!id||!companyId)return[{json:{output:JSON.stringify({erro:'id e company_id sao obrigatorios'}),remote_jid:id,company_id:companyId,current_step:0,score_total:0,status:'em_andamento'}}];const perguntas=($('Supabase Config').all()||[]).map(i=>i.json).sort((a,b)=>{const q=(a.qualificador_id||'').localeCompare(b.qualificador_id||'');return q!==0?q:(a.ordem||0)-(b.ordem||0)});const sessaoItem=$('Supabase Sessao').first();const sessao=sessaoItem?sessaoItem.json:null;let currentStep=sessao?(sessao.current_step||0):0;let scoreTotal=sessao?(sessao.score_total||0):0;let status=sessao?(sessao.status||'em_andamento'):'em_andamento';if(!resposta){currentStep=0;scoreTotal=0;status='em_andamento';if(perguntas.length===0)return[{json:{output:JSON.stringify({status:'concluido',classificacao:'Frio',score_total:0,mensagem:'Nenhuma pergunta configurada.'}),remote_jid:id,company_id:companyId,current_step:0,score_total:0,status:'concluido'}}];const primeira=perguntas[0];return[{json:{output:JSON.stringify({proxima_pergunta:primeira.pergunta_texto,status:'em_andamento'}),remote_jid:id,company_id:companyId,current_step:0,score_total:0,status:'em_andamento'}}]}const perguntaAtual=perguntas[currentStep];if(!perguntaAtual)return[{json:{output:JSON.stringify({status:'concluido',classificacao:classificarScore(scoreTotal),score_total:scoreTotal}),remote_jid:id,company_id:companyId,current_step:currentStep,score_total:scoreTotal,status:'concluido'}}];const tipo=classificarResposta(resposta,perguntaAtual.criterio_quente,perguntaAtual.criterio_morno,perguntaAtual.criterio_frio);const peso=Math.min(3,Math.max(1,perguntaAtual.peso||1));const pontos=(PONTOS[tipo]||PONTOS.morno)*peso;scoreTotal+=pontos;currentStep+=1;const proxima=perguntas[currentStep];if(proxima)return[{json:{output:JSON.stringify({proxima_pergunta:proxima.pergunta_texto,status:'em_andamento'}),remote_jid:id,company_id:companyId,current_step:currentStep,score_total:scoreTotal,status:'em_andamento'}}];status='concluido';const classificacao=classificarScore(scoreTotal);return[{json:{output:JSON.stringify({status:'concluido',classificacao,score_total:scoreTotal}),remote_jid:id,company_id:companyId,current_step:currentStep,score_total:scoreTotal,status}}]}"
+      },
+      "id": "code-1",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "tableId": "leads_sessao",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $json.remote_jid }}"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $json.company_id }}"
+            },
+            {
+              "fieldId": "current_step",
+              "fieldValue": "={{ $json.current_step }}"
+            },
+            {
+              "fieldId": "score_total",
+              "fieldValue": "={{ $json.score_total }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase-upsert",
+      "name": "Supabase Upsert",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "o1",
+              "name": "output",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false
+      },
+      "id": "set-output",
+      "name": "Set Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1540,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Supabase Config",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Supabase Sessao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Config": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Sessao": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Supabase Upsert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Set Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

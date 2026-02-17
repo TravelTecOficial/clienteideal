@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -10,6 +11,7 @@ import {
   MoreHorizontal,
   ExternalLink,
   Loader2,
+  MessageSquare,
 } from "lucide-react";
 
 import {
@@ -268,12 +270,18 @@ export default function BaseConhecimento() {
           </p>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:opacity-90">
-              <PlusCircle className="mr-2 h-4 w-4" /> Novo Documento
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/dashboard/chat-conhecimento">
+              <MessageSquare className="mr-2 h-4 w-4" /> Chat
+            </Link>
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
+            <DialogTrigger asChild>
+              <Button className="bg-primary hover:opacity-90">
+                <PlusCircle className="mr-2 h-4 w-4" /> Novo Documento
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleUpload}>
               <DialogHeader>
@@ -345,6 +353,7 @@ export default function BaseConhecimento() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Tabela de Listagem */}

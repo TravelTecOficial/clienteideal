@@ -1,12 +1,16 @@
 import { useEffect, useState, useCallback, type ReactNode } from "react"
 import { useUser, useAuth } from "@clerk/clerk-react"
 import { Navigate, useLocation } from "react-router-dom"
-import { Loader2 } from "lucide-react"
+import { Loader2, WifiOff } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { useSupabaseClient } from "@/lib/supabase-context"
 import { isSaasAdmin, isLocalhost } from "@/lib/use-saas-admin"
 
 const PLAN_CHECK_KEY = "plan_check_passed"
 const PLAN_CHECK_TTL_MS = 10 * 60 * 1000 // 10 min
+
+/** Rotas que usam apenas dados fictícios (mock) e não dependem do Supabase. */
+const MOCK_ONLY_ROUTES = ["/dashboard/indicadores"]
 
 function getPlanCheckPassed(): boolean {
   if (typeof sessionStorage === "undefined") return false
@@ -62,7 +66,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const supabase = useSupabaseClient()
   const location = useLocation()
   const [planCheckStatus, setPlanCheckStatus] = useState<
-    "idle" | "loading" | "allowed" | "blocked"
+    "idle" | "loading" | "allowed" | "blocked" | "connection_failed"
   >("idle")
 
   const fetchAndCheckPlan = useCallback(
@@ -92,6 +96,18 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           .maybeSingle()
 
         if (error) {
+          const msg = (error as { message?: string }).message ?? ""
+          const code = (error as { code?: string }).code ?? ""
+          const isConnectionError =
+            msg.toLowerCase().includes("fetch") ||
+            msg.toLowerCase().includes("network") ||
+            msg.toLowerCase().includes("connection") ||
+            msg.toLowerCase().includes("failed") ||
+            code === "PGRST301"
+          if (isConnectionError && retryCount >= maxRetries) {
+            setPlanCheckStatus("connection_failed")
+            return
+          }
           if (retryCount < maxRetries) {
             await new Promise((r) => setTimeout(r, retryDelay))
             return fetchAndCheckPlan(retryCount + 1)
@@ -121,7 +137,17 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           return fetchAndCheckPlan(retryCount + 1)
         }
         setPlanCheckStatus("blocked")
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        const isConnectionError =
+          msg.toLowerCase().includes("fetch") ||
+          msg.toLowerCase().includes("network") ||
+          msg.toLowerCase().includes("connection") ||
+          msg.toLowerCase().includes("failed")
+        if (isConnectionError && retryCount >= maxRetries) {
+          setPlanCheckStatus("connection_failed")
+          return
+        }
         if (retryCount < maxRetries) {
           await new Promise((r) => setTimeout(r, retryDelay))
           return fetchAndCheckPlan(retryCount + 1)
@@ -177,6 +203,37 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-background">
         <LoadingState />
+      </main>
+    )
+  }
+
+  if (planCheckStatus === "connection_failed") {
+    const isMockOnlyRoute = MOCK_ONLY_ROUTES.some((r) =>
+      location.pathname.startsWith(r)
+    )
+    if (isMockOnlyRoute) {
+      return <>{children}</>
+    }
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-8">
+        <WifiOff className="h-12 w-12 text-muted-foreground" aria-hidden />
+        <h1 className="text-lg font-semibold text-foreground">
+          Falha na conexão
+        </h1>
+        <p className="max-w-sm text-center text-sm text-muted-foreground">
+          Não foi possível conectar ao servidor. Verifique sua conexão com a
+          internet e as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no
+          arquivo .env.local.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setPlanCheckStatus("idle")
+            fetchAndCheckPlan(0)
+          }}
+        >
+          Tentar novamente
+        </Button>
       </main>
     )
   }

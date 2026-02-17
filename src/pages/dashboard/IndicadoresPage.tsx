@@ -16,7 +16,7 @@ import {
 import { AppSidebar } from "@/components/app-sidebar"
 import IndicadoresPageContent from "@/pages/dashboard/indicadores"
 
-export function DashboardPage() {
+export function IndicadoresPage() {
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -36,7 +36,7 @@ export function DashboardPage() {
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage>Visão geral</BreadcrumbPage>
+                <BreadcrumbPage>Indicadores</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>

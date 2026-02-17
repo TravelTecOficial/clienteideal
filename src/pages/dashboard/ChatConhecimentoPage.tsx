@@ -14,9 +14,9 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
-import IndicadoresPageContent from "@/pages/dashboard/indicadores"
+import ChatConhecimentoContent from "@/pages/dashboard/chat-conhecimento"
 
-export function DashboardPage() {
+export function ChatConhecimentoPage() {
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -36,13 +36,13 @@ export function DashboardPage() {
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage>Visão geral</BreadcrumbPage>
+                <BreadcrumbPage>Chat de conhecimento</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <div className="flex flex-1 flex-col gap-4 overflow-auto p-4">
-          <IndicadoresPageContent />
+        <div className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+          <ChatConhecimentoContent />
         </div>
       </SidebarInset>
     </SidebarProvider>

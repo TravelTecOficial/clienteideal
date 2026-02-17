@@ -21,8 +21,26 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Trash2, Pencil } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Plus, Loader2, Trash2, Pencil, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // --- Interfaces ---
@@ -30,12 +48,17 @@ interface ProfileRow {
   company_id: string | null;
 }
 
+const PONTOS_TIPO = { fria: 1, morna: 5, quente: 10 } as const;
+
 interface Qualificador {
   id: string;
   nome: string;
   ideal_customer_id: string | null;
   ideal_customers?: { profile_name: string | null } | null;
   perguntas_count?: number;
+  pontuacao_maxima?: number | null;
+  limite_frio_max?: number | null;
+  limite_morno_max?: number | null;
 }
 
 interface PerguntaLocal {
@@ -110,10 +133,135 @@ function StyledSelect({
 }
 
 const respostasConfig = [
-  { id: "fria" as const, label: "Frio (1pt)", dotClass: "bg-info" },
-  { id: "morna" as const, label: "Morno (5pts)", dotClass: "bg-warning" },
-  { id: "quente" as const, label: "Quente (10pts)", dotClass: "bg-destructive" },
-];
+  { id: "fria" as const, labelBase: "Frio", valorTipo: 1, dotClass: "bg-info" },
+  { id: "morna" as const, labelBase: "Morno", valorTipo: 5, dotClass: "bg-warning" },
+  { id: "quente" as const, labelBase: "Quente", valorTipo: 10, dotClass: "bg-destructive" },
+] as const;
+
+// --- SortablePerguntaCard ---
+function SortablePerguntaCard({
+  pergunta,
+  idx,
+  onRemove,
+  onUpdate,
+  respostasConfig: config,
+  canRemove,
+}: {
+  pergunta: PerguntaLocal;
+  idx: number;
+  onRemove: () => void;
+  onUpdate: (id: string, field: keyof PerguntaLocal, value: string | number) => void;
+  respostasConfig: typeof respostasConfig;
+  canRemove: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: pergunta.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "rounded-lg border border-border p-4 space-y-4 bg-muted/30",
+        isDragging && "opacity-50 shadow-lg"
+      )}
+    >
+      <div className="flex justify-between items-start gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="touch-none cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted text-muted-foreground"
+            aria-label="Arrastar para reordenar"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <span className="text-sm font-medium text-muted-foreground">
+            Pergunta {idx + 1}
+          </span>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:text-destructive h-8 shrink-0"
+          onClick={onRemove}
+          disabled={!canRemove}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Input
+          value={pergunta.pergunta}
+          onChange={(e) => onUpdate(pergunta.id, "pergunta", e.target.value)}
+          placeholder="Ex: Qual é a sua renda mensal?"
+          className="border-0 border-b border-input rounded-none px-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary text-lg font-medium h-auto py-2"
+        />
+      </div>
+
+      <div className="flex gap-4 items-center">
+        <div className="w-24 shrink-0">
+          <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+            Peso
+          </Label>
+          <StyledSelect
+            value={String(pergunta.peso)}
+            onChange={(v) => onUpdate(pergunta.id, "peso", parseInt(v, 10) || 1)}
+            options={[
+              { value: "1", label: "1x" },
+              { value: "2", label: "2x" },
+              { value: "3", label: "3x" },
+            ]}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {config.map((item) => {
+          const pontuacao = item.valorTipo * pergunta.peso;
+          return (
+            <div key={item.id} className="flex items-center gap-4">
+              <div className="flex items-center gap-3 min-w-[140px]">
+                <div className={cn("w-2.5 h-2.5 rounded-full", item.dotClass)} />
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                  {item.labelBase} ({pontuacao} pts)
+                </span>
+              </div>
+              <div className="flex-1">
+                <Input
+                  value={pergunta[`resposta_${item.id}`]}
+                  onChange={(e) =>
+                    onUpdate(
+                      pergunta.id,
+                      `resposta_${item.id}` as keyof PerguntaLocal,
+                      e.target.value
+                    )
+                  }
+                  placeholder="Opcional"
+                  className="rounded-xl border-input h-10 focus-visible:ring-2 focus-visible:ring-primary/20"
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function QualificacaoPage() {
   const { userId } = useAuth();
@@ -183,7 +331,7 @@ export default function QualificacaoPage() {
     try {
       const { data: qualData, error: qualError } = await supabase
         .from("qualificadores")
-        .select("id, nome, ideal_customer_id, ideal_customers(profile_name)")
+        .select("id, nome, ideal_customer_id, pontuacao_maxima, limite_frio_max, limite_morno_max, ideal_customers(profile_name)")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -215,11 +363,10 @@ export default function QualificacaoPage() {
       setQualificadores(withCount);
     } catch (err) {
       console.error("Erro ao carregar qualificadores:", err);
-      const msg = err instanceof Error ? err.message : "Erro desconhecido";
       toast({
         variant: "destructive",
         title: "Erro",
-        description: `Falha ao carregar qualificadores. ${msg}`,
+        description: `Falha ao carregar qualificadores. ${getErrorMessage(err)}`,
       });
       setQualificadores([]);
     } finally {
@@ -256,7 +403,7 @@ export default function QualificacaoPage() {
       toast({
         variant: "destructive",
         title: "Erro ao excluir",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
+        description: getErrorMessage(err),
       });
     }
   }
@@ -278,6 +425,27 @@ export default function QualificacaoPage() {
       prev.map((p) => (p.id === id ? { ...p, [field]: value } : p))
     );
   }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setPerguntas((prev) => {
+        const oldIndex = prev.findIndex((p) => p.id === active.id);
+        const newIndex = prev.findIndex((p) => p.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return prev;
+        return arrayMove(prev, oldIndex, newIndex);
+      });
+    }
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   function validateForm(): string | null {
     const nomeTrim = nome.trim();
@@ -366,12 +534,13 @@ export default function QualificacaoPage() {
 
       for (let i = 0; i < perguntasValidas.length; i++) {
         const p = perguntasValidas[i];
+        const peso = Math.min(3, Math.max(1, p.peso));
         const { data: pergunta, error: errPerg } = await supabase
           .from("qualificacao_perguntas")
           .insert({
             qualificador_id: qualificadorId,
             pergunta: p.pergunta.trim(),
-            peso: Math.min(3, Math.max(1, p.peso)),
+            peso,
             ordem: i + 1,
           })
           .select("id")
@@ -381,10 +550,10 @@ export default function QualificacaoPage() {
           throw new Error(errPerg?.message ?? `Falha ao criar pergunta ${i + 1}`);
         }
 
-        const respostas: { pergunta_id: string; resposta_texto: string; tipo: "fria" | "morna" | "quente" }[] = [];
-        if (p.resposta_fria.trim()) respostas.push({ pergunta_id: pergunta.id, resposta_texto: p.resposta_fria.trim(), tipo: "fria" });
-        if (p.resposta_morna.trim()) respostas.push({ pergunta_id: pergunta.id, resposta_texto: p.resposta_morna.trim(), tipo: "morna" });
-        if (p.resposta_quente.trim()) respostas.push({ pergunta_id: pergunta.id, resposta_texto: p.resposta_quente.trim(), tipo: "quente" });
+        const respostas: { pergunta_id: string; resposta_texto: string; tipo: "fria" | "morna" | "quente"; pontuacao: number }[] = [];
+        if (p.resposta_fria.trim()) respostas.push({ pergunta_id: pergunta.id, resposta_texto: p.resposta_fria.trim(), tipo: "fria", pontuacao: peso * PONTOS_TIPO.fria });
+        if (p.resposta_morna.trim()) respostas.push({ pergunta_id: pergunta.id, resposta_texto: p.resposta_morna.trim(), tipo: "morna", pontuacao: peso * PONTOS_TIPO.morna });
+        if (p.resposta_quente.trim()) respostas.push({ pergunta_id: pergunta.id, resposta_texto: p.resposta_quente.trim(), tipo: "quente", pontuacao: peso * PONTOS_TIPO.quente });
 
         if (respostas.length > 0) {
           const { error: errResp } = await supabase.from("qualificacao_respostas").insert(respostas);
@@ -393,6 +562,22 @@ export default function QualificacaoPage() {
           }
         }
       }
+
+      const pontuacaoMaxima = perguntasValidas.reduce((acc, p) => acc + Math.min(3, Math.max(1, p.peso)) * 10, 0);
+      const limiteFrioMax = Math.floor(pontuacaoMaxima / 3);
+      const limiteMornoMax = Math.floor((2 * pontuacaoMaxima) / 3);
+
+      const { error: errLimites } = await supabase
+        .from("qualificadores")
+        .update({
+          pontuacao_maxima: pontuacaoMaxima,
+          limite_frio_max: limiteFrioMax,
+          limite_morno_max: limiteMornoMax,
+        })
+        .eq("id", qualificadorId)
+        .eq("company_id", effectiveCompanyId);
+
+      if (errLimites) throw errLimites;
 
       toast({
         title: qualificadorIdToEdit ? "Qualificador atualizado" : "Qualificador salvo",
@@ -410,11 +595,10 @@ export default function QualificacaoPage() {
       setIsModalOpen(false);
       loadQualificadores();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Falha ao salvar dados.";
       toast({
         variant: "destructive",
         title: "Erro",
-        description: msg,
+        description: getErrorMessage(err, "Falha ao salvar dados."),
       });
     } finally {
       setLoading(false);
@@ -487,7 +671,7 @@ export default function QualificacaoPage() {
       toast({
         variant: "destructive",
         title: "Erro",
-        description: err instanceof Error ? err.message : "Falha ao carregar qualificador.",
+        description: getErrorMessage(err, "Falha ao carregar qualificador."),
       });
     } finally {
       setLoading(false);
@@ -513,20 +697,24 @@ export default function QualificacaoPage() {
               <TableHead className="text-foreground">Nome</TableHead>
               <TableHead className="text-foreground">Persona</TableHead>
               <TableHead className="text-foreground">Perguntas</TableHead>
+              <TableHead className="text-foreground">Pontuação máx</TableHead>
+              <TableHead className="text-foreground">Frio &lt; X</TableHead>
+              <TableHead className="text-foreground">Morno X–Y</TableHead>
+              <TableHead className="text-foreground">Quente ≥ Y</TableHead>
               <TableHead className="text-right text-foreground">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isFetching ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-10">
+                <TableCell colSpan={8} className="text-center py-10">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : qualificadores.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={8}
                   className="text-center py-10 text-muted-foreground"
                 >
                   Nenhum qualificador encontrado. Clique em &quot;Criar qualificador&quot; para adicionar.
@@ -540,6 +728,18 @@ export default function QualificacaoPage() {
                     {q.ideal_customers?.profile_name ?? "—"}
                   </TableCell>
                   <TableCell className="text-foreground">{q.perguntas_count ?? 0}</TableCell>
+                  <TableCell className="text-foreground">{q.pontuacao_maxima ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {q.limite_frio_max != null ? "< " + q.limite_frio_max : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {q.limite_frio_max != null && q.limite_morno_max != null
+                      ? `${q.limite_frio_max}–${q.limite_morno_max - 1}`
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {q.limite_morno_max != null ? `≥ ${q.limite_morno_max}` : "—"}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button
@@ -619,73 +819,30 @@ export default function QualificacaoPage() {
                 </Button>
               </div>
 
-              {perguntas.map((p, idx) => (
-                <div
-                  key={p.id}
-                  className="rounded-lg border border-border p-4 space-y-4 bg-muted/30"
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={perguntas.map((p) => p.id)}
+                  strategy={verticalListSortingStrategy}
                 >
-                  <div className="flex justify-between items-start gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Pergunta {idx + 1}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive h-8 shrink-0"
-                      onClick={() => removePergunta(p.id)}
-                      disabled={perguntas.length <= 1}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Input
-                      value={p.pergunta}
-                      onChange={(e) => updatePergunta(p.id, "pergunta", e.target.value)}
-                      placeholder="Ex: Qual é a sua renda mensal?"
-                      className="border-0 border-b border-input rounded-none px-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary text-lg font-medium h-auto py-2"
-                    />
-                  </div>
-
-                  <div className="flex gap-4 items-center">
-                    <div className="w-24 shrink-0">
-                      <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-                        Peso
-                      </Label>
-                      <StyledSelect
-                        value={String(p.peso)}
-                        onChange={(v) => updatePergunta(p.id, "peso", parseInt(v, 10) || 1)}
-                        options={[
-                          { value: "1", label: "1x" },
-                          { value: "2", label: "2x" },
-                          { value: "3", label: "3x" },
-                        ]}
+                  <div className="space-y-4">
+                    {perguntas.map((p, idx) => (
+                      <SortablePerguntaCard
+                        key={p.id}
+                        pergunta={p}
+                        idx={idx}
+                        onRemove={() => removePergunta(p.id)}
+                        onUpdate={updatePergunta}
+                        respostasConfig={respostasConfig}
+                        canRemove={perguntas.length > 1}
                       />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {respostasConfig.map((item) => (
-                      <div key={item.id} className="flex items-center gap-4">
-                        <div className="flex items-center gap-3 min-w-[140px]">
-                          <div className={cn("w-2.5 h-2.5 rounded-full", item.dotClass)} />
-                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                            {item.label}
-                          </span>
-                        </div>
-                        <div className="flex-1">
-                          <Input
-                            value={p[`resposta_${item.id}`]}
-                            onChange={(e) => updatePergunta(p.id, `resposta_${item.id}` as keyof PerguntaLocal, e.target.value)}
-                            placeholder="Opcional"
-                            className="rounded-xl border-input h-10 focus-visible:ring-2 focus-visible:ring-primary/20"
-                          />
-                        </div>
-                      </div>
                     ))}
                   </div>
-                </div>
-              ))}
+                </SortableContext>
+              </DndContext>
             </div>
 
             {/* Botões */}

@@ -26,20 +26,31 @@ function getMinDateTime(): string {
   return `${y}-${m}-${d}T${h}:${min}`;
 }
 
-const agendaFormSchema = z.object({
-  data_hora: z
-    .string()
-    .min(1, "Data/hora obrigatória")
-    .refine((val) => new Date(val) >= new Date(), {
-      message: "Data/hora não pode ser anterior a agora",
-    }),
+const baseSchema = z.object({
   tipo_reuniao: z.string().min(2, "Tipo de reunião obrigatório"),
   vendedor_id: z.string().optional(),
   status: z.enum(["Pendente", "Confirmado", "Cancelado", "Finalizado"]),
   descricao: z.string().optional(),
 });
 
-export type AgendaFormValues = z.infer<typeof agendaFormSchema>;
+const agendaFormSchemaCreate = baseSchema.extend({
+  data_hora: z
+    .string()
+    .min(1, "Data/hora obrigatória")
+    .refine((val) => new Date(val) >= new Date(), {
+      message: "Data/hora não pode ser anterior a agora",
+    }),
+});
+
+const agendaFormSchemaEdit = baseSchema.extend({
+  data_hora: z.string().min(1, "Data/hora obrigatória"),
+});
+
+function getAgendaFormSchema(mode: "create" | "edit") {
+  return mode === "create" ? agendaFormSchemaCreate : agendaFormSchemaEdit;
+}
+
+export type AgendaFormValues = z.infer<typeof agendaFormSchemaCreate>;
 
 export interface VendedorOption {
   id: string;
@@ -58,6 +69,9 @@ interface AgendaFormProps {
   defaultValues?: Partial<AgendaFormValues>;
   isSaving: boolean;
   vendedores: VendedorOption[];
+  mode?: "create" | "edit";
+  onCancelAgenda?: () => void | Promise<void>;
+  isCancelling?: boolean;
 }
 
 export function AgendaForm({
@@ -65,9 +79,12 @@ export function AgendaForm({
   defaultValues,
   isSaving,
   vendedores,
+  mode = "create",
+  onCancelAgenda,
+  isCancelling = false,
 }: AgendaFormProps) {
   const form = useForm<AgendaFormValues>({
-    resolver: zodResolver(agendaFormSchema),
+    resolver: zodResolver(getAgendaFormSchema(mode)),
     defaultValues: {
       data_hora: "",
       tipo_reuniao: "",
@@ -77,6 +94,12 @@ export function AgendaForm({
       ...defaultValues,
     },
   });
+
+  const currentStatus = form.watch("status");
+  const showCancelButton =
+    mode === "edit" &&
+    onCancelAgenda &&
+    currentStatus !== "Cancelado";
 
   return (
     <form
@@ -88,7 +111,7 @@ export function AgendaForm({
         <Input
           id="data_hora"
           type="datetime-local"
-          min={getMinDateTime()}
+          min={mode === "create" ? getMinDateTime() : undefined}
           {...form.register("data_hora")}
         />
         {form.formState.errors.data_hora && (
@@ -165,13 +188,34 @@ export function AgendaForm({
         />
       </div>
 
-      <div className="flex justify-end pt-2">
-        <Button type="submit" disabled={isSaving}>
+      <div className="flex justify-between pt-2">
+        <div>
+          {showCancelButton && (
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isSaving || isCancelling}
+              onClick={onCancelAgenda}
+            >
+              {isCancelling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelando...
+                </>
+              ) : (
+                "Cancelar agendamento"
+              )}
+            </Button>
+          )}
+        </div>
+        <Button type="submit" disabled={isSaving || isCancelling}>
           {isSaving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Salvando...
             </>
+          ) : mode === "edit" ? (
+            "Salvar alterações"
           ) : (
             "Salvar agendamento"
           )}

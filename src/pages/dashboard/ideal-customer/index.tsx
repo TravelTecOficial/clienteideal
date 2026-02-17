@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { getErrorMessage } from "@/lib/utils";
 
 // --- Helpers ---
 interface ProfileRow {
@@ -207,7 +208,22 @@ export default function IdealCustomerPage() {
   };
 
   async function onSubmit(values: IdealCustomerFormValues) {
-    if (!effectiveCompanyId || !userId) return;
+    if (!userId) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: "Sessão inválida. Faça login novamente.",
+      });
+      return;
+    }
+    if (!effectiveCompanyId) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: "Empresa não vinculada. Configure sua empresa em Configurações.",
+      });
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -257,11 +273,11 @@ export default function IdealCustomerPage() {
       setIsModalOpen(false);
       loadClientes();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erro ao salvar.";
+      console.error("[Cliente Ideal] Erro ao gravar:", err);
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
-        description: msg,
+        description: getErrorMessage(err, "Erro ao salvar."),
       });
     } finally {
       setIsLoading(false);
@@ -292,7 +308,7 @@ export default function IdealCustomerPage() {
       toast({
         variant: "destructive",
         title: "Erro ao excluir",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
+        description: getErrorMessage(err),
       });
     }
   }
@@ -494,9 +510,10 @@ export default function IdealCustomerPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>Critérios de Decisão</Label>
-                      <Input
+                      <Textarea
                         {...form.register("decision_criteria")}
                         placeholder="Ex: Atendimento, Suporte, Preço"
+                        className="min-h-[100px]"
                       />
                     </div>
                   </CardContent>
