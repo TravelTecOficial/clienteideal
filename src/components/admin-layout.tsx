@@ -14,6 +14,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { AppSidebarAdmin } from "@/components/app-sidebar-admin"
+import { ProfileDropdown } from "@/components/profile-dropdown"
 import type { ReactNode } from "react"
 
 interface AdminLayoutProps {
@@ -45,6 +46,7 @@ export function AdminLayout({ children, breadcrumb }: AdminLayoutProps) {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+          <ProfileDropdown className="ml-auto" />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">{children}</div>
       </SidebarInset>

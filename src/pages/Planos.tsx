@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useUser, useAuth } from "@clerk/clerk-react"
-import { isSaasAdmin, isLocalhost } from "@/lib/use-saas-admin"
+import { isLocalhost } from "@/lib/use-saas-admin"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { FunctionsHttpError } from "@supabase/supabase-js"
 import { useSupabaseClient } from "@/lib/supabase-context"
@@ -276,17 +276,17 @@ export function Planos() {
   }, [user, getToken, supabaseClient])
 
   useEffect(() => {
+    // #region agent log
+    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({runId:`planos-${Date.now()}`,hypothesisId:"H4",location:"src/pages/Planos.tsx:useEffect:entry",message:"Entrada do efeito de roteamento da página Planos",data:{isLoaded,hasUser:!!user,role:user?.publicMetadata?.role ?? null,localhost:isLocalhost()},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!isLoaded) return
     if (!user) {
       navigate("/entrar", { replace: true })
       return
     }
-    // Admin do SaaS → /admin. Note: UI-level check. API enforcement required.
-    // Em localhost, não redireciona para permitir testar fluxo de usuário normal.
-    if (!isLocalhost() && isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
-      navigate("/admin", { replace: true })
-      return
-    }
+    // #region agent log
+    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({runId:`planos-${Date.now()}`,hypothesisId:"H6",location:"src/pages/Planos.tsx:useEffect:load-profile",message:"Planos seguindo para loadProfile",data:{role:user.publicMetadata?.role ?? null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     loadProfile()
   }, [isLoaded, user, loadProfile, navigate])
 

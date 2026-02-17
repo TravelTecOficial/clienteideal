@@ -17,6 +17,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ProfileDropdown } from "@/components/profile-dropdown";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
@@ -413,6 +414,7 @@ export default function VendedoresPage() {
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
+            <ProfileDropdown className="ml-auto" />
           </header>
           <div className="flex min-h-[280px] flex-col items-center justify-center gap-4 p-8">
             <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
@@ -446,6 +448,7 @@ export default function VendedoresPage() {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+          <ProfileDropdown className="ml-auto" />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
     <div className="space-y-6">

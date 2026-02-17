@@ -1,6 +1,6 @@
 # Configurar CLERK_SECRET_KEY no Supabase
 
-O erro **"No suitable key or wrong key type"** aparece quando a Edge Function `sync-profile-client` não consegue validar o JWT do Clerk. A causa é: **Secret Key ausente ou incorreta** nos Secrets do Supabase.
+O erro **"No suitable key or wrong key type"** ou **"Erro ao carregar usuários" / "Edge Function returned a non-2xx status code"** (401) aparece quando as Edge Functions `sync-profile-client` ou `admin-list-users` não conseguem validar o JWT do Clerk. A causa é: **Secret Key ausente ou incorreta** nos Secrets do Supabase.
 
 ## ⚠️ Erro comum
 
@@ -27,6 +27,7 @@ O erro **"No suitable key or wrong key type"** aparece quando a Edge Function `s
 1. `npm run dev` (se necessário)
 2. Logout e login novamente
 3. A sincronização deve concluir e você será redirecionado ao dashboard
+4. **Área Admin** (`/admin`): se aparecer "Erro ao carregar usuários", a mesma `CLERK_SECRET_KEY` é usada pela Edge Function `admin-list-users`
 
 ---
 

@@ -1,11 +1,12 @@
 /**
- * Edge Function: admin-list-users
+ * Edge Function: admin-update-company
  *
- * Lista todos os usuários do sistema (tabela profiles).
- * Apenas o admin do SaaS (Clerk publicMetadata.role === "admin") pode acessar.
+ * Permite ao admin do SaaS atualizar segment_type de uma company.
  *
  * Requer: Authorization: Bearer <clerk_jwt>
- * Retorna: { users: Array<{ id, email, full_name, role, company_name, plan_type }> }
+ * Body: { company_id: string, segment_type: "produtos" | "consorcio" }
+ *
+ * Apenas usuários com publicMetadata.role === "admin" podem chamar.
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -18,13 +19,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 }
 
-interface ProfileRow {
-  id: string
-  email: string | null
-  full_name: string | null
-  role: string | null
-  company_id: string | null
-  companies: { name: string | null; plan_type: string | null; segment_type: string | null } | null
+interface UpdateBody {
+  company_id: string
+  segment_type: "produtos" | "consorcio"
 }
 
 Deno.serve(async (req) => {
@@ -97,6 +94,40 @@ Deno.serve(async (req) => {
     )
   }
 
+  let body: UpdateBody
+  try {
+    body = (await req.json()) as UpdateBody
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Body JSON inválido." }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    )
+  }
+
+  const { company_id, segment_type } = body
+  if (!company_id || !segment_type) {
+    return new Response(
+      JSON.stringify({ error: "company_id e segment_type são obrigatórios." }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    )
+  }
+
+  if (segment_type !== "produtos" && segment_type !== "consorcio") {
+    return new Response(
+      JSON.stringify({ error: "segment_type deve ser 'produtos' ou 'consorcio'." }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    )
+  }
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL")
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -111,50 +142,28 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, email, full_name, role, company_id, companies(name, plan_type, segment_type)")
-      .order("email", { ascending: true })
+  const { data, error } = await supabase
+    .from("companies")
+    .update({ segment_type })
+    .eq("id", company_id)
+    .select("id, segment_type")
+    .single()
 
-    if (error) {
-      console.error("[admin-list-users] Erro ao buscar profiles:", error)
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      )
-    }
-
-    const profiles = (data ?? []) as ProfileRow[]
-    const users = profiles.map((p) => ({
-      id: p.id,
-      email: p.email ?? "",
-      full_name: p.full_name ?? "",
-      role: p.role ?? "",
-      company_id: p.company_id ?? "",
-      company_name: p.companies?.name ?? "",
-      plan_type: p.companies?.plan_type ?? "",
-      segment_type: p.companies?.segment_type ?? "produtos",
-    }))
-
+  if (error) {
     return new Response(
-      JSON.stringify({ users }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    )
-  } catch (err) {
-    console.error("[admin-list-users] Erro inesperado:", err)
-    return new Response(
-      JSON.stringify({ error: String(err) }),
+      JSON.stringify({ error: error.message }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     )
   }
+
+  return new Response(
+    JSON.stringify({ success: true, company: data }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+  )
 })

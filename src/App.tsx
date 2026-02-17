@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { AdminPage } from "@/pages/admin/AdminPage"
 import { AdminConfigPage } from "@/pages/admin/AdminConfigPage"
+import { AdminPreviewPage } from "@/pages/admin/AdminPreviewPage"
 import { DashboardPage } from "@/pages/dashboard/DashboardPage"
 import { ProfilePage } from "@/pages/dashboard/ProfilePage"
 import { LoginPage } from "@/pages/LoginPage"
@@ -27,6 +28,7 @@ import { StyleguideLayout } from "@/styleguide/StyleguideLayout"
 import { StyleguidePage } from "@/styleguide/StyleguidePage"
 import { componentShowcases, blockShowcases } from "@/styleguide/registry"
 import { LandingPage } from "@/pages/LandingPage"
+import { PrecosPage } from "@/pages/PrecosPage"
 
 function ShowcaseFallback() {
   return <div className="flex min-h-[200px] items-center justify-center p-8 text-muted-foreground">Carregando…</div>
@@ -54,6 +56,7 @@ function App() {
       <Toaster />
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/precos" element={<PrecosPage />} />
         
         {/* Note o /* necessário para o Clerk funcionar em sub-rotas */}
         <Route path="/entrar/*" element={<LoginPage />} />
@@ -236,6 +239,16 @@ function App() {
           element={
             <SupabaseProvider>
               <AdminConfigPage />
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/preview/:companyId"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <AdminPreviewPage />
+              </ProtectedRoute>
             </SupabaseProvider>
           }
         />

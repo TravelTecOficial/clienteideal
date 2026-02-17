@@ -14,6 +14,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
+import { ProfileDropdown } from "@/components/profile-dropdown"
 import BaseConhecimentoContent from "@/pages/dashboard/base-conhecimento"
 
 export function BaseConhecimentoPage() {
@@ -40,6 +41,7 @@ export function BaseConhecimentoPage() {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+          <ProfileDropdown className="ml-auto" />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
           <BaseConhecimentoContent />

@@ -14,6 +14,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
+import { ProfileDropdown } from "@/components/profile-dropdown"
 import QualificacaoPage from "@/pages/dashboard/qualificacao"
 
 export function QualificadorPage() {
@@ -40,6 +41,7 @@ export function QualificadorPage() {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+          <ProfileDropdown className="ml-auto" />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
           <QualificacaoPage />

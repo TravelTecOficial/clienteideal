@@ -70,6 +70,12 @@ export function LandingPage() {
         </Link>
         <div className="flex items-center gap-2">
         <Link
+          to="/precos"
+          className="rounded-md px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          Preços
+        </Link>
+        <Link
           to="/entrar"
           className="rounded-md border border-border bg-background px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-muted hover:text-foreground"
         >

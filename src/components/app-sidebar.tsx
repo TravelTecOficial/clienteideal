@@ -14,7 +14,6 @@ import {
   Headphones,
   BookOpen,
   Package,
-  UserCircle,
   Settings,
   HandCoins,
   MessageSquare,
@@ -56,7 +55,6 @@ const navItemsBase = [
   { title: "Produtos & Serviços", url: "/dashboard/items", icon: Package, segmentFilter: "produtos" as const },
   { title: "Consórcios", url: "/dashboard/consorcio", icon: HandCoins, segmentFilter: "consorcio" as const },
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
-  { title: "Perfil", url: "/dashboard/perfil", icon: UserCircle },
 ]
 
 // Menu Usuários: subitens (Vendedores integrado ao Clerk + Usuários do sistema)

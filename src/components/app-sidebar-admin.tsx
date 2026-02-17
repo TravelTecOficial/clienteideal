@@ -53,19 +53,21 @@ export function AppSidebarAdmin(
   return (
     <Sidebar {...props}>
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild className="h-auto p-2">
-              <Link to="/admin" className="flex items-center justify-center">
-                <img
-                  src="/logo-cliente-ideal.png"
-                  alt="CLIENTE IDEAL Online"
-                  className="h-12 w-auto max-w-full object-contain"
-                />
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <div className="mx-2 rounded-lg border border-border bg-white p-2 shadow-sm">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild className="h-auto p-2">
+                <Link to="/admin" className="flex items-center justify-center">
+                  <img
+                    src="/logo-cliente-ideal.png"
+                    alt="CLIENTE IDEAL Online"
+                    className="h-12 w-auto max-w-full object-contain"
+                  />
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

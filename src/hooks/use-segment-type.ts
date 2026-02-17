@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { useCompanyPreview } from "@/lib/company-preview-context";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 interface ProfileRow {
@@ -13,19 +14,25 @@ interface CompanySegmentRow {
 
 async function fetchSegmentType(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  overrideCompanyId: string | null
 ): Promise<string> {
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
+  let companyId: string | null = overrideCompanyId;
 
-  if (profileError || !profile) {
-    return "produtos";
+  if (!companyId) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (profileError || !profile) {
+      return "produtos";
+    }
+
+    companyId = (profile as ProfileRow).company_id;
   }
 
-  const companyId = (profile as ProfileRow).company_id;
   if (!companyId) {
     return "produtos";
   }
@@ -47,25 +54,26 @@ async function fetchSegmentType(
 export function useSegmentType(): { segmentType: string; isLoading: boolean } {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
+  const { companyId: previewCompanyId } = useCompanyPreview();
   const [segmentType, setSegmentType] = useState<string>("produtos");
   const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!userId) {
+    if (!userId && !previewCompanyId) {
       setIsLoading(false);
       setSegmentType("produtos");
       return;
     }
     setIsLoading(true);
     try {
-      const value = await fetchSegmentType(supabase, userId);
+      const value = await fetchSegmentType(supabase, userId ?? "", previewCompanyId);
       setSegmentType(value);
     } catch {
       setSegmentType("produtos");
     } finally {
       setIsLoading(false);
     }
-  }, [userId, supabase]);
+  }, [userId, supabase, previewCompanyId]);
 
   useEffect(() => {
     load();

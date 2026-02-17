@@ -3,6 +3,15 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 import {
   PlusCircle,
   FileText,
@@ -99,7 +108,7 @@ function getTrainingTypeLabel(value: string): string {
 }
 
 export default function BaseConhecimento() {
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
 
@@ -188,24 +197,33 @@ export default function BaseConhecimento() {
     }
 
     const file_name = file.name;
-    const drive_file_id = `drive_${crypto.randomUUID()}`;
 
     setLoading(true);
     try {
-      const { error } = await supabase.from("kb_files_control").insert({
-        company_id: effectiveCompanyId,
-        user_id: userId,
-        file_name,
-        training_type: trainingType,
-        description: description.trim() || null,
-        drive_file_id,
+      const token = await getToken({ template: "supabase" }) ?? await getToken();
+      if (!token) {
+        throw new Error("Token de acesso indisponível.");
+      }
+
+      const file_base64 = await fileToBase64(file);
+
+      const { data, error } = await supabase.functions.invoke("upload-kb-to-webhook", {
+        body: {
+          file_base64,
+          file_name,
+          training_type: trainingType,
+          description: description.trim() || undefined,
+        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (error) throw error;
+      const body = data as { error?: string };
+      if (body?.error) throw new Error(body.error);
 
       toast({
         title: "Documento carregado",
-        description: `${file_name} foi adicionado com sucesso.`,
+        description: `${file_name} foi adicionado com sucesso e enviado ao webhook.`,
       });
       setIsDialogOpen(false);
       setTrainingType("");

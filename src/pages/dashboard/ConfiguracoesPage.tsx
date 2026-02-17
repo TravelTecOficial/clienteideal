@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 import { useForm } from "react-hook-form";
@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { Plus, Loader2, Check, Database, Megaphone, MessageSquare, Layers, Smartphone } from "lucide-react";
+import { Plus, Loader2, Check, Database, Megaphone, MessageSquare, Smartphone, ImagePlus } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -23,6 +23,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ProfileDropdown } from "@/components/profile-dropdown";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,7 +54,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -68,8 +68,7 @@ interface CompanyRow {
   celular_atendimento: string | null;
   email_atendimento: string | null;
   estancia_whatsapp: string | null;
-  n8n_chat_webhook_url: string | null;
-  segment_type: string | null;
+  whatsapp_group_image_url: string | null;
   evolution_api_url: string | null;
   evolution_api_key: string | null;
   evolution_instance_name: string | null;
@@ -137,9 +136,6 @@ const dadosFormSchema = z.object({
     .union([z.string().email("E-mail inválido"), z.literal("")])
     .optional(),
   estancia_whatsapp: z.string().optional(),
-  n8n_chat_webhook_url: z
-    .union([z.literal(""), z.string().url("URL inválida")])
-    .optional(),
 });
 
 const pagamentoFormSchema = z.object({
@@ -203,13 +199,13 @@ export function ConfiguracoesPage() {
   const [personas, setPersonas] = useState<PersonaOption[]>([]);
   const [isFetchingPrompt, setIsFetchingPrompt] = useState(true);
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
-  const [segmentType, setSegmentType] = useState<string>("produtos");
-  const [isFetchingSegment, setIsFetchingSegment] = useState(true);
-  const [isSavingSegment, setIsSavingSegment] = useState(false);
   const [isFetchingEvolution, setIsFetchingEvolution] = useState(true);
   const [isSavingEvolution, setIsSavingEvolution] = useState(false);
   const [qrCodeBase64, setQrCodeBase64] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<string | null>(null);
+  const [whatsappImageUrl, setWhatsappImageUrl] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const whatsappImageInputRef = useRef<HTMLInputElement>(null);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
 
@@ -219,7 +215,6 @@ export function ConfiguracoesPage() {
       celular_atendimento: "",
       email_atendimento: "",
       estancia_whatsapp: "",
-      n8n_chat_webhook_url: "",
     },
   });
 
@@ -268,15 +263,13 @@ export function ConfiguracoesPage() {
   const loadDados = useCallback(async () => {
     if (!companyId) {
       setIsFetchingDados(false);
-      setIsFetchingSegment(false);
       return;
     }
     setIsFetchingDados(true);
-    setIsFetchingSegment(true);
     try {
       const { data, error } = await supabase
         .from("companies")
-        .select("celular_atendimento, email_atendimento, estancia_whatsapp, n8n_chat_webhook_url, segment_type")
+        .select("celular_atendimento, email_atendimento, estancia_whatsapp, whatsapp_group_image_url")
         .eq("id", companyId)
         .maybeSingle();
 
@@ -286,9 +279,8 @@ export function ConfiguracoesPage() {
         celular_atendimento: row?.celular_atendimento ?? "",
         email_atendimento: row?.email_atendimento ?? "",
         estancia_whatsapp: row?.estancia_whatsapp ?? "",
-        n8n_chat_webhook_url: row?.n8n_chat_webhook_url ?? "",
       });
-      setSegmentType(row?.segment_type === "consorcio" ? "consorcio" : "produtos");
+      setWhatsappImageUrl(row?.whatsapp_group_image_url ?? null);
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
       toast({
@@ -298,7 +290,6 @@ export function ConfiguracoesPage() {
       });
     } finally {
       setIsFetchingDados(false);
-      setIsFetchingSegment(false);
     }
   }, [companyId, supabase, toast, dadosForm]);
 
@@ -458,7 +449,6 @@ export function ConfiguracoesPage() {
           celular_atendimento: values.celular_atendimento?.trim() || null,
           email_atendimento: values.email_atendimento?.trim() || null,
           estancia_whatsapp: values.estancia_whatsapp?.trim() || null,
-          n8n_chat_webhook_url: values.n8n_chat_webhook_url?.trim() || null,
         })
         .eq("id", companyId);
 
@@ -589,41 +579,6 @@ export function ConfiguracoesPage() {
     }
   }
 
-  // Salvar segmento (aba Segmento)
-  async function onSegmentSubmit() {
-    if (!companyId) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Empresa não identificada.",
-      });
-      return;
-    }
-    setIsSavingSegment(true);
-    try {
-      const { error } = await supabase
-        .from("companies")
-        .update({ segment_type: segmentType })
-        .eq("id", companyId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Segmento salvo",
-        description: "O tipo de segmento foi atualizado. O menu será atualizado.",
-      });
-      window.dispatchEvent(new CustomEvent("segment-type-changed"));
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao salvar",
-        description: getErrorMessage(err),
-      });
-    } finally {
-      setIsSavingSegment(false);
-    }
-  }
-
   // Salvar credenciais Evolution API
   async function onEvolutionSubmit(values: EvolutionFormValues) {
     if (!companyId) {
@@ -739,15 +694,13 @@ export function ConfiguracoesPage() {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+          <ProfileDropdown className="ml-auto" />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           <Tabs defaultValue="dados" className="w-full">
-            <TabsList className="grid w-full max-w-[1000px] grid-cols-5">
+            <TabsList className="grid w-full max-w-[1000px] grid-cols-4">
               <TabsTrigger value="dados" className="gap-2">
                 <Database className="h-4 w-4" /> Dados
-              </TabsTrigger>
-              <TabsTrigger value="segmento" className="gap-2">
-                <Layers className="h-4 w-4" /> Segmento
               </TabsTrigger>
               <TabsTrigger value="evolution" className="gap-2">
                 <Smartphone className="h-4 w-4" /> Evolution API
@@ -837,23 +790,82 @@ export function ConfiguracoesPage() {
                         )}
                       </div>
                       <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="n8n_chat_webhook_url">
-                          Webhook N8N (Chat de Conhecimento)
+                        <Label className="flex items-center gap-2">
+                          <ImagePlus className="h-4 w-4" />
+                          Imagem para grupos WhatsApp
                         </Label>
-                        <Input
-                          id="n8n_chat_webhook_url"
-                          type="url"
-                          placeholder="https://seu-n8n.com/webhook/consulta-chat"
-                          {...dadosForm.register("n8n_chat_webhook_url")}
-                        />
-                        {dadosForm.formState.errors.n8n_chat_webhook_url && (
-                          <p className="text-xs text-destructive">
-                            {
-                              dadosForm.formState.errors.n8n_chat_webhook_url
-                                .message
-                            }
-                          </p>
-                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Imagem pequena para uso em grupos (máx. 1MB, JPEG/PNG/WebP)
+                        </p>
+                        <div className="flex items-center gap-4">
+                          {whatsappImageUrl && (
+                            <img
+                              src={whatsappImageUrl}
+                              alt="Imagem WhatsApp"
+                              className="h-16 w-16 rounded-lg border object-cover"
+                            />
+                          )}
+                          <input
+                            ref={whatsappImageInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file || !companyId) return;
+                              if (file.size > 1048576) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Arquivo grande",
+                                  description: "Máximo 1MB.",
+                                });
+                                return;
+                              }
+                              setIsUploadingImage(true);
+                              try {
+                                const ext = file.name.split(".").pop() || "jpg";
+                                const path = `${companyId}/whatsapp-group.${ext}`;
+                                const { error: uploadError } = await supabase.storage
+                                  .from("company-assets")
+                                  .upload(path, file, { upsert: true });
+                                if (uploadError) throw uploadError;
+                                const { data: urlData } = supabase.storage
+                                  .from("company-assets")
+                                  .getPublicUrl(path);
+                                const url = urlData.publicUrl;
+                                const { error: updateError } = await supabase
+                                  .from("companies")
+                                  .update({ whatsapp_group_image_url: url })
+                                  .eq("id", companyId);
+                                if (updateError) throw updateError;
+                                setWhatsappImageUrl(url);
+                                toast({ title: "Imagem salva", description: "A imagem foi atualizada." });
+                              } catch (err) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Erro ao enviar",
+                                  description: getErrorMessage(err),
+                                });
+                              } finally {
+                                setIsUploadingImage(false);
+                                e.target.value = "";
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isUploadingImage}
+                            onClick={() => whatsappImageInputRef.current?.click()}
+                          >
+                            {isUploadingImage ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Selecionar imagem"
+                            )}
+                          </Button>
+                        </div>
                       </div>
                       <div className="sm:col-span-2">
                         <Button type="submit" disabled={isSavingDados}>
@@ -871,62 +883,6 @@ export function ConfiguracoesPage() {
                         </Button>
                       </div>
                     </form>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="segmento" className="space-y-4 pt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tipo de Segmento</CardTitle>
-                  <CardDescription>
-                    Defina o foco do seu negócio. Isso altera os módulos exibidos no menu lateral.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isFetchingSegment ? (
-                    <div className="flex min-h-[120px] items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <RadioGroup
-                        value={segmentType}
-                        onValueChange={setSegmentType}
-                        className="flex flex-col gap-4"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="produtos" id="segment-produtos" />
-                          <Label htmlFor="segment-produtos" className="cursor-pointer font-normal">
-                            Produtos e Serviços
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="consorcio" id="segment-consorcio" />
-                          <Label htmlFor="segment-consorcio" className="cursor-pointer font-normal">
-                            Consórcios
-                          </Label>
-                        </div>
-                      </RadioGroup>
-                      <Button
-                        type="button"
-                        onClick={onSegmentSubmit}
-                        disabled={isSavingSegment}
-                      >
-                        {isSavingSegment ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Salvando…
-                          </>
-                        ) : (
-                          <>
-                            <Check className="h-4 w-4" />
-                            Salvar
-                          </>
-                        )}
-                      </Button>
-                    </div>
                   )}
                 </CardContent>
               </Card>

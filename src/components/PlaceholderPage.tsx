@@ -14,6 +14,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
+import { ProfileDropdown } from "@/components/profile-dropdown"
 
 interface PlaceholderPageProps {
   title: string
@@ -44,6 +45,7 @@ export function PlaceholderPage({ title, breadcrumb }: PlaceholderPageProps) {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+          <ProfileDropdown className="ml-auto" />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           <div className="flex min-h-[200px] flex-col items-center justify-center rounded-xl bg-muted/50 p-8 text-center">

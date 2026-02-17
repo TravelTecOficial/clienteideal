@@ -19,7 +19,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, AlertCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Loader2, AlertCircle, LayoutDashboard } from "lucide-react"
+import { Link } from "react-router-dom"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 import { isSaasAdmin } from "@/lib/use-saas-admin"
@@ -31,8 +40,10 @@ interface AdminUser {
   email: string
   full_name: string
   role: string
+  company_id: string
   company_name: string
   plan_type: string
+  segment_type: string
 }
 
 function LoadingState() {
@@ -56,51 +67,106 @@ export function AdminPage() {
     "idle"
   )
   const [errorMsg, setErrorMsg] = useState<string>("")
+  const [updatingSegment, setUpdatingSegment] = useState<string | null>(null)
 
   const fetchUsers = useCallback(async () => {
-    // Token de sessão do Clerk (não o template supabase). A Edge Function admin-list-users
-    // valida com verifyToken do Clerk, que exige o token padrão assinado pela chave do Clerk.
-    const token = await getToken()
-    if (!token) {
-      setStatus("error")
-      setErrorMsg("Token de acesso indisponível. Faça logout e login novamente.")
-      return
-    }
-
-    setStatus("loading")
-    setErrorMsg("")
-
-    const { data, error } = await supabase.functions.invoke("admin-list-users", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-
-    if (error) {
-      let errMsg = error.message
-      if (error instanceof FunctionsHttpError) {
-        try {
-          const parsed = (await error.context.json()) as { error?: string }
-          if (parsed?.error) errMsg = parsed.error
-        } catch {
-          /* fallback */
-        }
+    if (!user?.id) return
+    const supabaseTemplateToken = await getToken({ template: "supabase" })
+    const defaultToken = await getToken()
+    const token = supabaseTemplateToken ?? defaultToken
+    try {
+      if (!token) {
+        setStatus("error")
+        setErrorMsg("Token de acesso indisponível. Faça logout e login novamente.")
+        return
       }
-      setStatus("error")
-      setErrorMsg(errMsg)
-      return
-    }
 
-    const body = data as { users?: AdminUser[] } | null
-    setUsers(body?.users ?? [])
-    setStatus("success")
-  }, [getToken, supabase.functions])
+      setStatus("loading")
+      setErrorMsg("")
+
+      const { data, error } = await supabase.functions.invoke("admin-list-users", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (error) {
+        let errMsg = error.message
+        let statusCode: number | undefined
+        if (error instanceof FunctionsHttpError && error.context) {
+          statusCode = error.context.status
+          const responseClone = error.context.clone()
+          let responseText = ""
+          try {
+            responseText = await responseClone.text()
+          } catch {
+            responseText = ""
+          }
+          try {
+            const parsed = (await error.context.json()) as { error?: string }
+            if (parsed?.error) errMsg = parsed.error
+          } catch {
+            if (statusCode) errMsg = `${errMsg} (HTTP ${statusCode})`
+          }
+          if (statusCode === 401 || statusCode === 403) {
+            errMsg +=
+              " Verifique CLERK_SECRET_KEY no Supabase (projeto correto), JWT Template 'supabase' no Clerk e se o usuário logado tem publicMetadata.role='admin'."
+          }
+          if (responseText) {
+            console.error("[admin] resposta 401/403 admin-list-users:", responseText)
+          }
+        }
+        setStatus("error")
+        setErrorMsg(errMsg)
+        return
+      }
+
+      const body = data as { users?: AdminUser[] } | null
+      setUsers(body?.users ?? [])
+      setStatus("success")
+    } catch (err) {
+      setStatus("error")
+      setErrorMsg(err instanceof Error ? err.message : "Erro ao carregar usuários.")
+    }
+  }, [getToken, supabase.functions, user?.id])
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) return
     if (!isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
       return
     }
+    if (status !== "idle") {
+      return
+    }
     fetchUsers()
-  }, [isLoaded, isSignedIn, user, fetchUsers])
+  }, [isLoaded, isSignedIn, user, status, fetchUsers])
+
+  const handleSegmentChange = async (u: AdminUser, newSegment: "produtos" | "consorcio") => {
+    if (!u.company_id || newSegment === u.segment_type) return
+    setUpdatingSegment(u.id)
+    const token = await getToken({ template: "supabase" }) ?? await getToken()
+    if (!token) {
+      setErrorMsg("Token indisponível.")
+      setUpdatingSegment(null)
+      return
+    }
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-update-company", {
+        body: { company_id: u.company_id, segment_type: newSegment },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (error) throw error
+      const body = data as { error?: string }
+      if (body?.error) throw new Error(body.error)
+      setUsers((prev) =>
+        prev.map((x) =>
+          x.id === u.id ? { ...x, segment_type: newSegment } : x
+        )
+      )
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Erro ao atualizar segmento.")
+    } finally {
+      setUpdatingSegment(null)
+    }
+  }
 
   if (!isLoaded) {
     return (
@@ -134,7 +200,20 @@ export function AdminPage() {
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Erro ao carregar usuários</AlertTitle>
-                <AlertDescription>{errorMsg}</AlertDescription>
+                <AlertDescription className="space-y-3">
+                  <p>{errorMsg}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setErrorMsg("")
+                      setStatus("idle")
+                    }}
+                  >
+                    Tentar novamente
+                  </Button>
+                </AlertDescription>
               </Alert>
             )}
 
@@ -147,14 +226,16 @@ export function AdminPage() {
                       <TableHead className="text-muted-foreground">E-mail</TableHead>
                       <TableHead className="text-muted-foreground">Empresa</TableHead>
                       <TableHead className="text-muted-foreground">Função</TableHead>
+                      <TableHead className="text-muted-foreground">Tipo</TableHead>
                       <TableHead className="text-muted-foreground">Plano</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {users.length === 0 ? (
                       <TableRow className="border-border">
                         <TableCell
-                          colSpan={5}
+                          colSpan={7}
                           className="py-12 text-center text-muted-foreground"
                         >
                           Nenhum usuário encontrado
@@ -186,8 +267,40 @@ export function AdminPage() {
                               {u.role || "—"}
                             </Badge>
                           </TableCell>
+                          <TableCell>
+                            <Select
+                              value={u.segment_type || "produtos"}
+                              onValueChange={(v) => handleSegmentChange(u, v as "produtos" | "consorcio")}
+                              disabled={!!updatingSegment}
+                            >
+                              <SelectTrigger className="w-[160px] h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="produtos">Produtos & Serviços</SelectItem>
+                                <SelectItem value="consorcio">Consórcio</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
                           <TableCell className="text-muted-foreground">
                             {u.plan_type || "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {u.company_id ? (
+                              <Button variant="outline" size="sm" asChild>
+                                <Link
+                                  to={`/admin/preview/${u.company_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="gap-1"
+                                >
+                                  <LayoutDashboard className="h-4 w-4" />
+                                  Ver Dashboard
+                                </Link>
+                              </Button>
+                            ) : (
+                              "—"
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
