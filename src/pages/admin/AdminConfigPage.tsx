@@ -8,21 +8,23 @@ import { isSaasAdmin } from "@/lib/use-saas-admin"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Check, HandCoins, Package } from "lucide-react"
+import { Loader2, Check, HandCoins, Package, MessageSquare } from "lucide-react"
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/utils"
 
-type ConfigType = "consorcio" | "produtos"
+type ConfigType = "consorcio" | "produtos" | "chat"
 
 interface WebhookConfig {
   config_type: string
   webhook_testar_atendente: string | null
   webhook_enviar_arquivos: string | null
+  webhook_chat: string | null
 }
 
 const CONFIG_LABELS: Record<ConfigType, string> = {
   consorcio: "Consórcio",
   produtos: "Produtos & Serviços",
+  chat: "Chat de Conhecimento",
 }
 
 export function AdminConfigPage() {
@@ -34,7 +36,11 @@ export function AdminConfigPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [selectedType, setSelectedType] = useState<ConfigType | null>(null)
-  const [form, setForm] = useState({ webhook_testar_atendente: "", webhook_enviar_arquivos: "" })
+  const [form, setForm] = useState({
+    webhook_testar_atendente: "",
+    webhook_enviar_arquivos: "",
+    webhook_chat: "",
+  })
   const [errorMsg, setErrorMsg] = useState<string>("")
   const loadedRef = useRef(false)
 
@@ -76,6 +82,7 @@ export function AdminConfigPage() {
       setForm({
         webhook_testar_atendente: c.webhook_testar_atendente ?? "",
         webhook_enviar_arquivos: c.webhook_enviar_arquivos ?? "",
+        webhook_chat: c.webhook_chat ?? "",
       })
     }
   }, [selectedType, configs])
@@ -89,12 +96,17 @@ export function AdminConfigPage() {
     }
     setSaving(selectedType)
     try {
+      const payload: Record<string, string | undefined> = {
+        config_type: selectedType,
+      }
+      if (selectedType === "chat") {
+        payload.webhook_chat = form.webhook_chat.trim() || undefined
+      } else {
+        payload.webhook_testar_atendente = form.webhook_testar_atendente.trim() || undefined
+        payload.webhook_enviar_arquivos = form.webhook_enviar_arquivos.trim() || undefined
+      }
       const { data, error } = await supabase.functions.invoke("admin-webhook-config", {
-        body: {
-          config_type: selectedType,
-          webhook_testar_atendente: form.webhook_testar_atendente.trim() || undefined,
-          webhook_enviar_arquivos: form.webhook_enviar_arquivos.trim() || undefined,
-        },
+        body: payload,
         headers: { Authorization: `Bearer ${token}` },
       })
       if (error) throw error
@@ -125,7 +137,7 @@ export function AdminConfigPage() {
         <CardHeader>
           <CardTitle className="text-foreground">Tipos de Configuração</CardTitle>
           <CardDescription className="text-muted-foreground">
-            Cadastre os webhooks por tipo (Consórcio ou Produtos & Serviços). Cada tipo possui dois webhooks: para testar o atendente e para enviar arquivos ao N8N.
+            Cadastre os webhooks por tipo. Consórcio e Produtos possuem dois webhooks cada. O Chat de Conhecimento usa uma URL global única para todas as empresas.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -152,8 +164,8 @@ export function AdminConfigPage() {
             </div>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {(["consorcio", "produtos"] as ConfigType[]).map((type) => (
+              <div className="grid gap-4 sm:grid-cols-3">
+                {(["consorcio", "produtos", "chat"] as ConfigType[]).map((type) => (
                   <Card
                     key={type}
                     className={`cursor-pointer transition-colors hover:bg-muted/50 ${
@@ -164,13 +176,17 @@ export function AdminConfigPage() {
                     <CardHeader className="flex flex-row items-center gap-4">
                       {type === "consorcio" ? (
                         <HandCoins className="h-10 w-10 text-primary" />
-                      ) : (
+                      ) : type === "produtos" ? (
                         <Package className="h-10 w-10 text-primary" />
+                      ) : (
+                        <MessageSquare className="h-10 w-10 text-primary" />
                       )}
                       <CardTitle className="text-lg">{CONFIG_LABELS[type]}</CardTitle>
                     </CardHeader>
                     <CardDescription>
-                      Clique para configurar os webhooks
+                      {type === "chat"
+                        ? "Webhook global (todas as empresas)"
+                        : "Clique para configurar os webhooks"}
                     </CardDescription>
                   </Card>
                 ))}
@@ -181,34 +197,53 @@ export function AdminConfigPage() {
                   <CardHeader>
                     <CardTitle>{CONFIG_LABELS[selectedType]}</CardTitle>
                     <CardDescription>
-                      Webhook para testar atendente e para enviar arquivos ao N8N
+                      {selectedType === "chat"
+                        ? "URL única do webhook N8N para o Chat de Conhecimento (formato Evolution API)"
+                        : "Webhook para testar atendente e para enviar arquivos ao N8N"}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="webhook_testar">Webhook para testar atendente</Label>
-                      <Input
-                        id="webhook_testar"
-                        type="url"
-                        placeholder="https://seu-n8n.com/webhook/testar-atendente"
-                        value={form.webhook_testar_atendente}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, webhook_testar_atendente: e.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="webhook_arquivos">Webhook para enviar arquivos ao N8N</Label>
-                      <Input
-                        id="webhook_arquivos"
-                        type="url"
-                        placeholder="https://seu-n8n.com/webhook/enviar-arquivos"
-                        value={form.webhook_enviar_arquivos}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, webhook_enviar_arquivos: e.target.value }))
-                        }
-                      />
-                    </div>
+                    {selectedType === "chat" ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="webhook_chat">Webhook do Chat de Conhecimento</Label>
+                        <Input
+                          id="webhook_chat"
+                          type="url"
+                          placeholder="https://seu-n8n.com/webhook/consulta-chat"
+                          value={form.webhook_chat}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, webhook_chat: e.target.value }))
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="webhook_testar">Webhook para testar atendente</Label>
+                          <Input
+                            id="webhook_testar"
+                            type="url"
+                            placeholder="https://seu-n8n.com/webhook/testar-atendente"
+                            value={form.webhook_testar_atendente}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, webhook_testar_atendente: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="webhook_arquivos">Webhook para enviar arquivos ao N8N</Label>
+                          <Input
+                            id="webhook_arquivos"
+                            type="url"
+                            placeholder="https://seu-n8n.com/webhook/enviar-arquivos"
+                            value={form.webhook_enviar_arquivos}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, webhook_enviar_arquivos: e.target.value }))
+                            }
+                          />
+                        </div>
+                      </>
+                    )}
                     <Button onClick={handleSave} disabled={!!saving}>
                       {saving ? (
                         <>

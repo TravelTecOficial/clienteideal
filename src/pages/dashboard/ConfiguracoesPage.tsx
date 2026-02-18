@@ -69,8 +69,6 @@ interface CompanyRow {
   email_atendimento: string | null;
   estancia_whatsapp: string | null;
   whatsapp_group_image_url: string | null;
-  evolution_api_url: string | null;
-  evolution_api_key: string | null;
   evolution_instance_name: string | null;
 }
 
@@ -166,10 +164,6 @@ const promptAtendimentoFormSchema = z.object({
 });
 
 const evolutionFormSchema = z.object({
-  evolution_api_url: z
-    .union([z.literal(""), z.string().url("URL inválida")])
-    .optional(),
-  evolution_api_key: z.string().optional(),
   evolution_instance_name: z.string().optional(),
 });
 
@@ -243,8 +237,6 @@ export function ConfiguracoesPage() {
   const evolutionForm = useForm<EvolutionFormValues>({
     resolver: zodResolver(evolutionFormSchema),
     defaultValues: {
-      evolution_api_url: "",
-      evolution_api_key: "",
       evolution_instance_name: "",
     },
   });
@@ -394,7 +386,7 @@ export function ConfiguracoesPage() {
     loadPromptAtendimento();
   }, [loadPromptAtendimento]);
 
-  // Carregar configuração Evolution API (não carrega API key por segurança)
+  // Carregar configuração Evolution API (URL e API Key são configuradas apenas no Admin)
   const loadEvolution = useCallback(async () => {
     if (!companyId) {
       setIsFetchingEvolution(false);
@@ -404,15 +396,13 @@ export function ConfiguracoesPage() {
     try {
       const { data, error } = await supabase
         .from("companies")
-        .select("evolution_api_url, evolution_instance_name")
+        .select("evolution_instance_name")
         .eq("id", companyId)
         .maybeSingle();
 
       if (error) throw error;
-      const row = data as { evolution_api_url: string | null; evolution_instance_name: string | null } | null;
+      const row = data as { evolution_instance_name: string | null } | null;
       evolutionForm.reset({
-        evolution_api_url: row?.evolution_api_url ?? "",
-        evolution_api_key: "", // Nunca carregado por segurança
         evolution_instance_name: row?.evolution_instance_name ?? "",
       });
     } catch (err) {
@@ -579,7 +569,7 @@ export function ConfiguracoesPage() {
     }
   }
 
-  // Salvar credenciais Evolution API
+  // Salvar nome da instância Evolution (URL e API Key são configuradas apenas no Admin)
   async function onEvolutionSubmit(values: EvolutionFormValues) {
     if (!companyId) {
       toast({
@@ -591,27 +581,18 @@ export function ConfiguracoesPage() {
     }
     setIsSavingEvolution(true);
     try {
-      const payload: Record<string, string | null> = {
-        evolution_api_url: values.evolution_api_url?.trim() || null,
-        evolution_instance_name: values.evolution_instance_name?.trim() || null,
-      };
-      if (values.evolution_api_key?.trim()) {
-        payload.evolution_api_key = values.evolution_api_key.trim();
-      }
       const { error } = await supabase
         .from("companies")
-        .update(payload)
+        .update({
+          evolution_instance_name: values.evolution_instance_name?.trim() || null,
+        })
         .eq("id", companyId);
 
       if (error) throw error;
 
       toast({
-        title: "Credenciais salvas",
-        description: "As configurações da Evolution API foram atualizadas.",
-      });
-      evolutionForm.reset({
-        ...evolutionForm.getValues(),
-        evolution_api_key: "", // Limpa o campo após salvar (nunca persistir no estado do form)
+        title: "Instância salva",
+        description: "O nome da instância foi atualizado.",
       });
     } catch (err) {
       toast({
@@ -641,6 +622,17 @@ export function ConfiguracoesPage() {
       return;
     }
     const res = data as Record<string, unknown> | null;
+    const webhookDebug = (res?._webhook ?? null) as
+      | {
+          configured?: boolean;
+          attempts?: Array<{
+            endpoint?: string;
+            status?: number;
+            ok?: boolean;
+            responsePreview?: string;
+          }>;
+        }
+      | null;
     if (action === "connect" && res) {
       const base64 = (res.base64 ?? res.code ?? res.pairingCode) as string | undefined;
       if (base64) {
@@ -660,6 +652,20 @@ export function ConfiguracoesPage() {
     if (action === "connectionState" && res) {
       const state = (res.state ?? res.instance?.state ?? res) as string | Record<string, unknown>;
       setConnectionState(typeof state === "string" ? state : JSON.stringify(state));
+    }
+    if ((action === "create" || action === "connect") && webhookDebug) {
+      const firstAttempt = webhookDebug.attempts?.[0];
+      const attemptSummary = webhookDebug.attempts
+        ?.map((a) => `${a.status ?? 0}${a.ok ? " OK" : " FAIL"}`)
+        .join(" | ");
+      toast({
+        title: webhookDebug.configured ? "Webhook configurado" : "Webhook não configurado",
+        description: webhookDebug.configured
+          ? "A Evolution confirmou a configuração do webhook."
+          : `Tentativas: ${attemptSummary ?? "sem detalhes"}${
+              firstAttempt?.responsePreview ? ` | resposta: ${firstAttempt.responsePreview}` : ""
+            }`,
+      });
     }
     if (action === "logout") {
       setQrCodeBase64(null);
@@ -893,8 +899,7 @@ export function ConfiguracoesPage() {
                 <CardHeader>
                   <CardTitle>Evolution API (WhatsApp)</CardTitle>
                   <CardDescription>
-                    Configure a conexão com a Evolution API hospedada na sua VPS.
-                    Crie uma instância e conecte via QR Code.
+                    Crie uma instância e conecte via QR Code. A URL e a API Key da Evolution API são configuradas pelo administrador.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -906,68 +911,32 @@ export function ConfiguracoesPage() {
                     <div className="space-y-6">
                       <form
                         onSubmit={evolutionForm.handleSubmit(onEvolutionSubmit)}
-                        className="grid gap-4 sm:grid-cols-2"
+                        className="flex flex-wrap items-end gap-4"
                       >
-                        <div className="space-y-2 sm:col-span-2">
-                          <Label htmlFor="evolution_api_url">
-                            URL da Evolution API
-                          </Label>
-                          <Input
-                            id="evolution_api_url"
-                            type="url"
-                            placeholder="https://evolution.sua-vps.com"
-                            {...evolutionForm.register("evolution_api_url")}
-                          />
-                          {evolutionForm.formState.errors.evolution_api_url && (
-                            <p className="text-xs text-destructive">
-                              {
-                                evolutionForm.formState.errors.evolution_api_url
-                                  .message
-                              }
-                            </p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="evolution_api_key">
-                            API Key
-                          </Label>
-                          <Input
-                            id="evolution_api_key"
-                            type="password"
-                            placeholder="••••••••"
-                            autoComplete="off"
-                            {...evolutionForm.register("evolution_api_key")}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Deixe em branco para manter a chave atual.
-                          </p>
-                        </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2 min-w-[200px]">
                           <Label htmlFor="evolution_instance_name">
                             Nome da instância
                           </Label>
                           <Input
                             id="evolution_instance_name"
                             type="text"
-                            placeholder="minha-empresa-whatsapp"
+                            placeholder="Ex: minha-empresa-whatsapp"
                             {...evolutionForm.register("evolution_instance_name")}
                           />
                         </div>
-                        <div className="flex items-end sm:col-span-2">
-                          <Button type="submit" disabled={isSavingEvolution}>
-                            {isSavingEvolution ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Salvando…
-                              </>
-                            ) : (
-                              <>
-                                <Check className="h-4 w-4" />
-                                Salvar credenciais
-                              </>
-                            )}
-                          </Button>
-                        </div>
+                        <Button type="submit" disabled={isSavingEvolution}>
+                          {isSavingEvolution ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Salvando…
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-4 w-4" />
+                              Salvar
+                            </>
+                          )}
+                        </Button>
                       </form>
 
                       <Separator />

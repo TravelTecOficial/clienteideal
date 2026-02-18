@@ -408,3 +408,15 @@ entrypoint = "./functions/clerk-invite-vendedor/index.ts"
 # sync-profile-client: usa Clerk JWT (não Supabase). Validação própria com verifyToken do Clerk.
 [functions.sync-profile-client]
 verify_jwt = false
+
+# evolution-webhook: recebe webhooks da Evolution API e encaminha ao N8N. Evolution envia sem JWT.
+[functions.evolution-webhook]
+verify_jwt = false
+import_map = "./functions/evolution-webhook/deno.json"
+entrypoint = "./functions/evolution-webhook/index.ts"
+
+# chat-conhecimento-proxy: recebe mensagem do Chat, monta payload formato Evolution API, encaminha ao N8N global. Valida Clerk JWT internamente.
+[functions.chat-conhecimento-proxy]
+verify_jwt = false
+import_map = "./functions/chat-conhecimento-proxy/deno.json"
+entrypoint = "./functions/chat-conhecimento-proxy/index.ts"

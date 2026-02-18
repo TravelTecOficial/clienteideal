@@ -1,13 +1,12 @@
 /**
- * Edge Function: admin-update-company
+ * Edge Function: admin-list-companies
  *
- * Permite ao admin do SaaS atualizar segment_type de uma company.
- * URL e API Key da Evolution são gerenciados por admin-evolution-config.
+ * Lista todas as empresas (companies) para o Admin configurar Evolution API.
+ * Apenas admin (Clerk publicMetadata.role === "admin") pode acessar.
  *
  * Requer: Authorization: Bearer <clerk_jwt>
- * Body: { company_id: string, segment_type: "produtos" | "consorcio" }
- *
- * Apenas usuários com publicMetadata.role === "admin" podem chamar.
+ * Retorna: { companies: Array<{ id, name, evolution_api_url, evolution_instance_name }> }
+ * Nota: evolution_api_key nunca é retornado por segurança.
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -20,9 +19,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 }
 
-interface UpdateBody {
-  company_id: string
-  segment_type?: "produtos" | "consorcio"
+interface CompanyRow {
+  id: string
+  name: string | null
+  evolution_api_url: string | null
+  evolution_instance_name: string | null
 }
 
 Deno.serve(async (req) => {
@@ -87,57 +88,11 @@ Deno.serve(async (req) => {
   const saasRole = user.publicMetadata?.role as string | undefined
   if (saasRole !== "admin") {
     return new Response(
-      JSON.stringify({ error: "Acesso negado. Apenas administradores do sistema." }),
-      {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    )
-  }
-
-  let body: UpdateBody
-  try {
-    body = (await req.json()) as UpdateBody
-  } catch {
-    return new Response(
-      JSON.stringify({ error: "Body JSON inválido." }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    )
-  }
-
-  const { company_id, segment_type } = body
-  if (!company_id) {
-    return new Response(
-      JSON.stringify({ error: "company_id é obrigatório." }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    )
-  }
-
-  const hasSegmentUpdate = segment_type !== undefined
-
-  if (!hasSegmentUpdate) {
-    return new Response(
       JSON.stringify({
-        error: "Informe segment_type para atualizar.",
+        error: "Acesso negado. Apenas administradores do sistema.",
       }),
       {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    )
-  }
-
-  if (hasSegmentUpdate && segment_type !== "produtos" && segment_type !== "consorcio") {
-    return new Response(
-      JSON.stringify({ error: "segment_type deve ser 'produtos' ou 'consorcio'." }),
-      {
-        status: 400,
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     )
@@ -157,31 +112,40 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-  const update: Record<string, unknown> = {}
-  if (hasSegmentUpdate) update.segment_type = segment_type
+  try {
+    const { data, error } = await supabase
+      .from("companies")
+      .select("id, name, evolution_api_url, evolution_instance_name")
+      .order("name", { ascending: true })
 
-  const { data, error } = await supabase
-    .from("companies")
-    .update(update)
-    .eq("id", company_id)
-    .select("id, segment_type, evolution_instance_name")
-    .single()
+    if (error) {
+      console.error("[admin-list-companies] Erro:", error)
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      )
+    }
 
-  if (error) {
+    const companies = (data ?? []) as CompanyRow[]
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ companies }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    )
+  } catch (err) {
+    console.error("[admin-list-companies] Erro inesperado:", err)
+    return new Response(
+      JSON.stringify({ error: String(err) }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     )
   }
-
-  return new Response(
-    JSON.stringify({ success: true, company: data }),
-    {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    }
-  )
 })

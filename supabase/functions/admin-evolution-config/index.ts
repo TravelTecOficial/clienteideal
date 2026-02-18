@@ -1,10 +1,9 @@
 /**
- * Edge Function: admin-webhook-config
+ * Edge Function: admin-evolution-config
  *
- * POST sem body ou com action: "get" -> Retorna as configurações (apenas admin)
- * POST com config_type e webhooks -> Atualiza uma configuração (apenas admin)
- *
- * Body update: { config_type: "consorcio" | "produtos", webhook_testar_atendente?: string, webhook_enviar_arquivos?: string }
+ * Configuração global da Evolution API (URL e API Key).
+ * GET ou POST sem body -> Retorna evolution_api_url (nunca API Key)
+ * POST com evolution_api_url e/ou evolution_api_key -> Atualiza (apenas admin)
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -83,7 +82,7 @@ Deno.serve(async (req) => {
     const saasRole = user.publicMetadata?.role as string | undefined
     isAdmin = saasRole === "admin"
   } catch {
-    // fallback abaixo via profiles
+    // fallback via profiles
   }
 
   if (!isAdmin) {
@@ -95,7 +94,6 @@ Deno.serve(async (req) => {
     const role = (profile as { role?: string } | null)?.role
     isAdmin = role === "admin"
   }
-
   if (!isAdmin) {
     return new Response(
       JSON.stringify({ error: "Acesso negado. Apenas administradores." }),
@@ -105,22 +103,24 @@ Deno.serve(async (req) => {
 
   let body: Record<string, unknown> = {}
   try {
-    if (req.method === "POST" && req.headers.get("content-type")?.includes("application/json")) {
-      body = (await req.json()) as Record<string, unknown>
+    const ct = req.headers.get("content-type") ?? ""
+    if (req.method === "POST" && (ct.includes("application/json") || ct === "")) {
+      const raw = await req.text()
+      body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
     }
-  } catch { /* empty body */ }
+  } catch {
+    body = {}
+  }
 
-  const isUpdate =
-    body.config_type &&
-    (body.webhook_testar_atendente !== undefined ||
-      body.webhook_enviar_arquivos !== undefined ||
-      body.webhook_chat !== undefined)
+  const hasUpdate =
+    body.evolution_api_url !== undefined || body.evolution_api_key !== undefined
 
-  if (req.method === "GET" || !isUpdate) {
+  if (req.method === "GET" || req.method === "POST" && !hasUpdate) {
     const { data, error } = await supabase
-      .from("admin_webhook_config")
-      .select("config_type, webhook_testar_atendente, webhook_enviar_arquivos, webhook_chat")
-      .order("config_type")
+      .from("admin_evolution_config")
+      .select("evolution_api_url")
+      .limit(1)
+      .maybeSingle()
 
     if (error) {
       return new Response(
@@ -129,65 +129,73 @@ Deno.serve(async (req) => {
       )
     }
 
+    const row = data as { evolution_api_url: string | null } | null
     return new Response(
-      JSON.stringify({ configs: data ?? [] }),
+      JSON.stringify({ evolution_api_url: row?.evolution_api_url ?? null }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
 
-  if (isUpdate) {
-    const { config_type, webhook_testar_atendente, webhook_enviar_arquivos, webhook_chat } =
-      body as {
-        config_type: string
-        webhook_testar_atendente?: string
-        webhook_enviar_arquivos?: string
-        webhook_chat?: string
-      }
-    if (
-      !config_type ||
-      (config_type !== "consorcio" && config_type !== "produtos" && config_type !== "chat")
-    ) {
+  const evolution_api_url = body.evolution_api_url as string | undefined
+  const evolution_api_key = body.evolution_api_key as string | undefined
+
+  const update: Record<string, string | null> = {
+    updated_at: new Date().toISOString(),
+  }
+  if (evolution_api_url !== undefined) {
+    update.evolution_api_url = evolution_api_url?.trim() || null
+  }
+  if (evolution_api_key !== undefined) {
+    update.evolution_api_key = evolution_api_key?.trim() || null
+  }
+
+  const { data: existing } = await supabase
+    .from("admin_evolution_config")
+    .select("id")
+    .limit(1)
+    .maybeSingle()
+
+  if (!existing) {
+    const { error: insertErr } = await supabase
+      .from("admin_evolution_config")
+      .insert({
+        evolution_api_url: update.evolution_api_url ?? null,
+        evolution_api_key: update.evolution_api_key ?? null,
+      })
+    if (insertErr) {
       return new Response(
-        JSON.stringify({
-          error: "config_type deve ser 'consorcio', 'produtos' ou 'chat'.",
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      )
-    }
-
-    const update: Record<string, string | null> = { updated_at: new Date().toISOString() }
-    if (webhook_testar_atendente !== undefined) {
-      update.webhook_testar_atendente = webhook_testar_atendente?.trim() || null
-    }
-    if (webhook_enviar_arquivos !== undefined) {
-      update.webhook_enviar_arquivos = webhook_enviar_arquivos?.trim() || null
-    }
-    if (webhook_chat !== undefined) {
-      update.webhook_chat = webhook_chat?.trim() || null
-    }
-
-    const { data, error } = await supabase
-      .from("admin_webhook_config")
-      .update(update)
-      .eq("config_type", config_type)
-      .select()
-      .single()
-
-    if (error) {
-      return new Response(
-        JSON.stringify({ error: error.message }),
+        JSON.stringify({ error: insertErr.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
-
+    const { data: inserted } = await supabase
+      .from("admin_evolution_config")
+      .select("evolution_api_url")
+      .limit(1)
+      .maybeSingle()
     return new Response(
-      JSON.stringify({ success: true, config: data }),
+      JSON.stringify({ success: true, evolution_api_url: (inserted as { evolution_api_url: string | null } | null)?.evolution_api_url ?? null }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
 
+  const { data, error } = await supabase
+    .from("admin_evolution_config")
+    .update(update)
+    .eq("id", (existing as { id: string }).id)
+    .select("evolution_api_url")
+    .maybeSingle()
+
+  if (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    )
+  }
+
+  const row = data as { evolution_api_url: string | null } | null
   return new Response(
-    JSON.stringify({ error: "Método não permitido." }),
-    { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    JSON.stringify({ success: true, evolution_api_url: row?.evolution_api_url ?? null }),
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   )
 })

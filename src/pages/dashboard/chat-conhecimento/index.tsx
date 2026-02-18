@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@clerk/clerk-react";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { SUPABASE_URL } from "@/lib/supabase";
 
 interface ProfileRow {
   company_id: string | null;
@@ -29,13 +30,6 @@ interface Message {
   content: string;
 }
 
-type ImportMetaWithEnv = ImportMeta & {
-  env?: {
-    VITE_N8N_CHAT_WEBHOOK_URL?: string;
-  };
-};
-
-const DEFAULT_CHAT_WEBHOOK_URL = 'https://jobs.traveltec.com.br/webhook/consulta-chat';
 const NONE_QUALIFICADOR = "__none__";
 
 /** Extrai o texto da resposta do assistente a partir dos formatos possíveis do n8n AI Agent / Webhook */
@@ -97,7 +91,6 @@ export default function ChatConhecimento() {
   const { getToken, userId } = useAuth();
   const supabase = useSupabaseClient();
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [n8nChatWebhookUrl, setN8nChatWebhookUrl] = useState<string | null>(null);
   const [qualificadores, setQualificadores] = useState<Qualificador[]>([]);
   const [selectedQualificadorId, setSelectedQualificadorId] = useState<string>(NONE_QUALIFICADOR);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -107,28 +100,6 @@ export default function ChatConhecimento() {
     if (!userId || !supabase) return;
     fetchCompanyId(supabase, userId).then(setCompanyId);
   }, [userId, supabase]);
-
-  // Buscar webhook N8N da empresa (prioridade: banco > env > default)
-  useEffect(() => {
-    if (!companyId || !supabase) {
-      setN8nChatWebhookUrl(null);
-      return;
-    }
-    supabase
-      .from("companies")
-      .select("n8n_chat_webhook_url")
-      .eq("id", companyId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("Erro ao buscar webhook N8N:", error);
-          setN8nChatWebhookUrl(null);
-          return;
-        }
-        const url = (data as { n8n_chat_webhook_url: string | null } | null)?.n8n_chat_webhook_url?.trim() || null;
-        setN8nChatWebhookUrl(url || null);
-      });
-  }, [companyId, supabase]);
 
   // Buscar qualificadores da empresa
   useEffect(() => {
@@ -183,31 +154,88 @@ export default function ChatConhecimento() {
     setIsLoading(true);
 
     try {
-      // Obtém o Token do Clerk configurado para o Supabase (garante Multitenancy via RLS) [cite: 29, 65]
-      const token = await getToken({ template: "supabase" });
-      
-      // Prioridade: banco (empresa) > env > default
-      const resolvedUrl = n8nChatWebhookUrl || (import.meta as ImportMetaWithEnv).env?.VITE_N8N_CHAT_WEBHOOK_URL || DEFAULT_CHAT_WEBHOOK_URL;
-      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      // Em localhost: se tem URL no banco, usa direto; senão usa proxy para evitar CORS
-      const webhookUrl = isLocalhost && !n8nChatWebhookUrl
-        ? '/api/chat-conhecimento'
-        : resolvedUrl;
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
+      // Usa o token padrão do Clerk (mesmo padrão já usado no Evolution proxy).
+      const token = await getToken();
+      if (!token) throw new Error("Token indisponível.");
+
+      const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      const proxyUrl = isLocalhost ? "/api/chat-conhecimento" : `${SUPABASE_URL}/functions/v1/chat-conhecimento-proxy-fix2`;
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "0a9bbc",
         },
         body: JSON.stringify({
-          chatInput: userMessage, // Nome do campo esperado pelo AI Agent do n8n
-          company_id: companyId, // Multitenancy: filtra documentos por empresa no n8n
+          sessionId: "0a9bbc",
+          runId: "chat-auth-debug-1",
+          hypothesisId: "CHAT_H1_TOKEN_OR_PROXY",
+          location: "src/pages/dashboard/chat-conhecimento/index.tsx:before-fetch",
+          message: "Sending chat request",
+          data: {
+            hasToken: Boolean(token),
+            isLocalhost,
+            proxyUrl,
+            hasCompanyId: Boolean(companyId),
+            selectedQualificadorId,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      const response = await fetch(proxyUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          company_id: companyId,
           qualificador_id: selectedQualificadorId !== NONE_QUALIFICADOR ? selectedQualificadorId : undefined,
           qualificador_nome: selectedQualificadorId !== NONE_QUALIFICADOR ? qualificadores.find((q) => q.id === selectedQualificadorId)?.nome ?? undefined : undefined,
-        })
+        }),
       });
 
-      if (!response.ok) throw new Error('Falha na comunicação com o servidor');
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        const parsedError = (() => {
+          try {
+            return JSON.parse(errorText) as { error?: string; message?: string };
+          } catch {
+            return null;
+          }
+        })();
+        // #region agent log
+        fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "0a9bbc",
+          },
+          body: JSON.stringify({
+            sessionId: "0a9bbc",
+            runId: "chat-auth-debug-1",
+            hypothesisId: "CHAT_H2_PROXY_RESPONSE",
+            location: "src/pages/dashboard/chat-conhecimento/index.tsx:non-2xx",
+            message: "Chat proxy returned non-2xx",
+            data: {
+              status: response.status,
+              responsePreview: errorText.slice(0, 200),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        throw new Error(
+          parsedError?.error ||
+            parsedError?.message ||
+            errorText ||
+            `Falha na comunicação com o servidor (HTTP ${response.status})`
+        );
+      }
 
       const data = await response.json();
       
@@ -226,12 +254,34 @@ export default function ChatConhecimento() {
       }]);
     } catch (error) {
       console.error("Erro ao consultar n8n:", error);
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "0a9bbc",
+        },
+        body: JSON.stringify({
+          sessionId: "0a9bbc",
+          runId: "chat-auth-debug-1",
+          hypothesisId: "CHAT_H4_FRONT_CATCH",
+          location: "src/pages/dashboard/chat-conhecimento/index.tsx:catch",
+          message: "Frontend catch during chat request",
+          data: {
+            errorMessage: error instanceof Error ? error.message : String(error),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       const isWebhookImmediate = error instanceof Error && error.message === 'WEBHOOK_IMMEDIATE';
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: isWebhookImmediate
           ? "O webhook n8n está configurado para responder imediatamente. Configure o nó Webhook para 'Respond: When Last Node Finishes' para receber a resposta do assistente."
-          : "Desculpe, tive um problema ao conectar com minha base de conhecimento. Por favor, tente novamente em instantes." 
+          : `Desculpe, tive um problema ao conectar com minha base de conhecimento: ${
+              error instanceof Error ? error.message : "erro desconhecido"
+            }` 
       }]);
     } finally {
       setIsLoading(false);

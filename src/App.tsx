@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { AdminPage } from "@/pages/admin/AdminPage"
 import { AdminConfigPage } from "@/pages/admin/AdminConfigPage"
+import { AdminEvolutionPage } from "@/pages/admin/AdminEvolutionPage"
 import { AdminPreviewPage } from "@/pages/admin/AdminPreviewPage"
 import { DashboardPage } from "@/pages/dashboard/DashboardPage"
 import { ProfilePage } from "@/pages/dashboard/ProfilePage"
@@ -239,6 +240,14 @@ function App() {
           element={
             <SupabaseProvider>
               <AdminConfigPage />
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/evolution"
+          element={
+            <SupabaseProvider>
+              <AdminEvolutionPage />
             </SupabaseProvider>
           }
         />

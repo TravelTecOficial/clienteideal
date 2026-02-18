@@ -34,6 +34,7 @@ const adminNavMain = [
     url: "#",
     items: [
       { title: "Configurações", url: "/admin/configuracoes" },
+      { title: "Evolution API", url: "/admin/evolution" },
       { title: "Planos", url: "/planos" },
     ],
   },
