@@ -11,6 +11,8 @@
 8. [Edge Functions (Supabase)](#8-edge-functions-supabase)
 9. [Segurança](#9-segurança)
 10. [Configuração e Deploy](#10-configuração-e-deploy)
+11. [Changelog da Versão 1.0.0](#11-changelog-da-versão-100)
+12. [Documentos Relacionados](#12-documentos-relacionados)
 
 ---
 
@@ -25,8 +27,11 @@ O **Cliente Ideal Online** é uma plataforma SaaS de qualificação de leads e g
 - **Agendar reuniões** em calendário
 - **Visualizar atendimentos de IA** (conversas classificadas)
 - **Manter base de conhecimento** (arquivos para treinamento)
+- **Chat de Conhecimento** (assistente IA via n8n)
 - **Cadastrar produtos e serviços**
 - **Convidar vendedores** via Clerk
+- **Integração WhatsApp** (Evolution API)
+- **Indicadores** (KPIs, funil, gráficos)
 
 O sistema é **multitenant**: cada empresa (company) tem seus próprios dados isolados por Row Level Security (RLS).
 
@@ -117,6 +122,7 @@ O sistema é **multitenant**: cada empresa (company) tem seus próprios dados is
 | Rota | Descrição |
 |------|-----------|
 | `/` | Landing page |
+| `/precos` | Página de preços |
 | `/entrar` | Login (Clerk) |
 | `/cadastrar` | Cadastro (Clerk) |
 | `/planos` | Seleção de plano (requer autenticação) |
@@ -125,7 +131,7 @@ O sistema é **multitenant**: cada empresa (company) tem seus próprios dados is
 
 | Rota | Módulo |
 |------|--------|
-| `/dashboard` | Visão geral |
+| `/dashboard` | Visão geral (Indicadores) |
 | `/dashboard/cliente-ideal` | Perfis de cliente ideal |
 | `/dashboard/qualificador` | Qualificadores |
 | `/dashboard/leads` | Leads |
@@ -133,11 +139,18 @@ O sistema é **multitenant**: cada empresa (company) tem seus próprios dados is
 | `/dashboard/agenda` | Agenda / Reuniões |
 | `/dashboard/atendimentos` | Atendimentos IA |
 | `/dashboard/base-conhecimento` | Base de conhecimento |
+| `/dashboard/chat-conhecimento` | Chat de Conhecimento (IA + n8n) |
 | `/dashboard/items` | Produtos e Serviços |
+| `/dashboard/produtos-servicos` | Redireciona para `/dashboard/items` |
+| `/dashboard/configuracoes` | Configurações da empresa |
+| `/dashboard/consorcio` | Módulo Consórcio |
+| `/dashboard/indicadores` | Indicadores e métricas |
 | `/dashboard/perfil` | Perfil do usuário |
 | `/dashboard/vendedores` | Vendedores |
 | `/admin` | Usuários do sistema (Admin SaaS) |
-| `/admin/configuracoes` | Configurações (Admin SaaS) |
+| `/admin/configuracoes` | Webhooks e Evolution API (Admin SaaS) |
+| `/admin/evolution` | Configuração Evolution API (Admin SaaS) |
+| `/admin/preview/:companyId` | Preview como empresa (Admin SaaS) |
 
 ### 5.3 Fluxo de Seleção de Plano
 
@@ -241,7 +254,20 @@ Gestão de arquivos para treinamento:
 
 ---
 
-### 6.8 Produtos e Serviços (Items)
+### 6.8 Chat de Conhecimento
+
+**Rota:** `/dashboard/chat-conhecimento`
+
+Assistente de IA que consulta documentos vetorizados:
+- Usa **Edge Function** `chat-conhecimento-proxy` (não chama n8n diretamente)
+- Proxy monta payload no formato Evolution API e encaminha ao webhook n8n configurado em `admin_webhook_config` (config_type=chat)
+- Seleção de **qualificador** para contexto de teste
+- Multitenant: RLS valida `company_id` do usuário
+- Webhook n8n deve estar configurado para "Respond: When Last Node Finishes"
+
+---
+
+### 6.9 Produtos e Serviços (Items)
 
 **Rota:** `/dashboard/items`
 
@@ -252,7 +278,36 @@ Cadastro de produtos e serviços:
 
 ---
 
-### 6.9 Vendedores
+### 6.10 Indicadores
+
+**Rota:** `/dashboard/indicadores`
+
+Dashboard de performance com KPIs e gráficos:
+- Performance Comercial: Investimento Ads, Atendimentos, Agendamentos, Vendas
+- Financeiro: Faturamento, Lucro
+- Funil de Vendas, Histórico de Fechamentos
+- Temperatura dos Leads (Quente, Morno, Frio)
+- Insights Redes Sociais
+
+---
+
+### 6.11 Consórcio
+
+**Rota:** `/dashboard/consorcio`
+
+Módulo específico para gestão de consórcios.
+
+---
+
+### 6.12 Configurações
+
+**Rota:** `/dashboard/configuracoes`
+
+Configurações da empresa (acessível apenas por usuários autorizados).
+
+---
+
+### 6.13 Vendedores
 
 **Rota:** `/dashboard/vendedores`
 
@@ -263,13 +318,15 @@ Cadastro de produtos e serviços:
 
 ---
 
-### 6.10 Admin (SaaS)
+### 6.14 Admin (SaaS)
 
-**Rotas:** `/admin`, `/admin/configuracoes`
+**Rotas:** `/admin`, `/admin/configuracoes`, `/admin/evolution`, `/admin/preview/:companyId`
 
-- Lista de usuários do sistema (profiles + companies)
+- **Admin:** Lista de usuários do sistema (profiles + companies)
+- **Admin Configurações:** Webhooks n8n (Consórcio, Produtos, Chat de Conhecimento)
+- **Admin Evolution:** URL e API Key da Evolution API (WhatsApp)
+- **Admin Preview:** Visualizar dashboard como empresa específica
 - Acesso restrito a `publicMetadata.role === "admin"`
-- Edge Function `admin-list-users` valida o token e retorna dados agregados
 
 ---
 
@@ -293,6 +350,8 @@ Cadastro de produtos e serviços:
 | `items` | Produtos e serviços |
 | `vendedores` | Vendedores da empresa |
 | `horarios` | Horários de trabalho dos vendedores |
+| `admin_evolution_config` | URL e API Key da Evolution API (global) |
+| `admin_webhook_config` | Webhooks n8n (consórcio, produtos, chat) |
 
 ### 7.2 Esquema Resumido
 
@@ -344,9 +403,22 @@ O JWT do Clerk é enviado em cada requisição Supabase; o template `supabase` g
 |--------|---------|-----------|
 | **clerk-webhook** | Webhook Clerk (`user.created`) | Cria `company` e `profile`; no convite, usa `publicMetadata.company_id` |
 | **sync-profile-client** | Chamada do frontend | Sincroniza perfil sob demanda (fallback se webhook falhar) |
+| **sync-profile** | Interno | Alternativa server-side de sync (se existir) |
 | **clerk-invite-vendedor** | Chamada do frontend | Envia convite Clerk com `company_id` no metadata |
 | **admin-list-users** | Chamada do frontend | Lista usuários; apenas admin SaaS |
-| **sync-profile** | Interno | Alternativa server-side de sync (se existir) |
+| **admin-list-companies** | Chamada do frontend | Lista empresas; admin SaaS |
+| **admin-update-company** | Chamada do frontend | Atualiza dados da empresa; admin SaaS |
+| **admin-webhook-config** | Chamada do frontend | CRUD de webhooks n8n (consórcio, produtos, chat) |
+| **admin-evolution-config** | Chamada do frontend | CRUD de URL e API Key da Evolution API |
+| **evolution-proxy** | Chamada do frontend | Proxy para Evolution API (create/connect/connectionState/fetchInstances/logout) |
+| **evolution-webhook** | Webhook Evolution | Recebe mensagens MESSAGES_UPSERT da Evolution |
+| **chat-conhecimento-proxy** | Chamada do frontend | Proxy para Chat de Conhecimento; monta payload e encaminha ao n8n |
+| **upload-kb-to-webhook** | Chamada do frontend | Envia arquivos da base de conhecimento ao webhook n8n |
+
+### Integração Evolution API (WhatsApp)
+
+- **evolution-proxy:** Proxy que lê `admin_evolution_config` e `companies.evolution_instance_name`; configura webhook para `evolution-webhook`; nunca expõe API Key ao cliente.
+- **evolution-webhook:** Recebe eventos da Evolution; encaminha ao n8n conforme `admin_webhook_config`.
 
 ### Secrets necessários (Supabase Edge Functions)
 
@@ -418,27 +490,60 @@ npm run lint     # ESLint
 
 ```
 src/
-├── components/       # Componentes reutilizáveis
-├── hooks/            # Hooks customizados
+├── components/       # Componentes reutilizáveis (UI, ProtectedRoute, etc.)
+├── hooks/            # Hooks customizados (use-evolution-proxy, etc.)
 ├── lib/              # Supabase, utils, use-saas-admin
 ├── pages/            # Páginas e rotas
-│   ├── admin/
-│   ├── dashboard/
+│   ├── admin/        # Admin SaaS
+│   ├── dashboard/    # Módulos do dashboard
 │   └── ...
-├── styleguide/       # Galeria de componentes
+├── styleguide/       # Galeria de componentes (/styleguide)
 └── main.tsx
 ```
 
----
+### 10.6 Styleguide
 
-## Changelog da Versão 1.0.0
-
-- Lançamento inicial com módulos: Cliente Ideal, Qualificador, Leads, Oportunidades, Agenda, Atendimentos, Base de Conhecimento, Produtos/Serviços, Vendedores.
-- Autenticação via Clerk integrada ao Supabase com RLS.
-- Plano de assinatura (free, pro, enterprise).
-- Admin SaaS para gestão de usuários.
-- Edge Functions para webhook, sync de perfil, convite de vendedores e listagem de usuários.
+Rota `/styleguide` — galeria de componentes e blocos para referência e desenvolvimento.
 
 ---
 
-*Documentação gerada em fevereiro de 2025.*
+## 11. Changelog da Versão 1.0.0
+
+### Funcionalidades
+
+- **Módulos:** Cliente Ideal, Qualificador, Leads, Oportunidades, Agenda, Atendimentos, Base de Conhecimento, Chat de Conhecimento, Produtos/Serviços, Vendedores, Indicadores, Consórcio, Configurações.
+- **Autenticação:** Clerk integrado ao Supabase com RLS.
+- **Planos:** free, pro, enterprise.
+- **Admin SaaS:** Gestão de usuários, webhooks n8n, Evolution API.
+- **Evolution API:** Integração WhatsApp via proxy; webhook para receber mensagens.
+- **Chat de Conhecimento:** Assistente IA via proxy → n8n.
+- **Landing e Preços:** Páginas públicas.
+
+### Edge Functions
+
+- clerk-webhook, sync-profile-client, sync-profile
+- clerk-invite-vendedor
+- admin-list-users, admin-list-companies, admin-update-company
+- admin-webhook-config, admin-evolution-config
+- evolution-proxy, evolution-webhook
+- chat-conhecimento-proxy
+- upload-kb-to-webhook
+
+### Correções (v1.0.0)
+
+- **Popup de rede local:** Removida instrumentação de debug que enviava requisições para `127.0.0.1:7243` em produção. O popup "clienteideal.online quer buscar e se conectar a qualquer dispositivo na sua rede local" era causado por essas chamadas; o navegador interpretava como acesso à rede privada (Private Network Access), exigindo permissão do usuário.
+
+---
+
+## 12. Documentos Relacionados
+
+| Documento | Descrição |
+|-----------|-----------|
+| [DEPLOY.md](../DEPLOY.md) | Guia de deploy para produção |
+| [AMBIENTES-DEV-PROD.md](./AMBIENTES-DEV-PROD.md) | Configuração dev vs prod |
+| [SETUP-CLERK-SUPABASE-AUTH.md](./SETUP-CLERK-SUPABASE-AUTH.md) | Integração Clerk + Supabase |
+| [SETUP-CLERK-SECRET.md](./SETUP-CLERK-SECRET.md) | Configuração de secrets do Clerk |
+
+---
+
+*Documentação atualizada em fevereiro de 2025 — Versão 1.0.0.*

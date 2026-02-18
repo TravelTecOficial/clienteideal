@@ -47,12 +47,23 @@ npx supabase db push
 
 ## 3. Edge Functions (Supabase)
 
-Já deployadas no projeto PROD. Para redeploy:
+Já deployadas no projeto PROD. Para redeploy completo:
 
 ```bash
-npx supabase functions deploy clerk-webhook --project-ref bctjodobbsxieywgulvl
-npx supabase functions deploy clerk-invite-vendedor --project-ref bctjodobbsxieywgulvl
-npx supabase functions deploy sync-profile-client --project-ref bctjodobbsxieywgulvl
+PROJECT_REF=bctjodobbsxieywgulvl
+
+npx supabase functions deploy clerk-webhook --project-ref $PROJECT_REF
+npx supabase functions deploy sync-profile-client --project-ref $PROJECT_REF
+npx supabase functions deploy clerk-invite-vendedor --project-ref $PROJECT_REF
+npx supabase functions deploy admin-list-users --project-ref $PROJECT_REF
+npx supabase functions deploy admin-list-companies --project-ref $PROJECT_REF
+npx supabase functions deploy admin-update-company --project-ref $PROJECT_REF
+npx supabase functions deploy admin-webhook-config --project-ref $PROJECT_REF
+npx supabase functions deploy admin-evolution-config --project-ref $PROJECT_REF
+npx supabase functions deploy evolution-proxy --project-ref $PROJECT_REF
+npx supabase functions deploy evolution-webhook --project-ref $PROJECT_REF
+npx supabase functions deploy chat-conhecimento-proxy --project-ref $PROJECT_REF
+npx supabase functions deploy upload-kb-to-webhook --project-ref $PROJECT_REF
 ```
 
 ---
@@ -78,11 +89,10 @@ npx supabase functions deploy sync-profile-client --project-ref bctjodobbsxieywg
 
 ## 6. Chat e Webhook n8n
 
-- O chat chama o webhook n8n diretamente em produção
-- n8n deve permitir CORS do domínio de produção
+- O **Chat de Conhecimento** usa a Edge Function `chat-conhecimento-proxy` (não chama n8n diretamente)
+- O proxy envia o payload ao webhook configurado em Admin → Configurações → Chat de Conhecimento
+- n8n deve permitir requisições do domínio do Supabase (Edge Functions)
 - Webhook configurado para "Respond: When Last Node Finishes"
-
-Se houver bloqueio de CORS, será necessário um proxy serverless.
 
 ---
 

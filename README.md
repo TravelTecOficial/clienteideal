@@ -4,7 +4,12 @@ Plataforma SaaS de qualificação de leads e gestão comercial.
 
 ## Documentação
 
-Para documentação completa do sistema, consulte: **[docs/DOCUMENTACAO_SISTEMA_V1.md](./docs/DOCUMENTACAO_SISTEMA_V1.md)**
+| Documento | Descrição |
+|-----------|-----------|
+| [**Documentação do Sistema**](./docs/DOCUMENTACAO_SISTEMA_V1.md) | Visão geral, arquitetura, módulos, Edge Functions |
+| [**CHANGELOG**](./CHANGELOG.md) | Histórico de alterações da versão 1.0.0 |
+| [**Deploy**](./DEPLOY.md) | Guia de deploy para produção |
+| [**Ambientes**](./docs/AMBIENTES-DEV-PROD.md) | Configuração dev vs prod |
 
 ---
 
