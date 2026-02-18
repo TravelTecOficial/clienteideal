@@ -160,30 +160,6 @@ export default function ChatConhecimento() {
 
       const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
       const proxyUrl = isLocalhost ? "/api/chat-conhecimento" : `${SUPABASE_URL}/functions/v1/chat-conhecimento-proxy-fix2`;
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "0a9bbc",
-        },
-        body: JSON.stringify({
-          sessionId: "0a9bbc",
-          runId: "chat-auth-debug-1",
-          hypothesisId: "CHAT_H1_TOKEN_OR_PROXY",
-          location: "src/pages/dashboard/chat-conhecimento/index.tsx:before-fetch",
-          message: "Sending chat request",
-          data: {
-            hasToken: Boolean(token),
-            isLocalhost,
-            proxyUrl,
-            hasCompanyId: Boolean(companyId),
-            selectedQualificadorId,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
 
       const response = await fetch(proxyUrl, {
         method: "POST",
@@ -208,27 +184,6 @@ export default function ChatConhecimento() {
             return null;
           }
         })();
-        // #region agent log
-        fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "0a9bbc",
-          },
-          body: JSON.stringify({
-            sessionId: "0a9bbc",
-            runId: "chat-auth-debug-1",
-            hypothesisId: "CHAT_H2_PROXY_RESPONSE",
-            location: "src/pages/dashboard/chat-conhecimento/index.tsx:non-2xx",
-            message: "Chat proxy returned non-2xx",
-            data: {
-              status: response.status,
-              responsePreview: errorText.slice(0, 200),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         throw new Error(
           parsedError?.error ||
             parsedError?.message ||
@@ -254,26 +209,6 @@ export default function ChatConhecimento() {
       }]);
     } catch (error) {
       console.error("Erro ao consultar n8n:", error);
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "0a9bbc",
-        },
-        body: JSON.stringify({
-          sessionId: "0a9bbc",
-          runId: "chat-auth-debug-1",
-          hypothesisId: "CHAT_H4_FRONT_CATCH",
-          location: "src/pages/dashboard/chat-conhecimento/index.tsx:catch",
-          message: "Frontend catch during chat request",
-          data: {
-            errorMessage: error instanceof Error ? error.message : String(error),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       const isWebhookImmediate = error instanceof Error && error.message === 'WEBHOOK_IMMEDIATE';
       setMessages(prev => [...prev, { 
         role: 'assistant', 

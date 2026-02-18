@@ -152,10 +152,6 @@ Deno.serve(async (req) => {
   const action = body?.action
   const instanceName = body?.instanceName?.trim() || storedInstanceName
 
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'run3',hypothesisId:'HQR4',location:'evolution-proxy/index.ts:action-received',message:'Evolution proxy action received',data:{action,instanceName:instanceName??null,hasStoredInstance:Boolean(storedInstanceName)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-
   if (!action) {
     return errorResponse("Ação obrigatória (create, connect, connectionState, fetchInstances, logout).", 400)
   }
@@ -245,17 +241,11 @@ Deno.serve(async (req) => {
         { method: "GET", headers }
       )
       const stateData = await stateRes.json().catch(() => ({}))
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'run3',hypothesisId:'HQR4',location:'evolution-proxy/index.ts:connect-pre-state',message:'State before connect',data:{instanceName,status:stateRes.status,state:(stateData as { instance?: { state?: string }; state?: string })?.instance?.state ?? (stateData as { state?: string })?.state ?? null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       const res = await fetch(`${url}/instance/connect/${encodeURIComponent(instanceName)}`, {
         method: "GET",
         headers,
       })
       const data = await res.json().catch(() => ({}))
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'run3',hypothesisId:'HQR5',location:'evolution-proxy/index.ts:connect-response',message:'Connect response from Evolution',data:{instanceName,status:res.status,hasBase64:Boolean((data as { base64?: string }).base64),hasCode:Boolean((data as { code?: string }).code),hasPairingCode:Boolean((data as { pairingCode?: string }).pairingCode),count:(data as { count?: number }).count ?? null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!res.ok) {
         return jsonResponse(data, res.status)
       }

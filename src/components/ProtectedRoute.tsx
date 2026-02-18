@@ -4,7 +4,7 @@ import { Navigate, useLocation } from "react-router-dom"
 import { Loader2, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useSupabaseClient } from "@/lib/supabase-context"
-import { isSaasAdmin, isLocalhost } from "@/lib/use-saas-admin"
+import { isSaasAdmin } from "@/lib/use-saas-admin"
 
 const PLAN_CHECK_KEY = "plan_check_passed"
 const PLAN_CHECK_TTL_MS = 10 * 60 * 1000 // 10 min
@@ -68,10 +68,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [planCheckStatus, setPlanCheckStatus] = useState<
     "idle" | "loading" | "allowed" | "blocked" | "connection_failed"
   >("idle")
-
-  // #region agent log
-  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({runId:`protected-route-${Date.now()}`,hypothesisId:"H1",location:"src/components/ProtectedRoute.tsx:render",message:"ProtectedRoute render snapshot",data:{isLoaded,isSignedIn,hasUser:!!user,role:user?.publicMetadata?.role ?? null,path:location.pathname,localhost:isLocalhost()},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   const fetchAndCheckPlan = useCallback(
     async (retryCount = 0): Promise<void> => {
@@ -188,9 +184,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Admin do SaaS (publicMetadata.role === "admin") → /admin. Note: UI-level check. API enforcement required.
   if (isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
-    // #region agent log
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({runId:`protected-route-${Date.now()}`,hypothesisId:"H2",location:"src/components/ProtectedRoute.tsx:admin-redirect",message:"Redirecionando para /admin",data:{role:user.publicMetadata?.role ?? null,path:location.pathname},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return <Navigate to="/admin" replace />
   }
 
@@ -245,9 +238,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (planCheckStatus === "blocked") {
-    // #region agent log
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({runId:`protected-route-${Date.now()}`,hypothesisId:"H3",location:"src/components/ProtectedRoute.tsx:blocked-redirect",message:"Redirecionando para /planos",data:{role:user.publicMetadata?.role ?? null,path:location.pathname,planCheckStatus},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return <Navigate to="/planos" replace state={{ from: location }} />
   }
 

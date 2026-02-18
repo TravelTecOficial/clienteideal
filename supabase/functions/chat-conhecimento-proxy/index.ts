@@ -54,47 +54,8 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get("Authorization")
   const token = authHeader?.replace(/^Bearer\s+/i, "")
-  // #region agent log
-  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "0a9bbc",
-    },
-    body: JSON.stringify({
-      sessionId: "0a9bbc",
-      runId: "chat-auth-debug-1",
-      hypothesisId: "CHAT_H1_TOKEN_OR_PROXY",
-      location: "supabase/functions/chat-conhecimento-proxy/index.ts:auth-header",
-      message: "Incoming auth header state",
-      data: {
-        hasAuthorizationHeader: Boolean(authHeader),
-        hasBearerToken: Boolean(token),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
 
   if (!token) {
-    // #region agent log
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "0a9bbc",
-      },
-      body: JSON.stringify({
-        sessionId: "0a9bbc",
-        runId: "chat-auth-debug-1",
-        hypothesisId: "CHAT_H1_TOKEN_OR_PROXY",
-        location: "supabase/functions/chat-conhecimento-proxy/index.ts:missing-token",
-        message: "Missing bearer token",
-        data: {},
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
     return jsonResponse({ error: "Token ausente. Faça login novamente." }, 401)
   }
 
@@ -108,24 +69,6 @@ Deno.serve(async (req) => {
     const verified = await verifyToken(token, { secretKey: clerkSecret })
     sub = verified.sub as string
   } catch {
-    // #region agent log
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "0a9bbc",
-      },
-      body: JSON.stringify({
-        sessionId: "0a9bbc",
-        runId: "chat-auth-debug-1",
-        hypothesisId: "CHAT_H2_TOKEN_VERIFY",
-        location: "supabase/functions/chat-conhecimento-proxy/index.ts:verify-failed",
-        message: "Token verification failed",
-        data: {},
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
     return jsonResponse({ error: "Token inválido ou expirado." }, 401)
   }
 
@@ -160,27 +103,6 @@ Deno.serve(async (req) => {
 
   const userCompanyId = (profile as { company_id: string | null } | null)?.company_id
   if (userCompanyId !== companyId) {
-    // #region agent log
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "0a9bbc",
-      },
-      body: JSON.stringify({
-        sessionId: "0a9bbc",
-        runId: "chat-auth-debug-1",
-        hypothesisId: "CHAT_H3_COMPANY_MISMATCH",
-        location: "supabase/functions/chat-conhecimento-proxy/index.ts:company-mismatch",
-        message: "User company mismatch",
-        data: {
-          hasUserCompanyId: Boolean(userCompanyId),
-          hasBodyCompanyId: Boolean(companyId),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
     return jsonResponse({ error: "Empresa não autorizada." }, 403)
   }
 
@@ -221,54 +143,9 @@ Deno.serve(async (req) => {
       .maybeSingle()
     webhookUrl =
       (fallbackConfig as { webhook_testar_atendente: string | null } | null)?.webhook_testar_atendente?.trim() || ""
-    // #region agent log
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "0a9bbc",
-      },
-      body: JSON.stringify({
-        sessionId: "0a9bbc",
-        runId: "chat-auth-debug-2",
-        hypothesisId: "CHAT_H5_WEBHOOK_CONFIG",
-        location: "supabase/functions/chat-conhecimento-proxy/index.ts:webhook-fallback",
-        message: "Fallback lookup for chat webhook",
-        data: {
-          usedFallback: true,
-          hasFallbackConfig: Boolean(fallbackConfig),
-          hasFallbackError: Boolean(fallbackError),
-          hasWebhookUrl: Boolean(webhookUrl),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
   }
 
   if (!webhookUrl) {
-    // #region agent log
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "0a9bbc",
-      },
-      body: JSON.stringify({
-        sessionId: "0a9bbc",
-        runId: "chat-auth-debug-1",
-        hypothesisId: "CHAT_H5_WEBHOOK_CONFIG",
-        location: "supabase/functions/chat-conhecimento-proxy/index.ts:webhook-config",
-        message: "Missing chat webhook config",
-        data: {
-          hasChatConfig: Boolean(chatConfig),
-          hasChatConfigError: Boolean(chatConfigError),
-          chatConfigError: chatConfigError?.message ?? null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
     return jsonResponse(
       { error: "Webhook do Chat de Conhecimento não configurado. Configure no Admin." },
       503
