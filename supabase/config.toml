@@ -409,6 +409,28 @@ entrypoint = "./functions/clerk-invite-vendedor/index.ts"
 [functions.sync-profile-client]
 verify_jwt = false
 
+# Admin functions: usam Clerk JWT (não Supabase). Validação própria com verifyToken do Clerk.
+[functions.admin-list-users]
+verify_jwt = false
+
+[functions.admin-list-companies]
+verify_jwt = false
+
+[functions.admin-update-company]
+verify_jwt = false
+
+[functions.admin-webhook-config]
+verify_jwt = false
+
+[functions.admin-evolution-config]
+verify_jwt = false
+
+[functions.admin-qualificacao-templates]
+verify_jwt = false
+
+[functions.admin-persona-templates]
+verify_jwt = false
+
 # evolution-webhook: recebe webhooks da Evolution API e encaminha ao N8N. Evolution envia sem JWT.
 [functions.evolution-webhook]
 verify_jwt = false

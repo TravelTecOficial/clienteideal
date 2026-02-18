@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* Design System: Inter + Paleta Orgânica */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 
 @layer base {
   :root {
@@ -109,6 +109,9 @@
   * {
     @apply border-border;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground antialiased transition-colors duration-300;
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -124,4 +127,30 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Landing: padrão hero, botões e cards */
+.hero-pattern {
+  background-color: hsl(var(--background));
+  background-image: radial-gradient(hsl(var(--primary) / 0.3) 0.5px, transparent 0.5px);
+  background-size: 24px 24px;
+}
+.btn-olive {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  transition: all 0.3s ease;
+}
+.btn-olive:hover {
+  background-color: hsl(var(--secondary));
+  transform: translateY(-2px);
+}
+.card-shadow {
+  box-shadow: 0 4px 20px hsl(var(--secondary) / 0.04);
+}
+.footer-organic {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.faq-item {
+  border-bottom: 1px solid hsl(var(--muted));
 }

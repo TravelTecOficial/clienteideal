@@ -21,6 +21,33 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 }
 
+async function debugLog(params: {
+  runId: string
+  hypothesisId: string
+  location: string
+  message: string
+  data?: Record<string, unknown>
+}) {
+  // #region agent log
+  await fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "3aa62b",
+    },
+    body: JSON.stringify({
+      sessionId: "3aa62b",
+      runId: params.runId,
+      hypothesisId: params.hypothesisId,
+      location: params.location,
+      message: params.message,
+      data: params.data ?? {},
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
+}
+
 const PONTOS_TIPO = { fria: 1, morna: 5, quente: 10 } as const
 
 interface PerguntaPayload {
@@ -54,6 +81,7 @@ function isValidSegment(
 }
 
 Deno.serve(async (req) => {
+  const runId = "qualificacao-pre-fix-1"
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
   }
@@ -73,6 +101,18 @@ Deno.serve(async (req) => {
   const tokenFromBody = body?.token?.trim() || ""
   const tokenFromHeader = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "")?.trim() || ""
   const token = tokenFromBody || tokenFromHeader
+  await debugLog({
+    runId,
+    hypothesisId: "H1",
+    location: "admin-qualificacao-templates/index.ts:request-parsed",
+    message: "Request parsed",
+    data: {
+      method: req.method,
+      action: body.action ?? "list",
+      hasTokenFromBody: Boolean(tokenFromBody),
+      hasTokenFromHeader: Boolean(tokenFromHeader),
+    },
+  })
 
   if (!token) {
     return new Response(
@@ -121,6 +161,17 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+  await debugLog({
+    runId,
+    hypothesisId: "H2",
+    location: "admin-qualificacao-templates/index.ts:env-check",
+    message: "Supabase env check",
+    data: {
+      hasSupabaseUrl: Boolean(supabaseUrl),
+      hasServiceRoleKey: Boolean(supabaseServiceKey),
+      supabaseHost: supabaseUrl ? new URL(supabaseUrl).host : "",
+    },
+  })
   if (!supabaseUrl || !supabaseServiceKey) {
     return new Response(
       JSON.stringify({ error: "Configuração do servidor inválida." }),
@@ -132,12 +183,29 @@ Deno.serve(async (req) => {
   const action = body.action ?? "list"
 
   if (action === "list") {
+    await debugLog({
+      runId,
+      hypothesisId: "H3",
+      location: "admin-qualificacao-templates/index.ts:list-start",
+      message: "Starting list query qualificacao_templates",
+      data: {},
+    })
     const { data: templates, error } = await supabase
       .from("qualificacao_templates")
       .select("id, nome, segment_type, created_at")
       .order("created_at", { ascending: false })
 
     if (error) {
+      await debugLog({
+        runId,
+        hypothesisId: "H3",
+        location: "admin-qualificacao-templates/index.ts:list-error",
+        message: "List query failed",
+        data: {
+          errorMessage: error.message,
+          errorCode: error.code ?? "",
+        },
+      })
       return new Response(
         JSON.stringify({ error: error.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
