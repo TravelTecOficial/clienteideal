@@ -27,7 +27,15 @@ const adminNavMain = [
   {
     title: "Usuários",
     url: "/admin",
-    items: [{ title: "Usuários do sistema", url: "/admin" }], // Usuários que se autenticaram
+    items: [{ title: "Usuários do sistema", url: "/admin" }],
+  },
+  {
+    title: "Modelos",
+    url: "#",
+    items: [
+      { title: "Modelos de Persona", url: "/admin/personas" },
+      { title: "Modelos de Qualificação", url: "/admin/qualificacao" },
+    ],
   },
   {
     title: "Conta",

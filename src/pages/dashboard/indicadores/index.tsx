@@ -3,6 +3,7 @@
  * Note: UI-level. RLS valida company_id no Supabase.
  */
 
+import { useState } from "react"
 import {
   Area,
   AreaChart,
@@ -22,7 +23,6 @@ import {
   DollarSign,
   Headphones,
   ShoppingCart,
-  TrendingUp,
 } from "lucide-react"
 
 import {
@@ -31,7 +31,6 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
@@ -39,6 +38,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   MOCK_CANAIS,
@@ -46,6 +53,16 @@ import {
   MOCK_KPI_COMERCIAL,
   MOCK_TEMPERATURA,
 } from "./mock-data"
+import {
+  useDashboardKpis,
+  type DashboardKpis,
+} from "./use-dashboard-kpis"
+import {
+  getPeriodRange,
+  hasVariacao,
+  PERIOD_OPTIONS,
+  type PeriodoKey,
+} from "./period-utils"
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -73,22 +90,63 @@ const engajamentoChartConfig: ChartConfig = {
   engajamento: { label: "Engajamento (%)", color: "#636F4E" },
 }
 
-function FunilVendas() {
-  const etapas = [
-    { label: "Leads", valor: 1240, width: "100%" },
-    { label: "Agendamentos", valor: 85, width: "70%" },
-    { label: "Vendas", valor: 32, width: "40%" },
-  ]
+const FUNIL_ETAPAS = [
+  { key: "atendimentos" as const, label: "Atendimentos", color: "#2563eb" },
+  { key: "agendamentos" as const, label: "Agendamentos", color: "#d97706" },
+  { key: "reunioes" as const, label: "Reuniões", color: "#ea580c" },
+  { key: "vendas" as const, label: "Vendas", color: "#636F4E" },
+] as const
+
+interface FunilVendasProps {
+  kpis: DashboardKpis
+  isLoading: boolean
+}
+
+function FunilVendas({ kpis, isLoading }: FunilVendasProps) {
+  const maxVal = Math.max(
+    kpis.atendimentos,
+    kpis.agendamentos,
+    kpis.reunioes,
+    kpis.vendas,
+    1
+  )
+
+  const etapas = FUNIL_ETAPAS.map((e) => ({
+    ...e,
+    valor: kpis[e.key],
+    width: `${Math.max(15, (kpis[e.key] / maxVal) * 100)}%`,
+  }))
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-12 w-full max-w-[280px]" />
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col items-center gap-2">
       {etapas.map((etapa, i) => (
         <div key={etapa.label} className="flex w-full flex-col items-center gap-1">
           <div
-            className="flex h-12 items-center justify-center rounded-md border border-border bg-muted/50 px-4 transition-all hover:bg-muted"
-            style={{ width: etapa.width, minWidth: 120 }}
+            className="flex h-12 items-center justify-center rounded-md border px-4 transition-all hover:opacity-90"
+            style={{
+              width: etapa.width,
+              minWidth: 120,
+              backgroundColor: `${etapa.color}20`,
+              border: "1px solid var(--border)",
+              borderLeft: `4px solid ${etapa.color}`,
+            }}
           >
-            <span className="font-black text-foreground">{etapa.valor.toLocaleString("pt-BR")}</span>
-            <span className="ml-2 text-sm text-muted-foreground">{etapa.label}</span>
+            <span className="font-black text-foreground">
+              {etapa.valor.toLocaleString("pt-BR")}
+            </span>
+            <span className="ml-2 text-sm text-muted-foreground">
+              {etapa.label}
+            </span>
           </div>
           {i < etapas.length - 1 && (
             <div className="h-3 w-px bg-border" aria-hidden />
@@ -100,10 +158,41 @@ function FunilVendas() {
 }
 
 export default function IndicadoresPageContent() {
-  const kpi = MOCK_KPI_COMERCIAL
+  const [periodoKey, setPeriodoKey] = useState<PeriodoKey>("todo")
+  const periodo = getPeriodRange(periodoKey)
+  const { kpis, isLoading, error } = useDashboardKpis(periodo)
+  const showVariacao = hasVariacao(periodoKey)
 
   return (
     <div className="space-y-6">
+      {/* Seletor de período */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <label htmlFor="periodo-select" className="text-sm font-medium">
+          Período
+        </label>
+        <Select
+          value={periodoKey}
+          onValueChange={(v) => setPeriodoKey(v as PeriodoKey)}
+        >
+          <SelectTrigger id="periodo-select" className="w-full sm:w-[220px]">
+            <SelectValue placeholder="Selecione o período" />
+          </SelectTrigger>
+          <SelectContent>
+            {PERIOD_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {error && (
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
       <Tabs defaultValue="comercial" className="w-full">
         <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid">
           <TabsTrigger value="comercial">Performance Comercial</TabsTrigger>
@@ -121,18 +210,16 @@ export default function IndicadoresPageContent() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(kpi.investimentoAds)}
-                </div>
-                <div className="flex items-center gap-1 pt-1">
-                  <Badge variant="success" className="gap-1 text-xs">
-                    <TrendingUp className="h-3 w-3" />
-                    +{kpi.investimentoAdsVariacao}%
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    vs. mês anterior
-                  </span>
-                </div>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(kpis.investimentoAds)}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground pt-1">
+                  {showVariacao ? "— vs. mês anterior" : "—"}
+                </p>
               </CardContent>
             </Card>
 
@@ -144,12 +231,15 @@ export default function IndicadoresPageContent() {
                 <Headphones className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {kpi.atendimentos.toLocaleString("pt-BR")}
-                </div>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <div className="text-2xl font-bold">
+                    {kpis.atendimentos.toLocaleString("pt-BR")}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
-                  {kpi.atendimentosVariacao >= 0 ? "+" : ""}
-                  {kpi.atendimentosVariacao}% vs. mês anterior
+                  {showVariacao ? "— vs. mês anterior" : "—"}
                 </p>
               </CardContent>
             </Card>
@@ -162,12 +252,15 @@ export default function IndicadoresPageContent() {
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {kpi.agendamentos.toLocaleString("pt-BR")}
-                </div>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <div className="text-2xl font-bold">
+                    {kpis.agendamentos.toLocaleString("pt-BR")}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
-                  {kpi.agendamentosVariacao >= 0 ? "+" : ""}
-                  {kpi.agendamentosVariacao}% vs. mês anterior
+                  {showVariacao ? "— vs. mês anterior" : "—"}
                 </p>
               </CardContent>
             </Card>
@@ -180,17 +273,21 @@ export default function IndicadoresPageContent() {
                 <ShoppingCart className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {kpi.vendas.toLocaleString("pt-BR")}
-                </div>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <div className="text-2xl font-bold">
+                    {kpis.vendas.toLocaleString("pt-BR")}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
-                  +{kpi.vendasVariacao}% vs. mês anterior
+                  {showVariacao ? "— vs. mês anterior" : "—"}
                 </p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Card Financeiro em destaque */}
+          {/* Card Financeiro em destaque - mantém mock (não conectado ao período) */}
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -203,13 +300,13 @@ export default function IndicadoresPageContent() {
                 <div>
                   <CardDescription>Faturamento</CardDescription>
                   <p className="text-2xl font-bold text-foreground">
-                    {formatCurrency(kpi.faturamento)}
+                    {formatCurrency(MOCK_KPI_COMERCIAL.faturamento)}
                   </p>
                 </div>
                 <div>
                   <CardDescription>Lucro</CardDescription>
                   <p className="text-2xl font-bold text-foreground">
-                    {formatCurrency(kpi.lucro)}
+                    {formatCurrency(MOCK_KPI_COMERCIAL.lucro)}
                   </p>
                 </div>
               </div>
@@ -226,7 +323,7 @@ export default function IndicadoresPageContent() {
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <FunilVendas />
+                <FunilVendas kpis={kpis} isLoading={isLoading} />
               </CardContent>
             </Card>
 

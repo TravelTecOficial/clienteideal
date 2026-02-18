@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { Plus, Loader2, Check, Database, Megaphone, MessageSquare, Smartphone, ImagePlus } from "lucide-react";
+import { Plus, Loader2, Check, Database, Megaphone, MessageSquare, Smartphone, ImagePlus, Building2 } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -65,6 +65,9 @@ interface ProfileRow {
 }
 
 interface CompanyRow {
+  name: string | null;
+  description: string | null;
+  history: string | null;
   celular_atendimento: string | null;
   email_atendimento: string | null;
   estancia_whatsapp: string | null;
@@ -128,6 +131,12 @@ function formatValor(valor: number): string {
 }
 
 // --- Schemas ---
+const empresaFormSchema = z.object({
+  name: z.string().min(1, "Nome da empresa é obrigatório"),
+  description: z.string().optional(),
+  history: z.string().optional(),
+});
+
 const dadosFormSchema = z.object({
   celular_atendimento: z.string().optional(),
   email_atendimento: z
@@ -167,6 +176,7 @@ const evolutionFormSchema = z.object({
   evolution_instance_name: z.string().optional(),
 });
 
+type EmpresaFormValues = z.infer<typeof empresaFormSchema>;
 type DadosFormValues = z.infer<typeof dadosFormSchema>;
 type PagamentoFormValues = z.infer<typeof pagamentoFormSchema>;
 type PromptAtendimentoFormValues = z.infer<typeof promptAtendimentoFormSchema>;
@@ -184,6 +194,8 @@ export function ConfiguracoesPage() {
   const { toast } = useToast();
 
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [isFetchingEmpresa, setIsFetchingEmpresa] = useState(true);
+  const [isSavingEmpresa, setIsSavingEmpresa] = useState(false);
   const [isFetchingDados, setIsFetchingDados] = useState(true);
   const [isSavingDados, setIsSavingDados] = useState(false);
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
@@ -202,6 +214,15 @@ export function ConfiguracoesPage() {
   const whatsappImageInputRef = useRef<HTMLInputElement>(null);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
+
+  const empresaForm = useForm<EmpresaFormValues>({
+    resolver: zodResolver(empresaFormSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      history: "",
+    },
+  });
 
   const dadosForm = useForm<DadosFormValues>({
     resolver: zodResolver(dadosFormSchema),
@@ -250,6 +271,43 @@ export function ConfiguracoesPage() {
     }
     init();
   }, [userId, supabase]);
+
+  // Carregar informações básicas da empresa (nome, apresentação, histórico)
+  const loadEmpresa = useCallback(async () => {
+    if (!companyId) {
+      setIsFetchingEmpresa(false);
+      return;
+    }
+    setIsFetchingEmpresa(true);
+    try {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("name, description, history")
+        .eq("id", companyId)
+        .maybeSingle();
+
+      if (error) throw error;
+      const row = data as { name: string | null; description: string | null; history: string | null } | null;
+      empresaForm.reset({
+        name: row?.name ?? "",
+        description: row?.description ?? "",
+        history: row?.history ?? "",
+      });
+    } catch (err) {
+      console.error("Erro ao carregar dados da empresa:", err);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Falha ao carregar informações da empresa.",
+      });
+    } finally {
+      setIsFetchingEmpresa(false);
+    }
+  }, [companyId, supabase, toast, empresaForm]);
+
+  useEffect(() => {
+    loadEmpresa();
+  }, [loadEmpresa]);
 
   // Carregar dados da empresa (celular, email atendimento)
   const loadDados = useCallback(async () => {
@@ -420,6 +478,44 @@ export function ConfiguracoesPage() {
   useEffect(() => {
     loadEvolution();
   }, [loadEvolution]);
+
+  // Salvar informações da empresa (aba Empresa)
+  async function onEmpresaSubmit(values: EmpresaFormValues) {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Empresa não identificada.",
+      });
+      return;
+    }
+    setIsSavingEmpresa(true);
+    try {
+      const { error } = await supabase
+        .from("companies")
+        .update({
+          name: values.name?.trim() || null,
+          description: values.description?.trim() || null,
+          history: values.history?.trim() || null,
+        })
+        .eq("id", companyId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Dados salvos",
+        description: "As informações da empresa foram atualizadas.",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSavingEmpresa(false);
+    }
+  }
 
   // Salvar dados (aba Dados)
   async function onDadosSubmit(values: DadosFormValues) {
@@ -703,8 +799,11 @@ export function ConfiguracoesPage() {
           <ProfileDropdown className="ml-auto" />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
-          <Tabs defaultValue="dados" className="w-full">
-            <TabsList className="grid w-full max-w-[1000px] grid-cols-4">
+          <Tabs defaultValue="empresa" className="w-full">
+            <TabsList className="grid w-full max-w-[1000px] grid-cols-5">
+              <TabsTrigger value="empresa" className="gap-2">
+                <Building2 className="h-4 w-4" /> Empresa
+              </TabsTrigger>
               <TabsTrigger value="dados" className="gap-2">
                 <Database className="h-4 w-4" /> Dados
               </TabsTrigger>
@@ -718,6 +817,89 @@ export function ConfiguracoesPage() {
                 <MessageSquare className="h-4 w-4" /> Prompt Atendimento
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="empresa" className="space-y-4 pt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Informações da empresa</CardTitle>
+                  <CardDescription>
+                    Nome, apresentação e histórico da sua empresa. Essas informações podem ser usadas em atendimentos e materiais.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isFetchingEmpresa ? (
+                    <div className="flex min-h-[120px] items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <form
+                      onSubmit={empresaForm.handleSubmit(onEmpresaSubmit)}
+                      className="grid gap-4 sm:grid-cols-2"
+                    >
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="empresa_name">Nome da empresa</Label>
+                        <Input
+                          id="empresa_name"
+                          type="text"
+                          placeholder="Ex: Minha Empresa Ltda"
+                          {...empresaForm.register("name")}
+                        />
+                        {empresaForm.formState.errors.name && (
+                          <p className="text-xs text-destructive">
+                            {empresaForm.formState.errors.name.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="empresa_description">Apresentação</Label>
+                        <Textarea
+                          id="empresa_description"
+                          placeholder="Descreva sua empresa: o que faz, missão, diferenciais..."
+                          rows={4}
+                          className="resize-none"
+                          {...empresaForm.register("description")}
+                        />
+                        {empresaForm.formState.errors.description && (
+                          <p className="text-xs text-destructive">
+                            {empresaForm.formState.errors.description?.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="empresa_history">Histórico</Label>
+                        <Textarea
+                          id="empresa_history"
+                          placeholder="Conte a história da empresa: fundação, marcos, evolução..."
+                          rows={4}
+                          className="resize-none"
+                          {...empresaForm.register("history")}
+                        />
+                        {empresaForm.formState.errors.history && (
+                          <p className="text-xs text-destructive">
+                            {empresaForm.formState.errors.history?.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Button type="submit" disabled={isSavingEmpresa}>
+                          {isSavingEmpresa ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Salvando…
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-4 w-4" />
+                              Salvar
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="dados" className="space-y-4 pt-4">
               <Card>

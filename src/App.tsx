@@ -5,6 +5,8 @@ import { AdminPage } from "@/pages/admin/AdminPage"
 import { AdminConfigPage } from "@/pages/admin/AdminConfigPage"
 import { AdminEvolutionPage } from "@/pages/admin/AdminEvolutionPage"
 import { AdminPreviewPage } from "@/pages/admin/AdminPreviewPage"
+import { AdminPersonasPage } from "@/pages/admin/AdminPersonasPage"
+import { AdminQualificacaoPage } from "@/pages/admin/AdminQualificacaoPage"
 import { DashboardPage } from "@/pages/dashboard/DashboardPage"
 import { ProfilePage } from "@/pages/dashboard/ProfilePage"
 import { LoginPage } from "@/pages/LoginPage"
@@ -258,6 +260,22 @@ function App() {
               <ProtectedRoute>
                 <AdminPreviewPage />
               </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/personas"
+          element={
+            <SupabaseProvider>
+              <AdminPersonasPage />
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/qualificacao"
+          element={
+            <SupabaseProvider>
+              <AdminQualificacaoPage />
             </SupabaseProvider>
           }
         />

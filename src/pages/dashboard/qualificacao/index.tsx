@@ -40,7 +40,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Loader2, Trash2, Pencil, GripVertical } from "lucide-react";
+import { Plus, Loader2, Trash2, Pencil, GripVertical, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // --- Interfaces ---
@@ -68,6 +68,19 @@ interface PerguntaLocal {
   resposta_fria: string;
   resposta_morna: string;
   resposta_quente: string;
+}
+
+interface QualificacaoTemplateRow {
+  id: string;
+  nome: string | null;
+  segment_type: string | null;
+  perguntas?: Array<{
+    id: string;
+    pergunta: string;
+    peso: number;
+    ordem: number;
+    respostas?: Array<{ tipo: string; resposta_texto: string; pontuacao: number }>;
+  }>;
 }
 
 // --- Helpers ---
@@ -282,6 +295,11 @@ export default function QualificacaoPage() {
     { id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" },
   ]);
   const [qualificadorIdToEdit, setQualificadorIdToEdit] = useState<string | null>(null);
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
+  const [templatesCopy, setTemplatesCopy] = useState<QualificacaoTemplateRow[]>([]);
+  const [isLoadingTemplatesCopy, setIsLoadingTemplatesCopy] = useState(false);
+  const [copyingTemplateId, setCopyingTemplateId] = useState<string | null>(null);
+  const [companySegmentType, setCompanySegmentType] = useState<string>("produtos");
 
   const effectiveCompanyId = companyId;
 
@@ -319,6 +337,163 @@ export default function QualificacaoPage() {
   useEffect(() => {
     loadPersonas();
   }, [loadPersonas]);
+
+  useEffect(() => {
+    async function loadSegment() {
+      if (!effectiveCompanyId) return;
+      const { data, error } = await supabase
+        .from("companies")
+        .select("segment_type")
+        .eq("id", effectiveCompanyId)
+        .maybeSingle();
+      if (error) return;
+      const seg = (data as { segment_type?: string | null } | null)?.segment_type;
+      if (seg) setCompanySegmentType(seg);
+    }
+    loadSegment();
+  }, [effectiveCompanyId, supabase]);
+
+  const loadTemplatesForCopy = useCallback(async () => {
+    setIsLoadingTemplatesCopy(true);
+    try {
+      const { data: templatesData, error: errT } = await supabase
+        .from("qualificacao_templates")
+        .select("id, nome, segment_type")
+        .order("created_at", { ascending: false });
+
+      if (errT) throw errT;
+      const allTemplates = (templatesData ?? []) as QualificacaoTemplateRow[];
+      const allowed = allTemplates.filter((t) => {
+        const seg = t.segment_type ?? "geral";
+        return seg === "geral" || seg === companySegmentType;
+      });
+
+      const result: QualificacaoTemplateRow[] = [];
+      for (const t of allowed) {
+        const { data: pergData } = await supabase
+          .from("qualificacao_template_perguntas")
+          .select("id, pergunta, peso, ordem")
+          .eq("template_id", t.id)
+          .order("ordem", { ascending: true });
+
+        const perguntasComRespostas: QualificacaoTemplateRow["perguntas"] = [];
+        for (const p of pergData ?? []) {
+          const { data: respData } = await supabase
+            .from("qualificacao_template_respostas")
+            .select("tipo, resposta_texto, pontuacao")
+            .eq("pergunta_id", p.id);
+          perguntasComRespostas.push({
+            id: p.id,
+            pergunta: p.pergunta ?? "",
+            peso: p.peso ?? 1,
+            ordem: p.ordem ?? 1,
+            respostas: (respData ?? []) as Array<{ tipo: string; resposta_texto: string; pontuacao: number }>,
+          });
+        }
+        result.push({ ...t, perguntas: perguntasComRespostas });
+      }
+      setTemplatesCopy(result);
+    } catch (err) {
+      console.error("Erro ao carregar modelos:", err);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Falha ao carregar modelos de qualificação.",
+      });
+      setTemplatesCopy([]);
+    } finally {
+      setIsLoadingTemplatesCopy(false);
+    }
+  }, [supabase, toast, companySegmentType]);
+
+  const handleOpenCopyModal = useCallback(() => {
+    setIsCopyModalOpen(true);
+    loadTemplatesForCopy();
+  }, [loadTemplatesForCopy]);
+
+  async function handleCopyTemplate(t: QualificacaoTemplateRow) {
+    if (!userId || !effectiveCompanyId) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Sessão ou empresa não configurada.",
+      });
+      return;
+    }
+    setCopyingTemplateId(t.id);
+    try {
+      const { data: qual, error: errQual } = await supabase
+        .from("qualificadores")
+        .insert({
+          company_id: effectiveCompanyId,
+          user_id: userId,
+          nome: (t.nome ?? "Qualificador").trim(),
+          ideal_customer_id: null,
+        })
+        .select("id")
+        .single();
+
+      if (errQual || !qual) throw errQual ?? new Error("Falha ao criar qualificador");
+      const qualificadorId = qual.id;
+
+      const perguntasList = t.perguntas ?? [];
+      for (let i = 0; i < perguntasList.length; i++) {
+        const p = perguntasList[i];
+        const peso = Math.min(3, Math.max(1, p.peso ?? 1));
+        const { data: pergunta, error: errP } = await supabase
+          .from("qualificacao_perguntas")
+          .insert({
+            qualificador_id: qualificadorId,
+            pergunta: p.pergunta.trim(),
+            peso,
+            ordem: i + 1,
+          })
+          .select("id")
+          .single();
+
+        if (errP || !pergunta) continue;
+
+        const respostas = (p.respostas ?? []).map((r) => ({
+          pergunta_id: pergunta.id,
+          resposta_texto: r.resposta_texto,
+          tipo: r.tipo as "fria" | "morna" | "quente",
+          pontuacao: r.pontuacao,
+        }));
+        if (respostas.length > 0) {
+          await supabase.from("qualificacao_respostas").insert(respostas);
+        }
+      }
+
+      const pontuacaoMaxima = perguntasList.reduce((acc, p) => acc + Math.min(3, Math.max(1, p.peso ?? 1)) * 10, 0);
+      const limiteFrioMax = Math.floor(pontuacaoMaxima / 3);
+      const limiteMornoMax = Math.floor((2 * pontuacaoMaxima) / 3);
+
+      await supabase
+        .from("qualificadores")
+        .update({
+          pontuacao_maxima: pontuacaoMaxima,
+          limite_frio_max: limiteFrioMax,
+          limite_morno_max: limiteMornoMax,
+        })
+        .eq("id", qualificadorId)
+        .eq("company_id", effectiveCompanyId);
+
+      toast({
+        title: "Copiado!",
+        description: `Qualificador "${t.nome ?? "modelo"}" copiado para sua empresa.`,
+      });
+      setIsCopyModalOpen(false);
+      loadQualificadores();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao copiar",
+        description: getErrorMessage(err, "Falha ao copiar modelo."),
+      });
+    } finally {
+      setCopyingTemplateId(null);
+    }
+  }
 
   // Buscar qualificadores
   const loadQualificadores = useCallback(async () => {
@@ -684,9 +859,14 @@ export default function QualificacaoPage() {
         <h1 className="text-3xl font-bold tracking-tight text-foreground">
           Configurar Qualificador
         </h1>
-        <Button size="sm" onClick={handleOpenModal} disabled={!effectiveCompanyId}>
-          <Plus className="mr-2 h-4 w-4" /> Criar qualificador
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={handleOpenModal} disabled={!effectiveCompanyId}>
+            <Plus className="mr-2 h-4 w-4" /> Criar qualificador
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleOpenCopyModal} disabled={!effectiveCompanyId}>
+            <Copy className="mr-2 h-4 w-4" /> Copiar de modelo
+          </Button>
+        </div>
       </div>
 
       {/* Listagem de qualificadores */}
@@ -867,6 +1047,58 @@ export default function QualificacaoPage() {
                 {qualificadorIdToEdit ? "Salvar alterações" : "Salvar qualificador"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Copiar de modelo */}
+      <Dialog open={isCopyModalOpen} onOpenChange={setIsCopyModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Copiar de modelo</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Escolha um modelo de qualificação para copiar para sua empresa. Apenas modelos compatíveis com seu segmento são exibidos.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="pt-4">
+            {isLoadingTemplatesCopy ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : templatesCopy.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                Nenhum modelo disponível para seu segmento.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {templatesCopy.map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">{t.nome ?? "Sem nome"}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Segmento: {t.segment_type ?? "geral"} · {t.perguntas?.length ?? 0} pergunta(s)
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => handleCopyTemplate(t)}
+                      disabled={copyingTemplateId !== null}
+                    >
+                      {copyingTemplateId === t.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Copy className="mr-2 h-4 w-4" /> Copiar
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
