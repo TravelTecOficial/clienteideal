@@ -1,4 +1,4 @@
-# Documentação Completa — Cliente Ideal Online v1.0.0
+# Documentação Completa — Cliente Ideal Online v1.1.0
 
 ## Índice
 1. [Visão Geral](#1-visão-geral)
@@ -11,7 +11,7 @@
 8. [Edge Functions (Supabase)](#8-edge-functions-supabase)
 9. [Segurança](#9-segurança)
 10. [Configuração e Deploy](#10-configuração-e-deploy)
-11. [Changelog da Versão 1.0.0](#11-changelog-da-versão-100)
+11. [Changelog da Versão 1.1.0](#11-changelog-da-versão-110)
 12. [Documentos Relacionados](#12-documentos-relacionados)
 
 ---
@@ -507,7 +507,7 @@ Rota `/styleguide` — galeria de componentes e blocos para referência e desenv
 
 ---
 
-## 11. Changelog da Versão 1.0.0
+## 11. Changelog da Versão 1.1.0
 
 ### Funcionalidades
 
@@ -529,7 +529,14 @@ Rota `/styleguide` — galeria de componentes e blocos para referência e desenv
 - chat-conhecimento-proxy
 - upload-kb-to-webhook
 
-### Correções (v1.0.0)
+### Atualizações (v1.1.0)
+
+- **Configurações da Empresa:** novo módulo para nome, apresentação e histórico da empresa.
+- **Admin de Templates:** inclusão de gestão de modelos globais de persona e qualificação.
+- **Persona com Avatar:** suporte a avatar em personas/modelos com geração por função dedicada.
+- **Cliente Ideal em Produção:** fallback de listagem quando `avatar_url` ainda não existir no schema.
+
+### Correções (v1.1.0)
 
 - **Popup de rede local:** Removida instrumentação de debug que enviava requisições para `127.0.0.1:7243` em produção. O popup "clienteideal.online quer buscar e se conectar a qualquer dispositivo na sua rede local" era causado por essas chamadas; o navegador interpretava como acesso à rede privada (Private Network Access), exigindo permissão do usuário.
 
@@ -546,4 +553,4 @@ Rota `/styleguide` — galeria de componentes e blocos para referência e desenv
 
 ---
 
-*Documentação atualizada em fevereiro de 2025 — Versão 1.0.0.*
+*Documentação atualizada em fevereiro de 2026 — Versão 1.1.0.*

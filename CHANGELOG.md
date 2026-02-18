@@ -7,6 +7,26 @@ e o projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [1.1.0] - 2026-02-18
+
+### Adicionado
+
+- **Configurações → Empresa** — Novo módulo para nome da empresa, apresentação e histórico.
+- **Admin de Templates** — Gestão de modelos globais de persona e qualificação.
+- **Avatares de Persona** — Suporte a geração/uso de avatar para personas e templates.
+
+### Corrigido
+
+- **Cliente Ideal em produção** — Fallback na listagem quando `avatar_url` ainda não existe no schema.
+- **Popup de rede local/CORS** — Remoção de chamadas de debug para `127.0.0.1:7243` no frontend.
+
+### Banco de Dados
+
+- **`companies`** — Novas colunas `description` e `history`.
+- **`ideal_customers`** — Migration de reparo para garantir a coluna `avatar_url`.
+
+---
+
 ## [1.0.0] - 2025-02-18
 
 ### Adicionado

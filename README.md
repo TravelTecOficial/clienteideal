@@ -1,4 +1,4 @@
-# Cliente Ideal Online v1.0.0
+# Cliente Ideal Online v1.1.0
 
 Plataforma SaaS de qualificação de leads e gestão comercial.
 
@@ -7,7 +7,7 @@ Plataforma SaaS de qualificação de leads e gestão comercial.
 | Documento | Descrição |
 |-----------|-----------|
 | [**Documentação do Sistema**](./docs/DOCUMENTACAO_SISTEMA_V1.md) | Visão geral, arquitetura, módulos, Edge Functions |
-| [**CHANGELOG**](./CHANGELOG.md) | Histórico de alterações da versão 1.0.0 |
+| [**CHANGELOG**](./CHANGELOG.md) | Histórico de alterações da versão 1.1.0 |
 | [**Deploy**](./DEPLOY.md) | Guia de deploy para produção |
 | [**Ambientes**](./docs/AMBIENTES-DEV-PROD.md) | Configuração dev vs prod |
 
