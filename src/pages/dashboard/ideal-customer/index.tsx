@@ -14,9 +14,6 @@ async function fetchCompanyId(
   supabase: SupabaseClient,
   userId: string
 ): Promise<string | null> {
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H2',location:'ideal-customer/index.tsx:fetchCompanyId:start',message:'fetchCompanyId start',data:{userIdPresent:!!userId},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const { data, error } = await supabase
     .from("profiles")
     .select("company_id")
@@ -24,16 +21,10 @@ async function fetchCompanyId(
     .maybeSingle();
 
   if (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H2',location:'ideal-customer/index.tsx:fetchCompanyId:error',message:'fetchCompanyId error',data:{code:(error as { code?: string }).code ?? null,message:(error as { message?: string }).message ?? 'unknown'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     console.error("Erro ao buscar company_id:", error);
     return null;
   }
   const profile = data as ProfileRow | null;
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H2',location:'ideal-customer/index.tsx:fetchCompanyId:success',message:'fetchCompanyId success',data:{companyId:profile?.company_id ?? null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return profile?.company_id ?? null;
 }
 
@@ -166,9 +157,6 @@ export default function IdealCustomerPage() {
   });
 
   const loadClientes = useCallback(async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H1',location:'ideal-customer/index.tsx:loadClientes:start',message:'loadClientes start',data:{effectiveCompanyId:effectiveCompanyId ?? null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!effectiveCompanyId) {
       setIsFetching(false);
       setClientes([]);
@@ -182,18 +170,11 @@ export default function IdealCustomerPage() {
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H1',location:'ideal-customer/index.tsx:loadClientes:query',message:'loadClientes query result',data:{hasError:!!error,errorCode:(error as { code?: string } | null)?.code ?? null,errorMessage:(error as { message?: string } | null)?.message ?? null,rows:Array.isArray(data)?data.length:0},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-
       const missingAvatarColumn =
         (error as { code?: string; message?: string } | null)?.code === "42703" &&
         ((error as { message?: string } | null)?.message ?? "").includes("avatar_url");
 
       if (missingAvatarColumn) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H1',location:'ideal-customer/index.tsx:loadClientes:fallback',message:'avatar_url missing, applying fallback query',data:{effectiveCompanyId},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         const fallback = await supabase
           .from("ideal_customers")
           .select("id, profile_name, job_title, location")
@@ -210,15 +191,11 @@ export default function IdealCustomerPage() {
       if (error) throw error;
       setClientes((data as IdealCustomerRow[]) ?? []);
     } catch (err) {
-      const debugErrorMessage = getErrorMessage(err, "unknown");
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H1',location:'ideal-customer/index.tsx:loadClientes:catch',message:'loadClientes catch',data:{errorMessage:err instanceof Error?err.message:'unknown'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       console.error("Erro ao carregar clientes ideais:", err);
       toast({
         variant: "destructive",
         title: "Erro",
-        description: `Falha ao carregar lista de clientes ideais. [debug: ${debugErrorMessage}]`,
+        description: "Falha ao carregar lista de clientes ideais.",
       });
     } finally {
       setIsFetching(false);
@@ -475,27 +452,6 @@ export default function IdealCustomerPage() {
     setGeneratingAvatarId(c.id);
     try {
       const token = (await getToken()) ?? (await getToken({ template: "supabase" }));
-      // #region agent log
-      const logPayload = {
-        sessionId: "4cee35",
-        location: "ideal-customer/index.tsx:handleGenerateAvatar",
-        message: "handleGenerateAvatar pre-fetch",
-        data: {
-          tokenPresent: !!token,
-          tokenStartsWithEyJ: typeof token === "string" ? token.startsWith("eyJ") : false,
-          tokenLength: typeof token === "string" ? token.length : 0,
-          personaId: c.id,
-        },
-        timestamp: Date.now(),
-        hypothesisId: "H2",
-      };
-      console.debug("[DEBUG 4cee35]", logPayload);
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4cee35" },
-        body: JSON.stringify(logPayload),
-      }).catch(() => {});
-      // #endregion
       if (!token) {
         toast({ variant: "destructive", title: "Erro", description: "Sessão inválida. Faça login novamente." });
         return;
@@ -511,22 +467,6 @@ export default function IdealCustomerPage() {
       });
 
       const data = (await res.json().catch(() => ({}))) as { error?: string; avatar_url?: string };
-      // #region agent log
-      const postLog = {
-        sessionId: "4cee35",
-        location: "ideal-customer/index.tsx:handleGenerateAvatar",
-        message: "handleGenerateAvatar post-fetch",
-        data: { status: res.status, ok: res.ok, error: data?.error },
-        timestamp: Date.now(),
-        hypothesisId: "H1",
-      };
-      console.debug("[DEBUG 4cee35]", postLog);
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4cee35" },
-        body: JSON.stringify(postLog),
-      }).catch(() => {});
-      // #endregion
       if (!res.ok) {
         throw new Error(data?.error ?? `Erro ${res.status}`);
       }
