@@ -14,6 +14,9 @@ async function fetchCompanyId(
   supabase: SupabaseClient,
   userId: string
 ): Promise<string | null> {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H2',location:'ideal-customer/index.tsx:fetchCompanyId:start',message:'fetchCompanyId start',data:{userIdPresent:!!userId},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   const { data, error } = await supabase
     .from("profiles")
     .select("company_id")
@@ -21,10 +24,16 @@ async function fetchCompanyId(
     .maybeSingle();
 
   if (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H2',location:'ideal-customer/index.tsx:fetchCompanyId:error',message:'fetchCompanyId error',data:{code:(error as { code?: string }).code ?? null,message:(error as { message?: string }).message ?? 'unknown'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     console.error("Erro ao buscar company_id:", error);
     return null;
   }
   const profile = data as ProfileRow | null;
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H2',location:'ideal-customer/index.tsx:fetchCompanyId:success',message:'fetchCompanyId success',data:{companyId:profile?.company_id ?? null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   return profile?.company_id ?? null;
 }
 
@@ -82,6 +91,13 @@ interface IdealCustomerRow {
   job_title: string | null;
   location: string | null;
   avatar_url: string | null;
+}
+
+interface IdealCustomerRowWithoutAvatar {
+  id: string;
+  profile_name: string | null;
+  job_title: string | null;
+  location: string | null;
 }
 
 interface PersonaTemplateRow {
@@ -150,6 +166,9 @@ export default function IdealCustomerPage() {
   });
 
   const loadClientes = useCallback(async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H1',location:'ideal-customer/index.tsx:loadClientes:start',message:'loadClientes start',data:{effectiveCompanyId:effectiveCompanyId ?? null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!effectiveCompanyId) {
       setIsFetching(false);
       setClientes([]);
@@ -157,20 +176,49 @@ export default function IdealCustomerPage() {
     }
     setIsFetching(true);
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("ideal_customers")
         .select("id, profile_name, job_title, location, avatar_url")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H1',location:'ideal-customer/index.tsx:loadClientes:query',message:'loadClientes query result',data:{hasError:!!error,errorCode:(error as { code?: string } | null)?.code ?? null,errorMessage:(error as { message?: string } | null)?.message ?? null,rows:Array.isArray(data)?data.length:0},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
+      const missingAvatarColumn =
+        (error as { code?: string; message?: string } | null)?.code === "42703" &&
+        ((error as { message?: string } | null)?.message ?? "").includes("avatar_url");
+
+      if (missingAvatarColumn) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H1',location:'ideal-customer/index.tsx:loadClientes:fallback',message:'avatar_url missing, applying fallback query',data:{effectiveCompanyId},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        const fallback = await supabase
+          .from("ideal_customers")
+          .select("id, profile_name, job_title, location")
+          .eq("company_id", effectiveCompanyId)
+          .order("created_at", { ascending: false });
+
+        error = fallback.error;
+        data = ((fallback.data as IdealCustomerRowWithoutAvatar[] | null) ?? []).map((row) => ({
+          ...row,
+          avatar_url: null,
+        }));
+      }
+
       if (error) throw error;
       setClientes((data as IdealCustomerRow[]) ?? []);
     } catch (err) {
+      const debugErrorMessage = getErrorMessage(err, "unknown");
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f5f846'},body:JSON.stringify({sessionId:'f5f846',runId:'cliente-ideal-load',hypothesisId:'H1',location:'ideal-customer/index.tsx:loadClientes:catch',message:'loadClientes catch',data:{errorMessage:err instanceof Error?err.message:'unknown'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       console.error("Erro ao carregar clientes ideais:", err);
       toast({
         variant: "destructive",
         title: "Erro",
-        description: "Falha ao carregar lista de clientes ideais.",
+        description: `Falha ao carregar lista de clientes ideais. [debug: ${debugErrorMessage}]`,
       });
     } finally {
       setIsFetching(false);
