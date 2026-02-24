@@ -123,8 +123,12 @@ Deno.serve(async (req) => {
       .order("config_type")
 
     if (error) {
+      console.error("[admin-webhook-config] Erro ao listar:", error)
       return new Response(
-        JSON.stringify({ error: error.message }),
+        JSON.stringify({
+          error: error.message,
+          hint: "Verifique se as migrations foram aplicadas (admin_webhook_config, webhook_chat).",
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
@@ -155,27 +159,33 @@ Deno.serve(async (req) => {
       )
     }
 
-    const update: Record<string, string | null> = { updated_at: new Date().toISOString() }
+    const upsertPayload: Record<string, unknown> = {
+      config_type,
+      updated_at: new Date().toISOString(),
+    }
     if (webhook_testar_atendente !== undefined) {
-      update.webhook_testar_atendente = webhook_testar_atendente?.trim() || null
+      upsertPayload.webhook_testar_atendente = webhook_testar_atendente?.trim() || null
     }
     if (webhook_enviar_arquivos !== undefined) {
-      update.webhook_enviar_arquivos = webhook_enviar_arquivos?.trim() || null
+      upsertPayload.webhook_enviar_arquivos = webhook_enviar_arquivos?.trim() || null
     }
     if (webhook_chat !== undefined) {
-      update.webhook_chat = webhook_chat?.trim() || null
+      upsertPayload.webhook_chat = webhook_chat?.trim() || null
     }
 
     const { data, error } = await supabase
       .from("admin_webhook_config")
-      .update(update)
-      .eq("config_type", config_type)
+      .upsert(upsertPayload, { onConflict: "config_type" })
       .select()
       .single()
 
     if (error) {
+      console.error("[admin-webhook-config] Erro ao salvar:", error)
       return new Response(
-        JSON.stringify({ error: error.message }),
+        JSON.stringify({
+          error: error.message,
+          hint: "Verifique se as migrations foram aplicadas (admin_webhook_config com config_type chat).",
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }

@@ -122,28 +122,15 @@ Deno.serve(async (req) => {
   const remoteJidAlt = row.celular_atendimento?.trim() || ""
   const serverUrl = row.evolution_api_url?.trim() || ""
 
-  // Buscar webhook do Chat. Primeiro tenta config_type=chat e, se não existir,
-  // usa qualquer webhook_testar_atendente preenchido (fallback compatível com schema atual).
+  // Buscar webhook do Chat (config_type=chat usa webhook_chat)
   const { data: chatConfig } = await supabase
     .from("admin_webhook_config")
-    .select("webhook_testar_atendente")
+    .select("webhook_chat")
     .eq("config_type", "chat")
     .maybeSingle()
 
-  let webhookUrl =
-    (chatConfig as { webhook_testar_atendente: string | null } | null)?.webhook_testar_atendente?.trim() || ""
-
-  if (!webhookUrl) {
-    const { data: fallbackConfig } = await supabase
-      .from("admin_webhook_config")
-      .select("webhook_testar_atendente")
-      .not("webhook_testar_atendente", "is", null)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    webhookUrl =
-      (fallbackConfig as { webhook_testar_atendente: string | null } | null)?.webhook_testar_atendente?.trim() || ""
-  }
+  const webhookUrl =
+    (chatConfig as { webhook_chat: string | null } | null)?.webhook_chat?.trim() || ""
 
   if (!webhookUrl) {
     return jsonResponse(

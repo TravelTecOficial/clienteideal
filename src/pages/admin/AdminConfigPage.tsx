@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useUser, useAuth } from "@clerk/clerk-react"
 import { Navigate } from "react-router-dom"
+import { FunctionsHttpError } from "@supabase/supabase-js"
 import { useSupabaseClient } from "@/lib/supabase-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AdminLayout } from "@/components/admin-layout"
@@ -25,6 +26,21 @@ const CONFIG_LABELS: Record<ConfigType, string> = {
   consorcio: "Consórcio",
   produtos: "Produtos & Serviços",
   chat: "Chat de Conhecimento",
+}
+
+async function extractApiError(error: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError && error.context) {
+    try {
+      const res = error.context.clone?.() ?? error.context
+      const parsed = (await res.json()) as { error?: string; hint?: string }
+      if (parsed?.error) {
+        return parsed.hint ? `${parsed.error} — ${parsed.hint}` : parsed.error
+      }
+    } catch {
+      /* fallback para message */
+    }
+  }
+  return error instanceof Error ? error.message : "Erro desconhecido"
 }
 
 export function AdminConfigPage() {
@@ -57,7 +73,10 @@ export function AdminConfigPage() {
       const { data, error } = await supabase.functions.invoke("admin-webhook-config", {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (error) throw error
+      if (error) {
+        const msg = await extractApiError(error)
+        throw new Error(msg)
+      }
       const body = data as { configs?: WebhookConfig[] }
       setConfigs(body?.configs ?? [])
     } catch (err) {
@@ -110,9 +129,12 @@ export function AdminConfigPage() {
         body: payload,
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (error) throw error
-      const body = data as { error?: string }
-      if (body?.error) throw new Error(body.error)
+      if (error) {
+        const msg = await extractApiError(error)
+        throw new Error(msg)
+      }
+      const body = data as { error?: string; hint?: string }
+      if (body?.error) throw new Error(body.hint ? `${body.error} ${body.hint}` : body.error)
       toast({ title: "Salvo", description: "Configurações atualizadas." })
       fetchConfigs()
     } catch (err) {
@@ -210,7 +232,7 @@ export function AdminConfigPage() {
                         <Input
                           id="webhook_chat"
                           type="url"
-                          placeholder="https://seu-n8n.com/webhook/consulta-chat"
+                          placeholder="https://jobs.traveltec.com.br/webhook/atendimento"
                           value={form.webhook_chat}
                           onChange={(e) =>
                             setForm((f) => ({ ...f, webhook_chat: e.target.value }))
