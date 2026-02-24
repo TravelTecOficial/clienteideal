@@ -172,8 +172,17 @@ Deno.serve(async (req) => {
       webhook_base64: true,
       events: ["MESSAGES_UPSERT"],
     }
+    const payloadWithWebhookObject = {
+      webhook: payloadBase,
+    }
     const attempts: WebhookAttempt[] = []
     const targets: Array<{ endpoint: string; body: Record<string, unknown> }> = [
+      // Versões mais novas da Evolution exigem o objeto "webhook" no payload.
+      { endpoint: `${url}/webhook/set/${encodeURIComponent(instance)}`, body: payloadWithWebhookObject },
+      { endpoint: `${url}/webhook/set`, body: { ...payloadWithWebhookObject, instanceName: instance } },
+      { endpoint: `${url}/webhook/instance/${encodeURIComponent(instance)}`, body: payloadWithWebhookObject },
+      { endpoint: `${url}/webhook/instance`, body: { ...payloadWithWebhookObject, instanceName: instance } },
+      // Fallback para versões antigas (payload flat).
       { endpoint: `${url}/webhook/set/${encodeURIComponent(instance)}`, body: payloadBase },
       { endpoint: `${url}/webhook/set`, body: { ...payloadBase, instanceName: instance } },
       { endpoint: `${url}/webhook/instance/${encodeURIComponent(instance)}`, body: payloadBase },
