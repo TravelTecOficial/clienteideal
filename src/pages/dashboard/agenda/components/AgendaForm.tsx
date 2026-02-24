@@ -26,11 +26,24 @@ function getMinDateTime(): string {
   return `${y}-${m}-${d}T${h}:${min}`;
 }
 
+const OPPORTUNITY_STAGES = [
+  { value: "novo", label: "Novo" },
+  { value: "qualificacao", label: "Em fase de qualificação" },
+  { value: "negociacao", label: "Em negociação" },
+  { value: "proposta", label: "Proposta" },
+  { value: "ganho", label: "Ganho" },
+  { value: "perdido", label: "Perdido" },
+] as const;
+
+export type AgendaOpportunityStage = (typeof OPPORTUNITY_STAGES)[number]["value"];
+
 const baseSchema = z.object({
   tipo_reuniao: z.string().min(2, "Tipo de reunião obrigatório"),
   vendedor_id: z.string().optional(),
   status: z.enum(["Pendente", "Confirmado", "Cancelado", "Finalizado"]),
   descricao: z.string().optional(),
+  include_as_opportunity: z.boolean().optional(),
+  opportunity_stage: z.enum(["novo", "qualificacao", "negociacao", "proposta", "ganho", "perdido"]).optional(),
 });
 
 const agendaFormSchemaCreate = baseSchema.extend({
@@ -72,6 +85,7 @@ interface AgendaFormProps {
   mode?: "create" | "edit";
   onCancelAgenda?: () => void | Promise<void>;
   isCancelling?: boolean;
+  showIncludeOpportunity?: boolean;
 }
 
 export function AgendaForm({
@@ -82,6 +96,7 @@ export function AgendaForm({
   mode = "create",
   onCancelAgenda,
   isCancelling = false,
+  showIncludeOpportunity = false,
 }: AgendaFormProps) {
   const form = useForm<AgendaFormValues>({
     resolver: zodResolver(getAgendaFormSchema(mode)),
@@ -91,6 +106,8 @@ export function AgendaForm({
       vendedor_id: "",
       status: "Pendente",
       descricao: "",
+      include_as_opportunity: false,
+      opportunity_stage: "novo",
       ...defaultValues,
     },
   });
@@ -101,6 +118,9 @@ export function AgendaForm({
     mode === "edit" &&
     onCancelAgenda &&
     currentStatus !== "Cancelado";
+
+  // eslint-disable-next-line react-hooks/incompatible-library -- form.watch do react-hook-form é padrão
+  const includeAsOpportunity = form.watch("include_as_opportunity");
 
   return (
     <form
@@ -188,6 +208,47 @@ export function AgendaForm({
           {...form.register("descricao")}
         />
       </div>
+
+      {showIncludeOpportunity && mode === "create" && (
+        <div className="space-y-2 rounded-lg border border-border p-4">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="include_as_opportunity"
+              checked={includeAsOpportunity ?? false}
+              onChange={(e) =>
+                form.setValue("include_as_opportunity", e.target.checked)
+              }
+              className="h-4 w-4 rounded border-input"
+            />
+            <Label htmlFor="include_as_opportunity">
+              Incluir como oportunidade
+            </Label>
+          </div>
+          {includeAsOpportunity && (
+            <div className="mt-3 space-y-2">
+              <Label>Em qual estágio deseja incluir?</Label>
+              <Select
+                value={form.watch("opportunity_stage") ?? "novo"}
+                onValueChange={(v: string) =>
+                  form.setValue("opportunity_stage", v as AgendaFormValues["opportunity_stage"])
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPPORTUNITY_STAGES.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex justify-between pt-2">
         <div>

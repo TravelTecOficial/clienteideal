@@ -6,7 +6,7 @@ import { format, parse, startOfWeek, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
-import { Calendar as CalendarIcon, List, Plus, Loader2 } from "lucide-react";
+import { Calendar as CalendarIcon, Edit2, List, Loader2, Plus, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -217,7 +217,6 @@ export default function AgendaPage() {
     }
     setIsSaving(true);
     try {
-      // datetime-local retorna "YYYY-MM-DDTHH:mm"; converter para ISO para timestamptz
       const dataHoraIso = new Date(values.data_hora).toISOString();
 
       const { error } = await supabase.from("agenda").insert({
@@ -231,10 +230,38 @@ export default function AgendaPage() {
 
       if (error) throw error;
 
-      toast({
-        title: "Agendamento criado",
-        description: "A reunião foi cadastrada com sucesso.",
-      });
+      if (values.include_as_opportunity) {
+        const dataHora = new Date(values.data_hora);
+        const expectedDate = dataHora.toISOString().slice(0, 10);
+        const stage = values.opportunity_stage ?? "novo";
+        const { error: oppErr } = await supabase.from("opportunities").insert({
+          company_id: effectiveCompanyId,
+          user_id: userId,
+          title: values.tipo_reuniao.trim(),
+          value: 0,
+          expected_closing_date: expectedDate,
+          stage,
+          seller_id: values.vendedor_id || null,
+        });
+        if (oppErr) {
+          console.error("Erro ao criar oportunidade:", oppErr);
+          toast({
+            variant: "destructive",
+            title: "Agendamento criado",
+            description: "A reunião foi cadastrada, mas falha ao criar oportunidade.",
+          });
+        } else {
+          toast({
+            title: "Agendamento criado",
+            description: "A reunião e a oportunidade foram cadastradas com sucesso.",
+          });
+        }
+      } else {
+        toast({
+          title: "Agendamento criado",
+          description: "A reunião foi cadastrada com sucesso.",
+        });
+      }
       setIsDialogOpen(false);
       loadAgenda();
     } catch (err) {
@@ -283,14 +310,15 @@ export default function AgendaPage() {
     }
   }
 
-  async function handleCancelAgenda() {
-    if (!selectedItem) return;
+  async function handleCancelAgenda(item?: AgendaItem) {
+    const target = item ?? selectedItem;
+    if (!target) return;
     setIsCancelling(true);
     try {
       const { error } = await supabase
         .from("agenda")
         .update({ status: "Cancelado" })
-        .eq("id", selectedItem.id);
+        .eq("id", target.id);
 
       if (error) throw error;
 
@@ -298,7 +326,7 @@ export default function AgendaPage() {
         title: "Agendamento cancelado",
         description: "O agendamento foi cancelado com sucesso.",
       });
-      setSelectedItem(null);
+      if (!item) setSelectedItem(null);
       loadAgenda();
     } catch (err) {
       toast({
@@ -356,6 +384,7 @@ export default function AgendaPage() {
                 onSubmit={onSubmit}
                 vendedores={vendedores}
                 isSaving={isSaving}
+                showIncludeOpportunity
               />
             </DialogContent>
           </Dialog>
@@ -377,12 +406,13 @@ export default function AgendaPage() {
                     <TableHead>Tipo de Reunião</TableHead>
                     <TableHead>Vendedor</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="w-[100px] text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {agenda.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                         Nenhum agendamento encontrado.
                       </TableCell>
                     </TableRow>
@@ -390,21 +420,64 @@ export default function AgendaPage() {
                     agenda.map((item) => (
                       <TableRow
                         key={item.id}
-                        className="cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => openEditModal(item)}
+                        className="hover:bg-muted/50 transition-colors"
                       >
-                        <TableCell className="font-medium">
+                        <TableCell
+                          className="font-medium cursor-pointer"
+                          onClick={() => openEditModal(item)}
+                        >
                           {formatDataHora(item.data_hora)}
                         </TableCell>
-                        <TableCell>{item.tipo_reuniao}</TableCell>
-                        <TableCell>{getVendedorName(item.vendedor_id)}</TableCell>
-                        <TableCell>
+                        <TableCell
+                          className="cursor-pointer"
+                          onClick={() => openEditModal(item)}
+                        >
+                          {item.tipo_reuniao}
+                        </TableCell>
+                        <TableCell
+                          className="cursor-pointer"
+                          onClick={() => openEditModal(item)}
+                        >
+                          {getVendedorName(item.vendedor_id)}
+                        </TableCell>
+                        <TableCell
+                          className="cursor-pointer"
+                          onClick={() => openEditModal(item)}
+                        >
                           <Badge
                             variant="outline"
                             className={getStatusBadgeClass(item.status)}
                           >
                             {item.status}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditModal(item)}
+                              aria-label={`Editar agendamento ${item.tipo_reuniao}`}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            {item.status !== "Cancelado" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm("Cancelar esta reunião?")) {
+                                    handleCancelAgenda(item);
+                                  }
+                                }}
+                                aria-label={`Cancelar reunião ${item.tipo_reuniao}`}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

@@ -1,8 +1,12 @@
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
 import { Loader2, Plus } from "lucide-react";
+import {
+  formatCurrencyDisplay,
+  parseCurrencyInput,
+} from "@/lib/currency-format";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +45,13 @@ const opportunityFormSchema = z.object({
     .union([z.number(), z.string()])
     .transform((v) => (typeof v === "string" ? parseFloat(v.replace(",", ".")) || 0 : v))
     .pipe(z.number().min(0, "O valor deve ser maior ou igual a zero")),
-  expected_closing_date: z.string().optional(),
+  expected_closing_date: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || new Date(val) >= new Date(new Date().setHours(0, 0, 0, 0)),
+      { message: "Data prevista não pode ser anterior a hoje" }
+    ),
   stage: z.enum([
     "novo",
     "qualificacao",
@@ -137,13 +147,22 @@ export function OpportunityForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="value">Valor (R$)</Label>
-          <Input
-            id="value"
-            type="number"
-            step="0.01"
-            min={0}
-            placeholder="0,00"
-            {...form.register("value")}
+          <Controller
+            name="value"
+            control={form.control}
+            render={({ field }) => (
+              <Input
+                id="value"
+                type="text"
+                placeholder="R$ 0,00"
+                value={formatCurrencyDisplay(Number(field.value) || 0)}
+                onChange={(e) => {
+                  const parsed = parseCurrencyInput(e.target.value);
+                  field.onChange(parsed);
+                }}
+                onBlur={field.onBlur}
+              />
+            )}
           />
           {form.formState.errors.value && (
             <p className="text-xs text-destructive">
@@ -156,8 +175,14 @@ export function OpportunityForm({
           <Input
             id="expected_closing_date"
             type="date"
+            min={new Date().toISOString().slice(0, 10)}
             {...form.register("expected_closing_date")}
           />
+          {form.formState.errors.expected_closing_date && (
+            <p className="text-xs text-destructive">
+              {form.formState.errors.expected_closing_date.message}
+            </p>
+          )}
         </div>
       </div>
 

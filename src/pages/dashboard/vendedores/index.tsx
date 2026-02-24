@@ -42,6 +42,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { SUPABASE_URL } from "@/lib/supabase";
+import { formatPhone } from "@/lib/phone-mask";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Dia da semana: 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb (Date.getDay()) */
@@ -260,9 +261,6 @@ export default function VendedoresPage() {
       const statusToPersist = canEditStatus ? form.status : false;
       const isEdit = Boolean(editingEmail);
       const insertId = `vend_${crypto.randomUUID()}`;
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId:"post-fix",hypothesisId:"H8",location:"src/pages/dashboard/vendedores/index.tsx:265",message:"Saving vendedor payload",data:{isEdit,email,companyId,hasClerkId:Boolean(editingClerkId),hasIdInPayload:!isEdit,statusToPersist,insertId:!isEdit?insertId:null},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
       const vendedorPayload = {
         email,
         company_id: companyId,
@@ -287,9 +285,6 @@ export default function VendedoresPage() {
       }
 
       if (vendErr) {
-        // #region agent log
-        fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId:"post-fix",hypothesisId:"H9",location:"src/pages/dashboard/vendedores/index.tsx:292",message:"Saving vendedor failed",data:{message:vendErr.message,code:String(vendErr.code ?? ""),details:String(vendErr.details ?? ""),hint:String(vendErr.hint ?? ""),isEdit},timestamp:Date.now()})}).catch(()=>{})
-        // #endregion
         setSaveError(vendErr.message ?? "Erro ao salvar vendedor.");
         return;
       }
@@ -636,8 +631,12 @@ export default function VendedoresPage() {
                 <Input
                   id="celular"
                   value={form.celular}
-                  onChange={(e) => setForm((f) => ({ ...f, celular: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, celular: formatPhone(e.target.value) }))
+                  }
                   placeholder="(11) 99999-9999"
+                  maxLength={15}
+                  inputMode="numeric"
                 />
               </div>
               <div className="flex items-center gap-2">
