@@ -173,11 +173,56 @@ export function ConfiguracoesPage() {
   const [isSavingEvolution, setIsSavingEvolution] = useState(false);
   const [qrCodeBase64, setQrCodeBase64] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<string | null>(null);
+  const connectionPollIntervalRef = useRef<number | null>(null);
+  const connectionPollAttemptsRef = useRef(0);
   const [whatsappImageUrl, setWhatsappImageUrl] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const whatsappImageInputRef = useRef<HTMLInputElement>(null);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
+
+  const stopConnectionPolling = useCallback(() => {
+    if (connectionPollIntervalRef.current !== null) {
+      window.clearInterval(connectionPollIntervalRef.current);
+      connectionPollIntervalRef.current = null;
+    }
+    connectionPollAttemptsRef.current = 0;
+  }, []);
+
+  const normalizeConnectionState = useCallback((value: unknown): string | null => {
+    if (typeof value !== "string") return null;
+    return value.trim().toLowerCase();
+  }, []);
+
+  const checkConnectionState = useCallback(async (runId: "pre-fix" | "post-fix" = "post-fix") => {
+    const instanceName = evolutionForm.getValues("evolution_instance_name")?.trim();
+    if (!instanceName) return;
+    const { data, error } = await executeEvolutionProxy("connectionState", {
+      instanceName,
+    });
+    if (error) {
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId,hypothesisId:"H7",location:"src/pages/dashboard/ConfiguracoesPage.tsx:204",message:"connectionState request failed",data:{instanceName,errorMessage:error},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
+      return;
+    }
+    const res = data as { state?: unknown; instance?: { state?: unknown } } | null;
+    const rawState = res?.state ?? res?.instance?.state ?? res;
+    const normalizedState = normalizeConnectionState(rawState);
+    // #region agent log
+    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId,hypothesisId:"H6",location:"src/pages/dashboard/ConfiguracoesPage.tsx:213",message:"connectionState normalized",data:{instanceName,rawState:typeof rawState==="string"?rawState:"non-string",normalizedState},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
+    if (normalizedState) {
+      setConnectionState(normalizedState);
+    }
+    if (normalizedState === "open") {
+      setQrCodeBase64(null);
+      stopConnectionPolling();
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId,hypothesisId:"H5",location:"src/pages/dashboard/ConfiguracoesPage.tsx:224",message:"connection open; qr closed",data:{instanceName},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
+    }
+  }, [evolutionForm, executeEvolutionProxy, normalizeConnectionState, stopConnectionPolling]);
 
   const empresaForm = useForm<EmpresaFormValues>({
     resolver: zodResolver(empresaFormSchema),
@@ -367,6 +412,12 @@ export function ConfiguracoesPage() {
     loadEvolution();
   }, [loadEvolution]);
 
+  useEffect(() => {
+    return () => {
+      stopConnectionPolling();
+    };
+  }, [stopConnectionPolling]);
+
   // Salvar informações da empresa (aba Empresa)
   async function onEmpresaSubmit(values: EmpresaFormValues) {
     if (!companyId) {
@@ -552,11 +603,24 @@ export function ConfiguracoesPage() {
       | null;
     if (action === "connect" && res) {
       const base64 = (res.base64 ?? res.code ?? res.pairingCode) as string | undefined;
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId:"post-fix",hypothesisId:"H5",location:"src/pages/dashboard/ConfiguracoesPage.tsx:604",message:"connect response received",data:{instanceName:instanceName||null,hasBase64:Boolean(base64)},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
       if (base64) {
         const src = typeof base64 === "string" && base64.startsWith("data:")
           ? base64
           : `data:image/png;base64,${base64}`;
         setQrCodeBase64(src);
+        stopConnectionPolling();
+        connectionPollAttemptsRef.current = 0;
+        await checkConnectionState("post-fix");
+        connectionPollIntervalRef.current = window.setInterval(() => {
+          connectionPollAttemptsRef.current += 1;
+          void checkConnectionState("post-fix");
+          if (connectionPollAttemptsRef.current >= 24) {
+            stopConnectionPolling();
+          }
+        }, 5000);
       } else {
         setQrCodeBase64(null);
         toast({
@@ -566,9 +630,8 @@ export function ConfiguracoesPage() {
         });
       }
     }
-    if (action === "connectionState" && res) {
-      const state = (res.state ?? res.instance?.state ?? res) as string | Record<string, unknown>;
-      setConnectionState(typeof state === "string" ? state : JSON.stringify(state));
+    if (action === "connectionState") {
+      await checkConnectionState("post-fix");
     }
     if ((action === "create" || action === "connect") && webhookDebug) {
       const firstAttempt = webhookDebug.attempts?.[0];
@@ -585,6 +648,7 @@ export function ConfiguracoesPage() {
       });
     }
     if (action === "logout") {
+      stopConnectionPolling();
       setQrCodeBase64(null);
       setConnectionState(null);
       toast({
