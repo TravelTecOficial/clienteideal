@@ -180,6 +180,12 @@ export function ConfiguracoesPage() {
   const whatsappImageInputRef = useRef<HTMLInputElement>(null);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
+  const evolutionForm = useForm<EvolutionFormValues>({
+    resolver: zodResolver(evolutionFormSchema),
+    defaultValues: {
+      evolution_instance_name: "",
+    },
+  });
 
   const stopConnectionPolling = useCallback(() => {
     if (connectionPollIntervalRef.current !== null) {
@@ -248,13 +254,6 @@ export function ConfiguracoesPage() {
       data: "",
       plataforma: undefined,
       valor: 0,
-    },
-  });
-
-  const evolutionForm = useForm<EvolutionFormValues>({
-    resolver: zodResolver(evolutionFormSchema),
-    defaultValues: {
-      evolution_instance_name: "",
     },
   });
 
