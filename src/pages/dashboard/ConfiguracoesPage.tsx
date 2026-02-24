@@ -200,33 +200,24 @@ export function ConfiguracoesPage() {
     return value.trim().toLowerCase();
   }, []);
 
-  const checkConnectionState = useCallback(async (runId: "pre-fix" | "post-fix" = "post-fix") => {
+  const checkConnectionState = useCallback(async () => {
     const instanceName = evolutionForm.getValues("evolution_instance_name")?.trim();
     if (!instanceName) return;
     const { data, error } = await executeEvolutionProxy("connectionState", {
       instanceName,
     });
     if (error) {
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId,hypothesisId:"H7",location:"src/pages/dashboard/ConfiguracoesPage.tsx:204",message:"connectionState request failed",data:{instanceName,errorMessage:error},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
       return;
     }
     const res = data as { state?: unknown; instance?: { state?: unknown } } | null;
     const rawState = res?.state ?? res?.instance?.state ?? res;
     const normalizedState = normalizeConnectionState(rawState);
-    // #region agent log
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId,hypothesisId:"H6",location:"src/pages/dashboard/ConfiguracoesPage.tsx:213",message:"connectionState normalized",data:{instanceName,rawState:typeof rawState==="string"?rawState:"non-string",normalizedState},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     if (normalizedState) {
       setConnectionState(normalizedState);
     }
     if (normalizedState === "open") {
       setQrCodeBase64(null);
       stopConnectionPolling();
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId,hypothesisId:"H5",location:"src/pages/dashboard/ConfiguracoesPage.tsx:224",message:"connection open; qr closed",data:{instanceName},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
     }
   }, [evolutionForm, executeEvolutionProxy, normalizeConnectionState, stopConnectionPolling]);
 
@@ -602,9 +593,6 @@ export function ConfiguracoesPage() {
       | null;
     if (action === "connect" && res) {
       const base64 = (res.base64 ?? res.code ?? res.pairingCode) as string | undefined;
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId:"post-fix",hypothesisId:"H5",location:"src/pages/dashboard/ConfiguracoesPage.tsx:604",message:"connect response received",data:{instanceName:instanceName||null,hasBase64:Boolean(base64)},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
       if (base64) {
         const src = typeof base64 === "string" && base64.startsWith("data:")
           ? base64
@@ -612,10 +600,10 @@ export function ConfiguracoesPage() {
         setQrCodeBase64(src);
         stopConnectionPolling();
         connectionPollAttemptsRef.current = 0;
-        await checkConnectionState("post-fix");
+        await checkConnectionState();
         connectionPollIntervalRef.current = window.setInterval(() => {
           connectionPollAttemptsRef.current += 1;
-          void checkConnectionState("post-fix");
+          void checkConnectionState();
           if (connectionPollAttemptsRef.current >= 24) {
             stopConnectionPolling();
           }
@@ -630,20 +618,19 @@ export function ConfiguracoesPage() {
       }
     }
     if (action === "connectionState") {
-      await checkConnectionState("post-fix");
+      await checkConnectionState();
     }
-    if ((action === "create" || action === "connect") && webhookDebug) {
+    // Só exibe toast de webhook quando NÃO está configurado (problema). Quando OK, evita banner redundante.
+    if ((action === "create" || action === "connect") && webhookDebug && !webhookDebug.configured) {
       const firstAttempt = webhookDebug.attempts?.[0];
       const attemptSummary = webhookDebug.attempts
         ?.map((a) => `${a.status ?? 0}${a.ok ? " OK" : " FAIL"}`)
         .join(" | ");
       toast({
-        title: webhookDebug.configured ? "Webhook configurado" : "Webhook não configurado",
-        description: webhookDebug.configured
-          ? "A Evolution confirmou a configuração do webhook."
-          : `Tentativas: ${attemptSummary ?? "sem detalhes"}${
-              firstAttempt?.responsePreview ? ` | resposta: ${firstAttempt.responsePreview}` : ""
-            }`,
+        title: "Webhook não configurado",
+        description: `Tentativas: ${attemptSummary ?? "sem detalhes"}${
+          firstAttempt?.responsePreview ? ` | resposta: ${firstAttempt.responsePreview}` : ""
+        }`,
       });
     }
     if (action === "logout") {
