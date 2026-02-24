@@ -187,6 +187,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Admin do SaaS (publicMetadata.role === "admin") → /admin. Note: UI-level check. API enforcement required.
   if (isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
+    // Se já está em rota admin (ex: /admin/preview/:companyId), permitir acesso.
+    if (location.pathname.startsWith("/admin")) {
+      return <>{children}</>
+    }
     return <Navigate to="/admin" replace />
   }
 
