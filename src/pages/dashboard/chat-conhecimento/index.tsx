@@ -148,6 +148,14 @@ export default function ChatConhecimento() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    if (!companyId) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Aguarde o carregamento da empresa ou verifique se seu perfil está vinculado a uma empresa.',
+      }]);
+      return;
+    }
+
     const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
@@ -308,15 +316,15 @@ export default function ChatConhecimento() {
         <div className="p-4 bg-white border-t border-slate-200">
           <form onSubmit={handleSendMessage} className="flex gap-2 max-w-4xl mx-auto">
             <Input 
-              placeholder="Digite sua dúvida aqui..."
+              placeholder={companyId ? "Digite sua dúvida aqui..." : "Carregando empresa..."}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               className="flex-1 py-6 shadow-sm border-slate-300 focus-visible:ring-blue-600"
-              disabled={isLoading}
+              disabled={isLoading || !companyId}
             />
             <Button 
               type="submit" 
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || !input.trim() || !companyId}
               className="h-auto px-6 bg-blue-600 hover:bg-blue-700 transition-all shadow-md"
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send size={20} />}

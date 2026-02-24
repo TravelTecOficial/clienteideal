@@ -123,14 +123,27 @@ Deno.serve(async (req) => {
   const serverUrl = row.evolution_api_url?.trim() || ""
 
   // Buscar webhook do Chat (config_type=chat usa webhook_chat)
-  const { data: chatConfig } = await supabase
+  const { data: chatConfig, error: chatConfigError } = await supabase
     .from("admin_webhook_config")
     .select("webhook_chat")
     .eq("config_type", "chat")
     .maybeSingle()
 
-  const webhookUrl =
+  // #region agent log
+  console.log("[chat-conhecimento-proxy] admin_webhook_config chat:", {
+    hasConfig: !!chatConfig,
+    hasWebhookValue: !!(chatConfig as { webhook_chat?: string } | null)?.webhook_chat?.trim(),
+    queryError: chatConfigError?.message ?? null,
+  })
+  // #endregion
+
+  let webhookUrl =
     (chatConfig as { webhook_chat: string | null } | null)?.webhook_chat?.trim() || ""
+
+  // Fallback: secret N8N_CHAT_WEBHOOK_URL (útil se admin_webhook_config não estiver populado em PROD)
+  if (!webhookUrl) {
+    webhookUrl = Deno.env.get("N8N_CHAT_WEBHOOK_URL")?.trim() || ""
+  }
 
   if (!webhookUrl) {
     return jsonResponse(

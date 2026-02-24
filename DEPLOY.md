@@ -90,9 +90,19 @@ npx supabase functions deploy upload-kb-to-webhook --project-ref $PROJECT_REF
 ## 6. Chat e Webhook n8n
 
 - O **Chat de Conhecimento** usa a Edge Function `chat-conhecimento-proxy` (não chama n8n diretamente)
-- O proxy envia o payload ao webhook configurado em Admin → Configurações → Chat de Conhecimento
+- O proxy envia o payload ao webhook configurado em **Admin → Configurações → Chat de Conhecimento**
 - n8n deve permitir requisições do domínio do Supabase (Edge Functions)
 - Webhook configurado para "Respond: When Last Node Finishes"
+
+**Se o webhook não aparecer após configurar no Admin**, verifique:
+
+1. **Migração aplicada em PROD**: a tabela `admin_webhook_config` deve ter `config_type='chat'` e coluna `webhook_chat`. Execute `scripts/verificar_webhook_chat_prod.sql` no SQL Editor do Supabase.
+
+2. **Fallback via secret** (se o Admin não salvar corretamente):
+   ```bash
+   npx supabase secrets set N8N_CHAT_WEBHOOK_URL=https://seu-n8n.com/webhook/sua-url --project-ref bctjodobbsxieywgulvl
+   ```
+   O proxy usa esse valor quando `admin_webhook_config.webhook_chat` está vazio.
 
 ---
 
