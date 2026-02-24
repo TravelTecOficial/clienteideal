@@ -32,7 +32,7 @@ interface CompanyRow {
 }
 
 interface RequestBody {
-  action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout"
+  action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout" | "setWebhook"
   instanceName?: string
   /** Token JWT do Clerk - enviado no body para evitar validação do gateway Supabase */
   token?: string
@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
   const instanceName = body?.instanceName?.trim() || storedInstanceName
 
   if (!action) {
-    return errorResponse("Ação obrigatória (create, connect, connectionState, fetchInstances, logout).", 400)
+    return errorResponse("Ação obrigatória (create, connect, connectionState, fetchInstances, logout, setWebhook).", 400)
   }
 
   const url = normalizeEvolutionBaseUrl(baseUrl)
@@ -165,28 +165,33 @@ Deno.serve(async (req) => {
   const evolutionWebhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook`
 
   async function setWebhookForInstance(instance: string): Promise<WebhookDebugResult> {
-    const payloadBase = {
+    // Evolution API v2 exige camelCase (webhookByEvents, webhookBase64). v1 usa snake_case.
+    // Enviamos ambos para compatibilidade com qualquer versão.
+    const payloadFlat = {
       enabled: true,
       url: evolutionWebhookUrl,
       webhook_by_events: false,
       webhook_base64: true,
+      webhookByEvents: false,
+      webhookBase64: true,
       events: ["MESSAGES_UPSERT"],
     }
     const payloadWithWebhookObject = {
-      webhook: payloadBase,
+      webhook: payloadFlat,
     }
     const attempts: WebhookAttempt[] = []
     const targets: Array<{ endpoint: string; body: Record<string, unknown> }> = [
-      // Versões mais novas da Evolution exigem o objeto "webhook" no payload.
+      // v2: POST /webhook/set/{instance} com payload flat (camelCase obrigatório)
+      { endpoint: `${url}/webhook/set/${encodeURIComponent(instance)}`, body: payloadFlat },
+      { endpoint: `${url}/webhook/set`, body: { ...payloadFlat, instanceName: instance } },
+      // Algumas versões usam /webhook/instance
+      { endpoint: `${url}/webhook/instance/${encodeURIComponent(instance)}`, body: payloadFlat },
+      { endpoint: `${url}/webhook/instance`, body: { ...payloadFlat, instanceName: instance } },
+      // Fallback: payload com objeto "webhook" aninhado (algumas versões)
       { endpoint: `${url}/webhook/set/${encodeURIComponent(instance)}`, body: payloadWithWebhookObject },
       { endpoint: `${url}/webhook/set`, body: { ...payloadWithWebhookObject, instanceName: instance } },
       { endpoint: `${url}/webhook/instance/${encodeURIComponent(instance)}`, body: payloadWithWebhookObject },
       { endpoint: `${url}/webhook/instance`, body: { ...payloadWithWebhookObject, instanceName: instance } },
-      // Fallback para versões antigas (payload flat).
-      { endpoint: `${url}/webhook/set/${encodeURIComponent(instance)}`, body: payloadBase },
-      { endpoint: `${url}/webhook/set`, body: { ...payloadBase, instanceName: instance } },
-      { endpoint: `${url}/webhook/instance/${encodeURIComponent(instance)}`, body: payloadBase },
-      { endpoint: `${url}/webhook/instance`, body: { ...payloadBase, instanceName: instance } },
     ]
 
     for (const target of targets) {
@@ -302,6 +307,14 @@ Deno.serve(async (req) => {
         return jsonResponse(data, res.status)
       }
       return jsonResponse(data)
+    }
+
+    if (action === "setWebhook") {
+      if (!instanceName) {
+        return errorResponse("Nome da instância obrigatório para configurar webhook.", 400)
+      }
+      const webhookDebug = await setWebhookForInstance(instanceName)
+      return jsonResponse({ success: webhookDebug.configured, _webhook: webhookDebug })
     }
 
     return errorResponse("Ação inválida.", 400)

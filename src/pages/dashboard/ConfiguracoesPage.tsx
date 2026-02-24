@@ -642,6 +642,26 @@ export function ConfiguracoesPage() {
         description: "A instância foi desconectada com sucesso.",
       });
     }
+    if (action === "setWebhook") {
+      if (webhookDebug?.configured) {
+        toast({
+          title: "Webhook configurado",
+          description: "O webhook foi registrado na Evolution API (MESSAGES_UPSERT, base64).",
+        });
+      } else if (webhookDebug && !webhookDebug.configured) {
+        const firstAttempt = webhookDebug.attempts?.[0];
+        const attemptSummary = webhookDebug.attempts
+          ?.map((a) => `${a.status ?? 0}${a.ok ? " OK" : " FAIL"}`)
+          .join(" | ");
+        toast({
+          variant: "destructive",
+          title: "Webhook não configurado",
+          description: `Tentativas: ${attemptSummary ?? "sem detalhes"}${
+            firstAttempt?.responsePreview ? ` | resposta: ${firstAttempt.responsePreview}` : ""
+          }`,
+        });
+      }
+    }
   }
 
   return (
@@ -1016,6 +1036,15 @@ export function ConfiguracoesPage() {
                             disabled={!evolutionForm.watch("evolution_instance_name")?.trim()}
                           >
                             Verificar conexão
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleEvolutionAction("setWebhook")}
+                            disabled={!evolutionForm.watch("evolution_instance_name")?.trim()}
+                            title="Reconfigurar webhook na Evolution (MESSAGES_UPSERT, base64)"
+                          >
+                            Configurar webhook
                           </Button>
                           <Button
                             type="button"

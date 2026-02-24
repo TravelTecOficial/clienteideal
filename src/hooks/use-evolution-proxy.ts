@@ -8,6 +8,7 @@ export type EvolutionAction =
   | "connectionState"
   | "fetchInstances"
   | "logout"
+  | "setWebhook"
 
 interface EvolutionProxyOptions {
   instanceName?: string
