@@ -30,6 +30,9 @@ interface CompanyRow {
   evolution_instance_name: string | null
   segment_type: string | null
 }
+interface WebhookChatConfig {
+  webhook_chat: string | null
+}
 
 interface RequestBody {
   action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout" | "setWebhook"
@@ -122,7 +125,7 @@ Deno.serve(async (req) => {
     return errorResponse("Empresa não encontrada.", 404)
   }
 
-  const [{ data: globalConfig }, { data: company }] = await Promise.all([
+  const [{ data: globalConfig }, { data: company }, { data: webhookChatRow }] = await Promise.all([
     supabase
       .from("admin_evolution_config")
       .select("evolution_api_url, evolution_api_key")
@@ -132,6 +135,11 @@ Deno.serve(async (req) => {
       .from("companies")
       .select("evolution_instance_name, segment_type")
       .eq("id", companyId)
+      .maybeSingle(),
+    supabase
+      .from("admin_webhook_config")
+      .select("webhook_chat")
+      .eq("config_type", "chat")
       .maybeSingle(),
   ])
 
@@ -151,6 +159,9 @@ Deno.serve(async (req) => {
 
   const action = body?.action
   const instanceName = body?.instanceName?.trim() || storedInstanceName
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H1',location:'evolution-proxy/index.ts:154',message:'Ação recebida no proxy',data:{action:action ?? null,hasBodyInstance:!!body?.instanceName,hasStoredInstance:!!storedInstanceName,segmentType:companyRow?.segment_type ?? null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   if (!action) {
     return errorResponse("Ação obrigatória (create, connect, connectionState, fetchInstances, logout, setWebhook).", 400)
@@ -162,7 +173,11 @@ Deno.serve(async (req) => {
     apikey: apiKey,
   }
 
-  const evolutionWebhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook`
+  const webhookChat = (webhookChatRow as WebhookChatConfig | null)?.webhook_chat?.trim() || ""
+  const evolutionWebhookUrl = webhookChat || `${supabaseUrl}/functions/v1/evolution-webhook`
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H2',location:'evolution-proxy/index.ts:166',message:'Configuração base do webhook pronta',data:{hasBaseUrl:!!baseUrl,baseUrlNormalized:url,hasApiKey:!!apiKey,evolutionWebhookUrl},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   async function setWebhookForInstance(instance: string): Promise<WebhookDebugResult> {
     // Evolution API v2 exige camelCase (webhookByEvents, webhookBase64). v1 usa snake_case.
@@ -174,25 +189,78 @@ Deno.serve(async (req) => {
       webhook_base64: true,
       webhookByEvents: false,
       webhookBase64: true,
+      byEvents: false,
+      base64: true,
       events: ["MESSAGES_UPSERT"],
     }
     const payloadWithWebhookObject = {
       webhook: payloadFlat,
     }
     const attempts: WebhookAttempt[] = []
+    const hasMessagesUpsert = (events: unknown): boolean =>
+      Array.isArray(events) && events.some((e) => String(e).toUpperCase() === "MESSAGES_UPSERT")
+    const readBoolean = (obj: Record<string, unknown>, keys: string[]): boolean | null => {
+      for (const key of keys) {
+        if (typeof obj[key] === "boolean") return obj[key] as boolean
+      }
+      return null
+    }
+    const readString = (obj: Record<string, unknown>, keys: string[]): string => {
+      for (const key of keys) {
+        if (typeof obj[key] === "string") return String(obj[key])
+      }
+      return ""
+    }
+    async function isWebhookApplied(): Promise<{ ok: boolean; details: string }> {
+      try {
+        const findRes = await fetch(`${url}/webhook/find/${encodeURIComponent(instance)}`, {
+          method: "GET",
+          headers,
+        })
+        const raw = await findRes.text().catch(() => "")
+        if (!findRes.ok) {
+          return { ok: false, details: `find=${findRes.status}:${raw.slice(0, 120)}` }
+        }
+        const parsed = JSON.parse(raw) as Record<string, unknown>
+        const root = (parsed.webhook && typeof parsed.webhook === "object"
+          ? parsed.webhook
+          : parsed) as Record<string, unknown>
+        const inner = (root.webhook && typeof root.webhook === "object"
+          ? root.webhook
+          : root) as Record<string, unknown>
+        const configuredUrl = readString(inner, ["url"])
+        const enabled = readBoolean(inner, ["enabled"]) === true
+        const base64Enabled =
+          readBoolean(inner, ["webhookBase64", "webhook_base64", "base64"]) === true
+        const events = inner.events ?? root.events
+        const hasUpsert = hasMessagesUpsert(events)
+        const sameUrl = configuredUrl === evolutionWebhookUrl
+        return {
+          ok: enabled && base64Enabled && hasUpsert && sameUrl,
+          details: `enabled=${enabled};base64=${base64Enabled};upsert=${hasUpsert};sameUrl=${sameUrl};url=${configuredUrl.slice(0, 120)}`,
+        }
+      } catch (err) {
+        return {
+          ok: false,
+          details: err instanceof Error ? err.message.slice(0, 120) : String(err).slice(0, 120),
+        }
+      }
+    }
     const targets: Array<{ endpoint: string; body: Record<string, unknown> }> = [
-      // v2: POST /webhook/set/{instance} com payload flat (camelCase obrigatório)
-      { endpoint: `${url}/webhook/set/${encodeURIComponent(instance)}`, body: payloadFlat },
-      { endpoint: `${url}/webhook/set`, body: { ...payloadFlat, instanceName: instance } },
-      // Algumas versões usam /webhook/instance
-      { endpoint: `${url}/webhook/instance/${encodeURIComponent(instance)}`, body: payloadFlat },
-      { endpoint: `${url}/webhook/instance`, body: { ...payloadFlat, instanceName: instance } },
-      // Fallback: payload com objeto "webhook" aninhado (algumas versões)
+      // Algumas versões (como visto em runtime) exigem objeto "webhook" aninhado.
       { endpoint: `${url}/webhook/set/${encodeURIComponent(instance)}`, body: payloadWithWebhookObject },
       { endpoint: `${url}/webhook/set`, body: { ...payloadWithWebhookObject, instanceName: instance } },
       { endpoint: `${url}/webhook/instance/${encodeURIComponent(instance)}`, body: payloadWithWebhookObject },
       { endpoint: `${url}/webhook/instance`, body: { ...payloadWithWebhookObject, instanceName: instance } },
+      // Fallback para versões que aceitam payload flat.
+      { endpoint: `${url}/webhook/set/${encodeURIComponent(instance)}`, body: payloadFlat },
+      { endpoint: `${url}/webhook/set`, body: { ...payloadFlat, instanceName: instance } },
+      { endpoint: `${url}/webhook/instance/${encodeURIComponent(instance)}`, body: payloadFlat },
+      { endpoint: `${url}/webhook/instance`, body: { ...payloadFlat, instanceName: instance } },
     ]
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H3',location:'evolution-proxy/index.ts:196',message:'Início configuração webhook por instância',data:{instance,targetCount:targets.length,firstEndpoint:targets[0]?.endpoint ?? null,usesCamelCase:true,usesSnakeCase:true,event:'MESSAGES_UPSERT'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     for (const target of targets) {
       try {
@@ -208,8 +276,24 @@ Deno.serve(async (req) => {
           ok: webhookRes.ok,
           responsePreview: responseText.slice(0, 300),
         })
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H4',location:'evolution-proxy/index.ts:213',message:'Resposta tentativa webhook',data:{instance,endpoint:target.endpoint,status:webhookRes.status,ok:webhookRes.ok,responsePreview:responseText.slice(0,120)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
 
         if (webhookRes.ok) {
+          const verification = await isWebhookApplied()
+          if (!verification.ok) {
+            attempts.push({
+              endpoint: `${target.endpoint}#verify`,
+              status: 0,
+              ok: false,
+              responsePreview: verification.details,
+            })
+            continue
+          }
+          // #region agent log
+          fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H5',location:'evolution-proxy/index.ts:217',message:'Webhook configurado com sucesso',data:{instance,endpoint:target.endpoint,status:webhookRes.status,attemptsSoFar:attempts.length},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           return { configured: true, attempts }
         }
       } catch (err) {

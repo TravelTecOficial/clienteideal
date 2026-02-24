@@ -9,7 +9,6 @@ import {
   MousePointer,
   MessageSquare,
   BarChart3,
-  Check,
 } from "lucide-react"
 import {
   Accordion,
@@ -17,7 +16,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
-import { cn } from "@/lib/utils"
 
 const BENEFITS = [
   {
@@ -73,30 +71,6 @@ const BENEFITS = [
     title: "Mais previsibilidade",
     description:
       "Métricas em tempo real para tomar decisões estratégicas seguras, eliminando surpresas desagradáveis.",
-  },
-] as const
-
-const PLANS = [
-  {
-    type: "free" as const,
-    title: "Free",
-    price: "R$ 0",
-    description: "Para começar",
-    benefits: ["Até 50 leads por mês", "1 usuário", "Relatórios básicos", "Suporte por e-mail"],
-  },
-  {
-    type: "pro" as const,
-    title: "Pro",
-    price: "R$ 49",
-    description: "Acesso completo",
-    benefits: ["Leads ilimitados", "Até 5 usuários", "Relatórios avançados", "Suporte prioritário", "Integrações de CRM", "API de acesso"],
-  },
-  {
-    type: "enterprise" as const,
-    title: "Enterprise",
-    price: "Sob consulta",
-    description: "Suporte dedicado",
-    benefits: ["Tudo do Pro", "Usuários ilimitados", "SLA garantido", "Gerente de conta dedicado", "Onboarding personalizado", "Customizações sob medida"],
   },
 ] as const
 
@@ -246,51 +220,20 @@ export function LandingPage() {
               Investimento
             </h2>
             <h3 className="text-3xl md:text-5xl font-extrabold text-secondary">
-              Planos para a sua Escala
+              Bem-vindo ao Cliente Ideal
             </h3>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.type}
-                className={cn(
-                  "p-8 rounded-xl-custom bg-card card-shadow border border-muted hover:border-primary transition-all flex flex-col",
-                  plan.type === "pro" && "border-primary ring-2 ring-primary/20"
-                )}
-              >
-                <span
-                  className={cn(
-                    "inline-block w-fit text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest mb-4",
-                    plan.type === "pro"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {plan.title}
-                </span>
-                <p className="text-2xl font-bold text-secondary">{plan.price}</p>
-                <p className="text-sm text-foreground/60 mt-1">{plan.description}</p>
-                <ul className="mt-6 space-y-3 text-foreground/70 text-sm flex-1">
-                  {plan.benefits.map((benefit) => (
-                    <li key={benefit} className="flex items-start gap-2">
-                      <Check className="h-4 w-4 shrink-0 text-primary mt-0.5" />
-                      <span>{benefit}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to="/cadastrar"
-                  className={cn(
-                    "mt-8 block w-full text-center py-4 rounded-xl-custom font-bold transition shadow-lg",
-                    plan.type === "pro"
-                      ? "bg-primary text-primary-foreground hover:bg-secondary"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  )}
-                >
-                  {plan.type === "enterprise" ? "Falar com vendas" : "Começar"}
-                </Link>
-              </div>
-            ))}
+          <div className="mx-auto max-w-2xl rounded-xl-custom border border-muted bg-background p-8 text-center shadow-sm">
+            <p className="text-lg font-semibold text-secondary">Acesso ao sistema</p>
+            <p className="mt-3 text-sm text-foreground/60">
+              Seu acesso está pronto. Clique abaixo para continuar.
+            </p>
+            <Link
+              to="/cadastrar"
+              className="mt-8 inline-block rounded-xl-custom bg-primary px-8 py-3 font-bold text-primary-foreground transition hover:bg-secondary"
+            >
+              Começar agora
+            </Link>
           </div>
         </div>
       </section>

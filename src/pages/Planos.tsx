@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { cn } from "@/lib/utils"
-import { Loader2, AlertCircle, Check } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
 
 const RETRY_ATTEMPTS = 5
 const RETRY_INTERVAL_MS = 2000
@@ -28,36 +27,6 @@ interface ProfileRow {
   company_id: string | null
   role: string | null
 }
-
-const PLANS: {
-  type: PlanType
-  title: string
-  price: string
-  description: string
-  benefits: string[]
-}[] = [
-  {
-    type: "free",
-    title: "Free",
-    price: "R$ 0",
-    description: "Para começar",
-    benefits: ["Até 50 leads por mês", "1 usuário", "Relatórios básicos", "Suporte por e-mail"],
-  },
-  {
-    type: "pro",
-    title: "Pro",
-    price: "R$ 49",
-    description: "Acesso completo",
-    benefits: ["Leads ilimitados", "Até 5 usuários", "Relatórios avançados", "Suporte prioritário", "Integrações de CRM", "API de acesso"],
-  },
-  {
-    type: "enterprise",
-    title: "Enterprise",
-    price: "Sob consulta",
-    description: "Suporte dedicado",
-    benefits: ["Tudo do Pro", "Usuários ilimitados", "SLA garantido", "Gerente de conta dedicado", "Onboarding personalizado", "Customizações sob medida"],
-  },
-]
 
 async function fetchProfileWithRetry(
   supabaseClient: SupabaseClient,
@@ -370,8 +339,8 @@ export function Planos() {
     <main className="flex min-h-screen flex-col items-center bg-background px-4 py-8 sm:px-6 md:px-10">
       <div className="w-full max-w-5xl space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Escolha seu plano</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Selecione o plano ideal para sua empresa</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Bem-vindo ao Cliente Ideal</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Acesso ao sistema</p>
         </div>
 
         {errorMsg && (
@@ -404,37 +373,26 @@ export function Planos() {
           </Alert>
         )}
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {PLANS.map((plan) => (
-            <Card key={plan.type} className={cn("flex flex-col transition-shadow hover:shadow-md", plan.type === "pro" && "border-primary ring-2 ring-primary/20")}>
-              <CardHeader>
-                <CardTitle className="text-xl font-semibold">{plan.title}</CardTitle>
-                <CardDescription>{plan.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 space-y-4">
-                <p className="text-2xl font-bold">{plan.price}</p>
-                <ul className="space-y-2">
-                  {plan.benefits.map((benefit) => (
-                    <li key={benefit} className="flex items-start gap-2 text-sm">
-                      <Check className="mt-0.5 h-4 w-4 text-primary" />
-                      <span>{benefit}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  variant={plan.type === "pro" ? "default" : "secondary"} 
-                  className="w-full" 
-                  onClick={() => handleSelectPlan(plan.type)}
-                  disabled={status === "processing" || status === "error"}
-                >
-                  {status === "processing" ? "Processando..." : "Selecionar"}
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+        <Card className="mx-auto w-full max-w-xl">
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold">Bem-vindo ao Cliente Ideal</CardTitle>
+            <CardDescription>Acesso ao sistema</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Seu acesso está pronto. Clique abaixo para continuar.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button
+              className="w-full"
+              onClick={() => handleSelectPlan("free")}
+              disabled={status === "processing" || status === "error"}
+            >
+              {status === "processing" ? "Processando..." : "Acessar sistema"}
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
     </main>
   )

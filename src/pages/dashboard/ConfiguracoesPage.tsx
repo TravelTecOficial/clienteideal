@@ -565,7 +565,7 @@ export function ConfiguracoesPage() {
 
   // Ações Evolution API via Edge Function
   async function handleEvolutionAction(
-    action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout"
+    action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout" | "setWebhook"
   ) {
     const instanceName = evolutionForm.getValues("evolution_instance_name")?.trim();
     const { data, error } = await executeEvolutionProxy(action, {
