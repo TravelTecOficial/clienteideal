@@ -34,7 +34,7 @@ FROM public.prompt_atendimento pa
 LEFT JOIN public.prompt_templates pt ON pa.prompt_template_id = pt.id;
 
 -- 4. Recria view_stages_por_empresa (usa enabled no lugar de pts.is_active)
---    pt.is_active: se prompt_templates tiver essa coluna, mantém; senão troque por true
+--    prompt_templates não tem is_active; filtra apenas por pts.enabled
 CREATE OR REPLACE VIEW public.view_stages_por_empresa AS
 SELECT
   pa.company_id,
@@ -43,7 +43,7 @@ SELECT
 FROM public.prompt_atendimento pa
 JOIN public.prompt_templates pt ON pa.prompt_template_id = pt.id
 JOIN public.prompt_template_stages pts ON pt.id = pts.template_id
-WHERE (pt.is_active = true OR pt.is_active IS NULL) AND pts.enabled = true
+WHERE pts.enabled = true
 ORDER BY pts.ordem;
 
 -- 5. Recria view_stage_por_empresa (usa enabled no lugar de pts.is_active)
