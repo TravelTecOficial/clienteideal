@@ -431,6 +431,12 @@ verify_jwt = false
 [functions.admin-persona-templates]
 verify_jwt = false
 
+# evolution-proxy: proxy para Evolution API. Valida Clerk JWT no body; anon key no header para gateway.
+[functions.evolution-proxy]
+verify_jwt = false
+import_map = "./functions/evolution-proxy/deno.json"
+entrypoint = "./functions/evolution-proxy/index.ts"
+
 # evolution-webhook: recebe webhooks da Evolution API e encaminha ao N8N. Evolution envia sem JWT.
 [functions.evolution-webhook]
 verify_jwt = false
