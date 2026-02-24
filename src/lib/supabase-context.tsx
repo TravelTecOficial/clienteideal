@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components -- useSupabaseClient é hook */
+/* eslint-disable react-hooks/refs -- padrão singleton com ref; getToken é estável */
 import {
   createContext,
   useContext,
@@ -29,9 +31,8 @@ export function SupabaseProvider({ children }: SupabaseProviderProps) {
   const clientRef = useRef<SupabaseClient | null>(null)
 
   const client = useMemo(() => {
-    if (!clientRef.current) {
+    if (clientRef.current == null) {
       clientRef.current = createSupabaseClient(async () => {
-        // Token de sessão (sem template) = Supabase Third-Party Auth valida via JWKS do Clerk
         const token = await getToken()
         return token ?? null
       })

@@ -161,7 +161,7 @@ export default function ConsorcioPage() {
 
       setCotasImoveis((imoveis as CotaImovel[]) ?? []);
       setCotasVeiculos((veiculos as CotaVeiculo[]) ?? []);
-    } catch (error) {
+    } catch {
       toast({ title: "Erro ao carregar dados", variant: "destructive" });
     } finally {
       setLoading(false);

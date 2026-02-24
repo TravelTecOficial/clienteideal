@@ -30,6 +30,7 @@ function clearPlanCheckPassed(): void {
 
 interface ProfileWithCompany {
   company_id: string | null
+  role: string | null
   companies: { plan_type: string | null } | null
 }
 
@@ -69,21 +70,21 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     "idle" | "loading" | "allowed" | "blocked" | "connection_failed"
   >("idle")
 
-  const fetchAndCheckPlan = useCallback(
-    async (retryCount = 0): Promise<void> => {
-      if (!user?.id) return
-      setPlanCheckStatus("loading")
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- user?.id é mais estável que user
+  const fetchAndCheckPlan = useCallback(async (): Promise<void> => {
+    if (!user?.id) return
+    setPlanCheckStatus("loading")
 
-      const maxRetries = location.state?.fromPlanSelection ? 5 : 3
-      const retryDelay = 500
+    const maxRetries = location.state?.fromPlanSelection ? 5 : 3
+    const retryDelay = 500
 
+    for (let retryCount = 0; retryCount <= maxRetries; retryCount++) {
       try {
-        // Garantir que o JWT do Clerk (template supabase) está pronto antes de consultar
         const token = await getToken()
         if (!token) {
           if (retryCount < maxRetries) {
             await new Promise((r) => setTimeout(r, retryDelay))
-            return fetchAndCheckPlan(retryCount + 1)
+            continue
           }
           setPlanCheckStatus("blocked")
           return
@@ -91,7 +92,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
         const { data, error } = await supabase
           .from("profiles")
-          .select("company_id, companies(plan_type)")
+          .select("company_id, role, companies(plan_type)")
           .eq("id", user.id)
           .maybeSingle()
 
@@ -110,7 +111,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           }
           if (retryCount < maxRetries) {
             await new Promise((r) => setTimeout(r, retryDelay))
-            return fetchAndCheckPlan(retryCount + 1)
+            continue
           }
           setPlanCheckStatus("blocked")
           return
@@ -134,9 +135,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
         if (retryCount < maxRetries) {
           await new Promise((r) => setTimeout(r, retryDelay))
-          return fetchAndCheckPlan(retryCount + 1)
+          continue
         }
         setPlanCheckStatus("blocked")
+        return
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         const isConnectionError =
@@ -150,18 +152,19 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         }
         if (retryCount < maxRetries) {
           await new Promise((r) => setTimeout(r, retryDelay))
-          return fetchAndCheckPlan(retryCount + 1)
+          continue
         }
         setPlanCheckStatus("blocked")
+        return
       }
-    },
-    [user?.id, supabase, location.state?.fromPlanSelection, getToken]
-  )
+    }
+  }, [user?.id, supabase, location.state?.fromPlanSelection, getToken])
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) return
 
     if (location.pathname === "/planos") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- early exit para rota /planos
       setPlanCheckStatus("allowed")
       return
     }
@@ -228,7 +231,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           variant="outline"
           onClick={() => {
             setPlanCheckStatus("idle")
-            fetchAndCheckPlan(0)
+            void fetchAndCheckPlan()
           }}
         >
           Tentar novamente

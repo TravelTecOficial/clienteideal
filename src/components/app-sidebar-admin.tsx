@@ -35,6 +35,7 @@ const adminNavMain = [
     items: [
       { title: "Modelos de Persona", url: "/admin/personas" },
       { title: "Modelos de Qualificação", url: "/admin/qualificacao" },
+      { title: "Templates Master", url: "/admin/prompt-templates" },
     ],
   },
   {

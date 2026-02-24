@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { Plus, Loader2, Check, Database, Megaphone, MessageSquare, Smartphone, ImagePlus, Building2 } from "lucide-react";
+import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2 } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -82,22 +82,6 @@ interface Pagamento {
   valor: number;
 }
 
-interface PersonaOption {
-  id: string;
-  profile_name: string | null;
-}
-
-interface PromptAtendimentoRow {
-  id: string;
-  nome_atendente: string | null;
-  principais_instrucoes: string | null;
-  papel: string | null;
-  tom_voz: string | null;
-  persona_id: string | null;
-  criatividade_temperatura: number | null;
-  max_tokens: number | null;
-}
-
 // --- Helpers ---
 async function fetchCompanyId(
   supabase: SupabaseClient,
@@ -156,22 +140,6 @@ const pagamentoFormSchema = z.object({
     .pipe(z.number().min(0, "O valor deve ser maior ou igual a zero")),
 });
 
-const promptAtendimentoFormSchema = z.object({
-  nome_atendente: z.string().optional(),
-  principais_instrucoes: z.string().optional(),
-  papel: z.string().optional(),
-  tom_voz: z.string().optional(),
-  persona_id: z.string().optional(),
-  criatividade_temperatura: z
-    .union([z.number(), z.string()])
-    .transform((v) => (typeof v === "string" ? parseInt(v, 10) || 5 : v))
-    .pipe(z.number().min(1, "Mínimo 1").max(10, "Máximo 10")),
-  max_tokens: z
-    .union([z.number(), z.string()])
-    .transform((v) => (typeof v === "string" ? parseInt(v, 10) || 1024 : v))
-    .pipe(z.number().min(1, "Mínimo 1")),
-});
-
 const evolutionFormSchema = z.object({
   evolution_instance_name: z.string().optional(),
 });
@@ -179,7 +147,6 @@ const evolutionFormSchema = z.object({
 type EmpresaFormValues = z.infer<typeof empresaFormSchema>;
 type DadosFormValues = z.infer<typeof dadosFormSchema>;
 type PagamentoFormValues = z.infer<typeof pagamentoFormSchema>;
-type PromptAtendimentoFormValues = z.infer<typeof promptAtendimentoFormSchema>;
 type EvolutionFormValues = z.infer<typeof evolutionFormSchema>;
 
 const PLATAFORMA_OPTIONS = [
@@ -202,9 +169,6 @@ export function ConfiguracoesPage() {
   const [isFetchingPagamentos, setIsFetchingPagamentos] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSavingPagamento, setIsSavingPagamento] = useState(false);
-  const [personas, setPersonas] = useState<PersonaOption[]>([]);
-  const [isFetchingPrompt, setIsFetchingPrompt] = useState(true);
-  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [isFetchingEvolution, setIsFetchingEvolution] = useState(true);
   const [isSavingEvolution, setIsSavingEvolution] = useState(false);
   const [qrCodeBase64, setQrCodeBase64] = useState<string | null>(null);
@@ -239,19 +203,6 @@ export function ConfiguracoesPage() {
       data: "",
       plataforma: undefined,
       valor: 0,
-    },
-  });
-
-  const promptForm = useForm<PromptAtendimentoFormValues>({
-    resolver: zodResolver(promptAtendimentoFormSchema),
-    defaultValues: {
-      nome_atendente: "",
-      principais_instrucoes: "",
-      papel: "",
-      tom_voz: "",
-      persona_id: "",
-      criatividade_temperatura: 5,
-      max_tokens: 1024,
     },
   });
 
@@ -380,69 +331,6 @@ export function ConfiguracoesPage() {
   useEffect(() => {
     loadPagamentos();
   }, [loadPagamentos]);
-
-  // Carregar personas (ideal_customers) para o select
-  const loadPersonas = useCallback(async () => {
-    if (!companyId) return;
-    try {
-      const { data, error } = await supabase
-        .from("ideal_customers")
-        .select("id, profile_name")
-        .eq("company_id", companyId)
-        .order("profile_name");
-
-      if (error) throw error;
-      setPersonas((data as PersonaOption[]) ?? []);
-    } catch (err) {
-      console.error("Erro ao carregar personas:", err);
-      setPersonas([]);
-    }
-  }, [companyId, supabase]);
-
-  // Carregar prompt de atendimento
-  const loadPromptAtendimento = useCallback(async () => {
-    if (!companyId) {
-      setIsFetchingPrompt(false);
-      return;
-    }
-    setIsFetchingPrompt(true);
-    try {
-      const { data, error } = await supabase
-        .from("prompt_atendimento")
-        .select("id, nome_atendente, principais_instrucoes, papel, tom_voz, persona_id, criatividade_temperatura, max_tokens")
-        .eq("company_id", companyId)
-        .maybeSingle();
-
-      if (error) throw error;
-      const row = data as PromptAtendimentoRow | null;
-      promptForm.reset({
-        nome_atendente: row?.nome_atendente ?? "",
-        principais_instrucoes: row?.principais_instrucoes ?? "",
-        papel: row?.papel ?? "",
-        tom_voz: row?.tom_voz ?? "",
-        persona_id: row?.persona_id ?? "",
-        criatividade_temperatura: row?.criatividade_temperatura ?? 5,
-        max_tokens: row?.max_tokens ?? 1024,
-      });
-    } catch (err) {
-      console.error("Erro ao carregar prompt de atendimento:", err);
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Falha ao carregar configurações do prompt.",
-      });
-    } finally {
-      setIsFetchingPrompt(false);
-    }
-  }, [companyId, supabase, toast, promptForm]);
-
-  useEffect(() => {
-    loadPersonas();
-  }, [loadPersonas]);
-
-  useEffect(() => {
-    loadPromptAtendimento();
-  }, [loadPromptAtendimento]);
 
   // Carregar configuração Evolution API (URL e API Key são configuradas apenas no Admin)
   const loadEvolution = useCallback(async () => {
@@ -598,73 +486,6 @@ export function ConfiguracoesPage() {
     }
   }
 
-  // Salvar prompt de atendimento
-  async function onPromptAtendimentoSubmit(values: PromptAtendimentoFormValues) {
-    if (!companyId) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Empresa não identificada.",
-      });
-      return;
-    }
-    setIsSavingPrompt(true);
-    try {
-      const payload = {
-        company_id: companyId,
-        nome_atendente: values.nome_atendente?.trim() || null,
-        principais_instrucoes: values.principais_instrucoes?.trim() || null,
-        papel: values.papel?.trim() || null,
-        tom_voz: values.tom_voz?.trim() || null,
-        persona_id: values.persona_id?.trim() || null,
-        criatividade_temperatura: values.criatividade_temperatura ?? 5,
-        max_tokens: values.max_tokens ?? 1024,
-      };
-
-      const { data: existing } = await supabase
-        .from("prompt_atendimento")
-        .select("id")
-        .eq("company_id", companyId)
-        .maybeSingle();
-
-      if (existing) {
-        const { error } = await supabase
-          .from("prompt_atendimento")
-          .update({
-            nome_atendente: payload.nome_atendente,
-            principais_instrucoes: payload.principais_instrucoes,
-            papel: payload.papel,
-            tom_voz: payload.tom_voz,
-            persona_id: payload.persona_id,
-            criatividade_temperatura: payload.criatividade_temperatura,
-            max_tokens: payload.max_tokens,
-          })
-          .eq("company_id", companyId);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("prompt_atendimento")
-          .insert(payload);
-
-        if (error) throw error;
-      }
-
-      toast({
-        title: "Prompt salvo",
-        description: "As configurações do prompt de atendimento foram atualizadas.",
-      });
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao salvar",
-        description: getErrorMessage(err),
-      });
-    } finally {
-      setIsSavingPrompt(false);
-    }
-  }
-
   // Salvar nome da instância Evolution (URL e API Key são configuradas apenas no Admin)
   async function onEvolutionSubmit(values: EvolutionFormValues) {
     if (!companyId) {
@@ -800,7 +621,7 @@ export function ConfiguracoesPage() {
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           <Tabs defaultValue="empresa" className="w-full">
-            <TabsList className="grid w-full max-w-[1000px] grid-cols-5">
+            <TabsList className="grid w-full max-w-[1000px] grid-cols-4">
               <TabsTrigger value="empresa" className="gap-2">
                 <Building2 className="h-4 w-4" /> Empresa
               </TabsTrigger>
@@ -812,9 +633,6 @@ export function ConfiguracoesPage() {
               </TabsTrigger>
               <TabsTrigger value="anuncios" className="gap-2">
                 <Megaphone className="h-4 w-4" /> Anúncios
-              </TabsTrigger>
-              <TabsTrigger value="prompt-atendimento" className="gap-2">
-                <MessageSquare className="h-4 w-4" /> Prompt Atendimento
               </TabsTrigger>
             </TabsList>
 
@@ -1187,177 +1005,6 @@ export function ConfiguracoesPage() {
                         </div>
                       )}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="prompt-atendimento" className="space-y-4 pt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Prompt de Atendimento</CardTitle>
-                  <CardDescription>
-                    Configure o comportamento da IA no atendimento: nome, papel,
-                    tom de voz, persona e parâmetros de geração.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isFetchingPrompt ? (
-                    <div className="flex min-h-[200px] items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <form
-                      onSubmit={promptForm.handleSubmit(onPromptAtendimentoSubmit)}
-                      className="grid gap-4 sm:grid-cols-2"
-                    >
-                      <div className="space-y-2">
-                        <Label htmlFor="nome_atendente">Nome do atendente</Label>
-                        <Input
-                          id="nome_atendente"
-                          type="text"
-                          placeholder="Ex: Assistente de Vendas"
-                          {...promptForm.register("nome_atendente")}
-                        />
-                        {promptForm.formState.errors.nome_atendente && (
-                          <p className="text-xs text-destructive">
-                            {promptForm.formState.errors.nome_atendente.message}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="principais_instrucoes">
-                          Principais instruções
-                        </Label>
-                        <Textarea
-                          id="principais_instrucoes"
-                          placeholder="Descreva as principais instruções para o atendente..."
-                          rows={4}
-                          className="resize-none"
-                          {...promptForm.register("principais_instrucoes")}
-                        />
-                        {promptForm.formState.errors.principais_instrucoes && (
-                          <p className="text-xs text-destructive">
-                            {
-                              promptForm.formState.errors.principais_instrucoes
-                                .message
-                            }
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="papel">Papel</Label>
-                        <Input
-                          id="papel"
-                          type="text"
-                          placeholder="Ex: Consultor de vendas"
-                          {...promptForm.register("papel")}
-                        />
-                        {promptForm.formState.errors.papel && (
-                          <p className="text-xs text-destructive">
-                            {promptForm.formState.errors.papel.message}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="tom_voz">Tom de voz</Label>
-                        <Input
-                          id="tom_voz"
-                          type="text"
-                          placeholder="Ex: Amigável e profissional"
-                          {...promptForm.register("tom_voz")}
-                        />
-                        {promptForm.formState.errors.tom_voz && (
-                          <p className="text-xs text-destructive">
-                            {promptForm.formState.errors.tom_voz.message}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Persona (Cliente Ideal)</Label>
-                        <Select
-                          value={
-                            promptForm.watch("persona_id") || "__none__"
-                          }
-                          onValueChange={(v) =>
-                            promptForm.setValue(
-                              "persona_id",
-                              v === "__none__" ? "" : v
-                            )
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione uma persona" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">Nenhuma</SelectItem>
-                            {personas.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.profile_name ?? "Sem nome"}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {promptForm.formState.errors.persona_id && (
-                          <p className="text-xs text-destructive">
-                            {promptForm.formState.errors.persona_id.message}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="criatividade_temperatura">
-                          Criatividade/Temperatura (1-10)
-                        </Label>
-                        <Input
-                          id="criatividade_temperatura"
-                          type="number"
-                          min={1}
-                          max={10}
-                          placeholder="5"
-                          {...promptForm.register("criatividade_temperatura")}
-                        />
-                        {promptForm.formState.errors.criatividade_temperatura && (
-                          <p className="text-xs text-destructive">
-                            {
-                              promptForm.formState.errors
-                                .criatividade_temperatura?.message
-                            }
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="max_tokens">
-                          Tamanho da resposta (max tokens)
-                        </Label>
-                        <Input
-                          id="max_tokens"
-                          type="number"
-                          min={1}
-                          placeholder="1024"
-                          {...promptForm.register("max_tokens")}
-                        />
-                        {promptForm.formState.errors.max_tokens && (
-                          <p className="text-xs text-destructive">
-                            {promptForm.formState.errors.max_tokens.message}
-                          </p>
-                        )}
-                      </div>
-                      <div className="sm:col-span-2">
-                        <Button type="submit" disabled={isSavingPrompt}>
-                          {isSavingPrompt ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Salvando…
-                            </>
-                          ) : (
-                            <>
-                              <Check className="h-4 w-4" />
-                              Salvar
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </form>
                   )}
                 </CardContent>
               </Card>

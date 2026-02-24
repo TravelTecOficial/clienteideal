@@ -249,7 +249,7 @@ export default function IdealCustomerPage() {
     } finally {
       setIsLoadingTemplates(false);
     }
-  }, [supabase, toast]);
+  }, [supabase, toast, companySegmentType]);
 
   const handleOpenCopyModal = useCallback(() => {
     setIsCopyModalOpen(true);
@@ -360,7 +360,7 @@ export default function IdealCustomerPage() {
         });
         setEditingAvatarUrl(data.avatar_url ?? null);
       }
-    } catch (err) {
+    } catch {
       toast({
         variant: "destructive",
         title: "Erro",

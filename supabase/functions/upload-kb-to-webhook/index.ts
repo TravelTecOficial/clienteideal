@@ -1,7 +1,7 @@
 /**
  * Edge Function: upload-kb-to-webhook
  *
- * Recebe upload de arquivo da base de conhecimento, envia ao webhook cadastrado no admin
+ * Recebe upload de arquivo da base de conhecimento, envia ao webhook n8n fixo
  * e insere em kb_files_control.
  *
  * POST JSON: { file_base64: string, file_name: string, training_type: string, description?: string }
@@ -104,45 +104,26 @@ Deno.serve(async (req) => {
     )
   }
 
-  const { data: company } = await supabase
-    .from("companies")
-    .select("segment_type")
-    .eq("id", companyId)
-    .maybeSingle()
+  const WEBHOOK_URL = "https://jobs.traveltec.com.br/webhook/arquivos"
+  try {
+    const binary = Uint8Array.from(atob(file_base64.replace(/^data:[^;]+;base64,/, "")), (c) => c.charCodeAt(0))
+    const blob = new Blob([binary])
+    const formToSend = new FormData()
+    formToSend.append("file", blob, file_name)
+    formToSend.append("file_name", file_name)
+    formToSend.append("company_id", companyId)
 
-  const segmentType = ((company as { segment_type: string | null } | null)?.segment_type === "consorcio")
-    ? "consorcio"
-    : "produtos"
+    const webhookRes = await fetch(WEBHOOK_URL, {
+      method: "POST",
+      body: formToSend,
+    })
 
-  const { data: webhookConfig } = await supabase
-    .from("admin_webhook_config")
-    .select("webhook_enviar_arquivos")
-    .eq("config_type", segmentType)
-    .maybeSingle()
-
-  const webhookUrl = (webhookConfig as { webhook_enviar_arquivos: string | null } | null)?.webhook_enviar_arquivos?.trim()
-
-  if (webhookUrl) {
-    try {
-      const binary = Uint8Array.from(atob(file_base64.replace(/^data:[^;]+;base64,/, "")), (c) => c.charCodeAt(0))
-      const blob = new Blob([binary])
-      const formToSend = new FormData()
-      formToSend.append("file", blob, file_name)
-      formToSend.append("training_type", trainingType)
-      if (desc) formToSend.append("description", desc)
-      formToSend.append("company_id", companyId)
-
-      const webhookRes = await fetch(webhookUrl, {
-        method: "POST",
-        body: formToSend,
-      })
-
-      if (!webhookRes.ok) {
-        console.error("[upload-kb-to-webhook] Webhook retornou", webhookRes.status, await webhookRes.text())
-      }
-    } catch (err) {
-      console.error("[upload-kb-to-webhook] Erro ao enviar ao webhook:", err)
+    if (!webhookRes.ok) {
+      const webhookBody = await webhookRes.text()
+      console.error("[upload-kb-to-webhook] Webhook retornou", webhookRes.status, webhookBody)
     }
+  } catch (err) {
+    console.error("[upload-kb-to-webhook] Erro ao enviar ao webhook:", err)
   }
 
   const drive_file_id = `drive_${crypto.randomUUID()}`

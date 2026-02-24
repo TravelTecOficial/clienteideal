@@ -7,6 +7,8 @@ import { AdminEvolutionPage } from "@/pages/admin/AdminEvolutionPage"
 import { AdminPreviewPage } from "@/pages/admin/AdminPreviewPage"
 import { AdminPersonasPage } from "@/pages/admin/AdminPersonasPage"
 import { AdminQualificacaoPage } from "@/pages/admin/AdminQualificacaoPage"
+import { AdminPromptTemplatesPage } from "@/pages/admin/prompt-templates"
+import { TemplateFormPage } from "@/pages/admin/prompt-templates/TemplateFormPage"
 import { DashboardPage } from "@/pages/dashboard/DashboardPage"
 import { ProfilePage } from "@/pages/dashboard/ProfilePage"
 import { LoginPage } from "@/pages/LoginPage"
@@ -23,6 +25,7 @@ import { BaseConhecimentoPage } from "@/pages/dashboard/BaseConhecimentoPage"
 import { ChatConhecimentoPage } from "@/pages/dashboard/ChatConhecimentoPage"
 import { ProdutosServicosPage } from "@/pages/dashboard/ProdutosServicosPage"
 import { ConfiguracoesPage } from "@/pages/dashboard/ConfiguracoesPage"
+import { PromptAtendimentoPage } from "@/pages/dashboard/prompt-atendimento"
 import ConsorcioPage from "@/pages/dashboard/consorcio"
 import { IndicadoresPage } from "@/pages/dashboard/IndicadoresPage"
 import { SupabaseProvider } from "@/lib/supabase-context"
@@ -195,6 +198,16 @@ function App() {
           }
         />
         <Route
+          path="/dashboard/prompt-atendimento"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <PromptAtendimentoPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
           path="/dashboard/configuracoes"
           element={
             <SupabaseProvider>
@@ -276,6 +289,22 @@ function App() {
           element={
             <SupabaseProvider>
               <AdminQualificacaoPage />
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/prompt-templates"
+          element={
+            <SupabaseProvider>
+              <AdminPromptTemplatesPage />
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/prompt-templates/:id"
+          element={
+            <SupabaseProvider>
+              <TemplateFormPage />
             </SupabaseProvider>
           }
         />

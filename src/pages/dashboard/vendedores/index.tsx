@@ -117,12 +117,13 @@ export default function VendedoresPage() {
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editingEmail, setEditingEmail] = useState<string | null>(null);
+  const [editingClerkId, setEditingClerkId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     nome: "",
     email: "",
     celular: "",
-    status: true,
+    status: false,
     sendInvite: false,
   });
   const [formDiasAtivos, setFormDiasAtivos] = useState<Record<number, boolean>>(
@@ -204,9 +205,10 @@ export default function VendedoresPage() {
 
   const openNew = () => {
     setEditingEmail(null);
+    setEditingClerkId(null);
     setInviteError(null);
     setSaveError(null);
-    setForm({ nome: "", email: "", celular: "", status: true, sendInvite: false });
+    setForm({ nome: "", email: "", celular: "", status: false, sendInvite: false });
     setFormDiasAtivos(
       Object.fromEntries(DIAS_SEMANA.map((d) => [d.id, d.id >= 1 && d.id <= 5]))
     );
@@ -220,13 +222,14 @@ export default function VendedoresPage() {
 
   const openEdit = (v: VendedorRow) => {
     setEditingEmail(v.email);
+    setEditingClerkId(v.clerk_id ?? null);
     setInviteError(null);
     setSaveError(null);
     setForm({
       nome: v.nome ?? "",
       email: v.email,
       celular: v.celular ?? "",
-      status: v.status ?? true,
+      status: v.status ?? false,
       sendInvite: false,
     });
     const hrs = horarios[v.email] ?? [];
@@ -253,13 +256,15 @@ export default function VendedoresPage() {
     setSaveError(null);
     setSaving(true);
     try {
+      const canEditStatus = Boolean(editingEmail && editingClerkId);
+      const statusToPersist = canEditStatus ? form.status : false;
       const { error: vendErr } = await supabase.from("vendedores").upsert(
         {
           email,
           company_id: companyId,
           nome: form.nome.trim() || null,
           celular: form.celular.trim() || null,
-          status: form.status,
+          status: statusToPersist,
         },
         { onConflict: "email" }
       );
@@ -621,10 +626,16 @@ export default function VendedoresPage() {
                   id="status"
                   checked={form.status}
                   onChange={(e) => setForm((f) => ({ ...f, status: e.target.checked }))}
+                  disabled={!editingEmail || !editingClerkId}
                   className="h-4 w-4 rounded border-input"
                 />
                 <Label htmlFor="status">Ativo</Label>
               </div>
+              {(!editingEmail || !editingClerkId) && (
+                <p className="text-xs text-muted-foreground">
+                  O vendedor permanece inativo ate concluir o registro no Clerk.
+                </p>
+              )}
               {!editingEmail && (
                 <div className="flex items-center gap-2">
                   <input

@@ -55,6 +55,23 @@ import {
 
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { getErrorMessage } from "@/lib/utils";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/** Envia webhook CRM quando estágio muda. Fire-and-forget (não bloqueia UI). */
+async function notifyCrmWebhook(
+  supabase: SupabaseClient,
+  id_lead: string | null,
+  external_id: string | null,
+  stage: string
+) {
+  try {
+    await supabase.functions.invoke("crm-webhook-stage-change", {
+      body: { id_lead, external_id, stage },
+    });
+  } catch (err) {
+    console.error("[crm-webhook] Erro ao notificar:", err);
+  }
+}
 import { useToast } from "@/hooks/use-toast";
 import { useSegmentType } from "@/hooks/use-segment-type";
 
@@ -85,7 +102,7 @@ interface Opportunity {
   product_id: string | null;
   lead_id: string | null;
   sinopse: string | null;
-  leads?: { name: string | null } | null;
+  leads?: { name: string | null; external_id: string | null } | null;
   vendedores?: { nome: string | null } | null;
 }
 
@@ -295,7 +312,7 @@ export default function OportunidadesPage() {
     try {
       const { data, error } = await supabase
         .from("leads")
-        .select("id, name")
+        .select("id, name, external_id")
         .eq("company_id", effectiveCompanyId)
         .order("name");
 
@@ -354,7 +371,7 @@ export default function OportunidadesPage() {
     try {
       const { data, error } = await supabase
         .from("opportunities")
-        .select("id, title, value, expected_closing_date, stage, seller_id, product_id, lead_id, sinopse, leads(name), vendedores!seller_id(nome)")
+        .select("id, title, value, expected_closing_date, stage, seller_id, product_id, lead_id, sinopse, leads(name, external_id), vendedores!seller_id(nome)")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -463,6 +480,12 @@ export default function OportunidadesPage() {
       setOpportunities((prev) =>
         prev.map((o) => (o.id === oppId ? { ...o, stage: targetStage! } : o))
       );
+      notifyCrmWebhook(
+        supabase,
+        opp.lead_id ?? null,
+        opp.leads?.external_id ?? null,
+        targetStage
+      );
       toast({ title: "Estágio atualizado", description: "A oportunidade foi movida." });
     } catch (err) {
       toast({
@@ -554,6 +577,14 @@ export default function OportunidadesPage() {
         .eq("company_id", effectiveCompanyId);
 
       if (error) throw error;
+      if (values.stage !== editingOpportunity.stage) {
+        const idLead = values.lead_id || editingOpportunity.lead_id;
+        const externalId =
+          leads.find((l) => l.id === idLead)?.external_id ??
+          editingOpportunity.leads?.external_id ??
+          null;
+        notifyCrmWebhook(supabase, idLead ?? null, externalId ?? null, values.stage);
+      }
       toast({
         title: "Oportunidade atualizada",
         description: "As alterações foram salvas.",

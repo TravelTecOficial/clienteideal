@@ -27,6 +27,7 @@ export function AdminPreviewPage() {
 
   useEffect(() => {
     if (!companyId || !supabase) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- early exit com estado inválido
       setStatus("error")
       return
     }

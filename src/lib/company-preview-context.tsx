@@ -22,6 +22,7 @@ export function CompanyPreviewProvider({
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- useCompanyPreview é hook
 export function useCompanyPreview() {
   return useContext(CompanyPreviewContext)
 }

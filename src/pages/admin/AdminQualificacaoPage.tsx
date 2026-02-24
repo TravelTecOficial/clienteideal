@@ -48,7 +48,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Plus, Loader2, Edit2, Trash2, Pencil, GripVertical, AlertCircle } from "lucide-react"
+import { Plus, Loader2, Trash2, Pencil, GripVertical, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface QualificacaoTemplateRow {

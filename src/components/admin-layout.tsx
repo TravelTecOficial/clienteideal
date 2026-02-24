@@ -19,7 +19,7 @@ import type { ReactNode } from "react"
 
 interface AdminLayoutProps {
   children: ReactNode
-  breadcrumb: { label: string; page?: string }
+  breadcrumb: { label: string; page?: string; parent?: { label: string; href: string } }
 }
 
 export function AdminLayout({ children, breadcrumb }: AdminLayoutProps) {
@@ -41,6 +41,16 @@ export function AdminLayout({ children, breadcrumb }: AdminLayoutProps) {
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
+              {breadcrumb.parent && (
+                <>
+                  <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbLink asChild>
+                      <Link to={breadcrumb.parent.href}>{breadcrumb.parent.label}</Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block" />
+                </>
+              )}
               <BreadcrumbItem>
                 <BreadcrumbPage>{breadcrumb.page ?? breadcrumb.label}</BreadcrumbPage>
               </BreadcrumbItem>

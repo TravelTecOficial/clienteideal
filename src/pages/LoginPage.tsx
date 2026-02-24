@@ -2,6 +2,7 @@ import { SignIn } from "@clerk/clerk-react"
 import { Link } from "react-router-dom"
 
 export function LoginPage() {
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-8">
       <div className="flex w-full max-w-sm flex-col items-center justify-center">

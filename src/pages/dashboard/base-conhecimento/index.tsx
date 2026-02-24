@@ -219,7 +219,9 @@ export default function BaseConhecimento() {
 
       if (error) throw error;
       const body = data as { error?: string };
-      if (body?.error) throw new Error(body.error);
+      if (body?.error) {
+        throw new Error(body.error);
+      }
 
       toast({
         title: "Documento carregado",

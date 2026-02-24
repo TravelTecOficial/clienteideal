@@ -134,7 +134,7 @@ export default function ChatConhecimento() {
     }
   }, []);
 
-  // Auto-scroll suave para a última mensagem
+  // Auto-scroll suave para a última mensagem (messages + isLoading suficientes)
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({

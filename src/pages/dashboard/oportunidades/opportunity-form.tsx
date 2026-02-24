@@ -61,6 +61,7 @@ export type OpportunityFormValues = z.infer<typeof opportunityFormSchema>;
 export interface LeadOption {
   id: string;
   name: string;
+  external_id?: string | null;
 }
 
 export interface ItemOption {
@@ -163,6 +164,7 @@ export function OpportunityForm({
       <div className="space-y-2">
         <Label>Estágio</Label>
         <Select
+          // eslint-disable-next-line react-hooks/incompatible-library -- form.watch do react-hook-form é padrão
           value={form.watch("stage")}
           onValueChange={(v: string) =>
             form.setValue("stage", v as OpportunityFormValues["stage"])

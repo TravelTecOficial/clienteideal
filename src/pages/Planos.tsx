@@ -26,6 +26,7 @@ type PlanType = "free" | "pro" | "enterprise"
 interface ProfileRow {
   id: string
   company_id: string | null
+  role: string | null
 }
 
 const PLANS: {
@@ -62,11 +63,11 @@ async function fetchProfileWithRetry(
   supabaseClient: SupabaseClient,
   userId: string,
   onRetry?: (attempt: number) => void
-): Promise<string | null> {
+): Promise<ProfileRow | null> {
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     const { data, error } = await supabaseClient
       .from("profiles")
-      .select("id, company_id")
+      .select("id, company_id, role")
       .eq("id", String(userId))
       .maybeSingle()
 
@@ -77,7 +78,7 @@ async function fetchProfileWithRetry(
 
     const profile = data as ProfileRow | null
     if (profile?.company_id) {
-      return profile.company_id
+      return profile
     }
 
     if (attempt < RETRY_ATTEMPTS) {
@@ -130,6 +131,45 @@ async function syncProfileDirect(
   email: string,
   fullName: string
 ): Promise<{ companyId: string } | { error: string }> {
+  const normalizedEmail = (email || "").trim().toLowerCase()
+  if (normalizedEmail) {
+    const { data: vendedorMatch } = await supabaseClient
+      .from("vendedores")
+      .select("company_id")
+      .eq("email", normalizedEmail)
+      .maybeSingle()
+
+    const invitedCompanyId =
+      (vendedorMatch as { company_id?: string | null } | null)?.company_id ?? null
+
+    if (invitedCompanyId) {
+      const { error: invitedProfileError } = await supabaseClient
+        .from("profiles")
+        .upsert(
+          {
+            id: userId,
+            email: normalizedEmail,
+            full_name: fullName,
+            company_id: invitedCompanyId,
+            role: "vendedor",
+          },
+          { onConflict: "id" }
+        )
+
+      if (invitedProfileError) {
+        return { error: invitedProfileError.message }
+      }
+
+      await supabaseClient
+        .from("vendedores")
+        .update({ clerk_id: userId, status: true })
+        .eq("email", normalizedEmail)
+        .eq("company_id", invitedCompanyId)
+
+      return { companyId: invitedCompanyId }
+    }
+  }
+
   const companyId = `company-${userId.replace(/^user_/, "")}`
   const { error: companyError } = await supabaseClient
     .from("companies")
@@ -206,7 +246,7 @@ export function Planos() {
   const supabaseClient = useSupabaseClient()
   const navigate = useNavigate()
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [status, setStatus] = useState<"idle" | "loading-profile" | "ready" | "processing" | "error">("idle")
+  const [status, setStatus] = useState<"idle" | "loading-profile" | "redirecting" | "ready" | "processing" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState<string>("")
 
   const loadProfile = useCallback(async () => {
@@ -215,9 +255,15 @@ export function Planos() {
     setErrorMsg("")
 
     try {
-      let id = await fetchProfileWithRetry(supabaseClient, user.id)
+      let profile = await fetchProfileWithRetry(supabaseClient, user.id)
 
-      if (!id) {
+      if (profile?.company_id && profile.role === "vendedor") {
+        setStatus("redirecting")
+        navigate("/dashboard", { replace: true, state: { fromPlanSelection: true } })
+        return
+      }
+
+      if (!profile?.company_id) {
         const primaryEmail = user.primaryEmailAddress?.emailAddress ?? ""
         const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim()
 
@@ -246,10 +292,14 @@ export function Planos() {
         }
 
         if ("companyId" in result) {
-          id = result.companyId
+          profile = {
+            id: user.id,
+            company_id: result.companyId,
+            role: "vendedor",
+          }
           // Em localhost: após sync bem-sucedido, vai direto ao dashboard
-          if (id && isLocalhost()) {
-            setCompanyId(id)
+          if (profile.company_id && isLocalhost()) {
+            setCompanyId(profile.company_id)
             setStatus("ready")
             navigate("/dashboard", { replace: true, state: { fromPlanSelection: true } })
             return
@@ -265,15 +315,15 @@ export function Planos() {
         }
       }
 
-      if (id) {
-        setCompanyId(id)
+      if (profile?.company_id) {
+        setCompanyId(profile.company_id)
         setStatus("ready")
       }
     } catch (err) {
       setStatus("error")
       setErrorMsg(err instanceof Error ? err.message : "Erro ao buscar perfil.")
     }
-  }, [user, getToken, supabaseClient])
+  }, [user, getToken, supabaseClient, navigate])
 
   useEffect(() => {
     if (!isLoaded) return
@@ -300,7 +350,7 @@ export function Planos() {
     navigate("/dashboard", { replace: true, state: { fromPlanSelection: true } })
   }
 
-  if (!isLoaded || status === "loading-profile") {
+  if (!isLoaded || status === "loading-profile" || status === "redirecting") {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-8">
         <Card className="w-full max-w-3xl">

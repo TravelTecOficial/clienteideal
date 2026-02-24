@@ -140,13 +140,66 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
   const companyId = `company-${sub.replace(/^user_/, "")}`
+  const normalizedEmail = (email || "").trim().toLowerCase()
 
   try {
     const { data: existing } = await supabase
       .from("profiles")
-      .select("id, company_id, email, full_name")
+      .select("id, company_id, email, full_name, role")
       .eq("id", sub)
       .maybeSingle()
+
+    const { data: vendedorMatch } = normalizedEmail
+      ? await supabase
+          .from("vendedores")
+          .select("company_id")
+          .eq("email", normalizedEmail)
+          .maybeSingle()
+      : { data: null }
+    const invitedCompanyId =
+      (vendedorMatch as { company_id?: string | null } | null)?.company_id ?? null
+
+    if (invitedCompanyId) {
+      const needsReconcile =
+        !existing?.company_id || existing.company_id !== invitedCompanyId || existing.role !== "vendedor"
+      if (needsReconcile) {
+        const { error: invitedProfileError } = await supabase.from("profiles").upsert(
+          {
+            id: sub,
+            email: normalizedEmail || email || "",
+            full_name: fullName,
+            company_id: invitedCompanyId,
+            role: "vendedor",
+          },
+          { onConflict: "id" }
+        )
+        if (invitedProfileError) {
+          return new Response(
+            JSON.stringify({ error: invitedProfileError.message }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          )
+        }
+      }
+
+      if (normalizedEmail) {
+        await supabase
+          .from("vendedores")
+          .update({ clerk_id: sub, status: true })
+          .eq("email", normalizedEmail)
+          .eq("company_id", invitedCompanyId)
+      }
+
+      return new Response(
+        JSON.stringify({ companyId: invitedCompanyId, created: !existing?.company_id }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      )
+    }
 
     if (existing?.company_id) {
       return new Response(
@@ -187,7 +240,7 @@ Deno.serve(async (req) => {
     const { error: profileError } = await supabase.from("profiles").upsert(
       {
         id: sub,
-        email: email || "",
+        email: normalizedEmail || email || "",
         full_name: fullName,
         company_id: companyId,
         role: "admin",

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- useSidebar e outros são hooks/utilitários */
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -647,9 +648,8 @@ const SidebarMenuSkeleton = React.forwardRef<
     showIcon?: boolean
   }
 >(({ className, showIcon = false, ...props }, ref) => {
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  const id = React.useId()
+  const width = `${50 + ((id.split("").reduce((a, c) => (a + c.charCodeAt(0)) % 40, 0)) % 40)}%`
 
   return (
     <div

@@ -160,13 +160,13 @@ Deno.serve(async (req) => {
 
     const role = invitedCompanyId ? "vendedor" : "admin"
 
-    const { error: profileError } = await supabase.from("profiles").insert({
+    const { error: profileError } = await supabase.from("profiles").upsert({
       id,
       email: primaryEmail ?? "",
       full_name: fullName,
       company_id: companyId,
       role,
-    })
+    }, { onConflict: "id" })
 
     if (profileError) {
       console.error("[clerk-webhook] Erro ao criar profile:", profileError)

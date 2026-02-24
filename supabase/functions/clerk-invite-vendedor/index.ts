@@ -24,6 +24,20 @@ interface InviteRequestBody {
   email?: string
 }
 
+function resolveInviteRedirectUrl(originHeader: string | null): string | null {
+  const configured = Deno.env.get("CLERK_INVITE_REDIRECT_URL")?.trim()
+  if (configured) return configured
+
+  if (!originHeader) return null
+  const isLocalhost =
+    originHeader.startsWith("http://localhost") ||
+    originHeader.startsWith("http://127.0.0.1")
+  const isHttps = originHeader.startsWith("https://")
+  if (!isLocalhost && !isHttps) return null
+
+  return `${originHeader.replace(/\/$/, "")}/cadastrar`
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
@@ -31,6 +45,7 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get("Authorization")
   const token = authHeader?.replace(/^Bearer\s+/i, "")
+  const originHeader = req.headers.get("origin")
 
   if (!token) {
     return new Response(
@@ -140,11 +155,20 @@ Deno.serve(async (req) => {
   const clerkClient = createClerkClient({ secretKey: clerkSecret })
 
   try {
-    await clerkClient.invitations.createInvitation({
+    const redirectUrl = resolveInviteRedirectUrl(originHeader)
+    const invitationPayload = {
       emailAddress: email,
       publicMetadata: { company_id: companyId },
       ignoreExisting: true,
-    })
+      ...(redirectUrl ? { redirectUrl } : {}),
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b7c1dd'},body:JSON.stringify({sessionId:'b7c1dd',runId:'invite-flow',hypothesisId:'H1',location:'supabase/functions/clerk-invite-vendedor/index.ts:createInvitation:before',message:'Criando convite Clerk',data:{hasCompanyId:Boolean(companyId),emailDomain:email.includes('@')?email.split('@')[1]:null,hasRedirectEnv:Boolean(Deno.env.get('CLERK_INVITE_REDIRECT_URL')),hasRedirectUrl:Boolean(redirectUrl),ignoreExisting:true},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
+    const invitation = await clerkClient.invitations.createInvitation(invitationPayload)
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b7c1dd'},body:JSON.stringify({sessionId:'b7c1dd',runId:'invite-flow',hypothesisId:'H1',location:'supabase/functions/clerk-invite-vendedor/index.ts:createInvitation:after',message:'Convite Clerk criado',data:{invitationId:invitation?.id ?? null,invitationStatus:(invitation as { status?: string } | null)?.status ?? null,hasPublicMetadata:Boolean((invitation as { publicMetadata?: unknown } | null)?.publicMetadata)},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
     console.error("[clerk-invite-vendedor] Erro ao criar convite:", err)
@@ -168,8 +192,17 @@ Deno.serve(async (req) => {
     )
   }
 
+  const responsePayload: Record<string, unknown> = {
+    success: true,
+    message: "Convite enviado com sucesso.",
+  }
+  if (Deno.env.get("DEBUG_INVITE_RESPONSE") === "true") {
+    responsePayload.redirectUrlUsed = resolveInviteRedirectUrl(originHeader)
+    responsePayload.originHeader = originHeader
+  }
+
   return new Response(
-    JSON.stringify({ success: true, message: "Convite enviado com sucesso." }),
+    JSON.stringify(responsePayload),
     {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

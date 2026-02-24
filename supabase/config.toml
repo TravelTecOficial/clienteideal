@@ -442,3 +442,15 @@ entrypoint = "./functions/evolution-webhook/index.ts"
 verify_jwt = false
 import_map = "./functions/chat-conhecimento-proxy/deno.json"
 entrypoint = "./functions/chat-conhecimento-proxy/index.ts"
+
+# upload-kb-to-webhook: recebe upload de KB com JWT do Clerk; valida internamente com verifyToken.
+[functions.upload-kb-to-webhook]
+verify_jwt = false
+import_map = "./functions/upload-kb-to-webhook/deno.json"
+entrypoint = "./functions/upload-kb-to-webhook/index.ts"
+
+# crm-webhook-stage-change: encaminha id_lead, external_id e stage ao webhook CRM quando oportunidade muda de estágio. Valida Clerk JWT.
+[functions.crm-webhook-stage-change]
+verify_jwt = false
+import_map = "./functions/crm-webhook-stage-change/deno.json"
+entrypoint = "./functions/crm-webhook-stage-change/index.ts"

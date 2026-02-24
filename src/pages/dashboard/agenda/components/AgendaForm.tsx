@@ -95,6 +95,7 @@ export function AgendaForm({
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- form.watch do react-hook-form é padrão
   const currentStatus = form.watch("status");
   const showCancelButton =
     mode === "edit" &&

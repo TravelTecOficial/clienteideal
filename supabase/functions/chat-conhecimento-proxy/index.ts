@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
 
   // Buscar webhook do Chat. Primeiro tenta config_type=chat e, se não existir,
   // usa qualquer webhook_testar_atendente preenchido (fallback compatível com schema atual).
-  const { data: chatConfig, error: chatConfigError } = await supabase
+  const { data: chatConfig } = await supabase
     .from("admin_webhook_config")
     .select("webhook_testar_atendente")
     .eq("config_type", "chat")
@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
     (chatConfig as { webhook_testar_atendente: string | null } | null)?.webhook_testar_atendente?.trim() || ""
 
   if (!webhookUrl) {
-    const { data: fallbackConfig, error: fallbackError } = await supabase
+    const { data: fallbackConfig } = await supabase
       .from("admin_webhook_config")
       .select("webhook_testar_atendente")
       .not("webhook_testar_atendente", "is", null)

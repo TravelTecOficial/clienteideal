@@ -98,6 +98,7 @@ export function PlanSelectionPage() {
   const [errorMsg, setErrorMsg] = useState<string>("")
   const [retryCount, setRetryCount] = useState(0)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- user?.id é mais estável que user para deps
   const loadProfile = useCallback(async () => {
     if (!user?.id) return
     setStatus("loading-profile")
@@ -131,6 +132,8 @@ export function PlanSelectionPage() {
       navigate("/entrar", { replace: true })
       return
     }
+    // Carregar perfil ao montar; loadProfile faz setState (padrão comum)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadProfile()
   }, [isLoaded, user, loadProfile, navigate])
 

@@ -65,7 +65,8 @@ export function AdminConfigPage() {
     } finally {
       setLoading(false)
     }
-  }, [getToken, supabase.functions, toast])
+  // toast é estável (useToast); exhaustive-deps reclama mas é necessário no catch
+  }, [getToken, supabase.functions])
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) return

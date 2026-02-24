@@ -240,7 +240,7 @@ Deno.serve(async (req) => {
         `${url}/instance/connectionState/${encodeURIComponent(instanceName)}`,
         { method: "GET", headers }
       )
-      const stateData = await stateRes.json().catch(() => ({}))
+      await stateRes.json().catch(() => ({}))
       const res = await fetch(`${url}/instance/connect/${encodeURIComponent(instanceName)}`, {
         method: "GET",
         headers,

@@ -66,6 +66,7 @@ interface Lead {
   phone: string | null;
   external_id: string | null;
   status: "Novo" | "Em Contato" | "Qualificado" | "Perdido";
+  classificacao: string | null;
   seller_id?: string | null;
 }
 
@@ -100,6 +101,7 @@ const leadFormSchema = z.object({
   phone: z.string().optional(),
   external_id: z.string().optional(),
   status: z.enum(["Novo", "Em Contato", "Qualificado", "Perdido"]),
+  classificacao: z.enum(["Frio", "Morno", "Quente"]).optional().nullable(),
   seller_id: z.string().optional(),
 });
 
@@ -111,6 +113,25 @@ const STATUS_OPTIONS = [
   { value: "Qualificado", label: "Qualificado" },
   { value: "Perdido", label: "Perdido" },
 ] as const;
+
+const CLASSIFICACAO_OPTIONS = [
+  { value: "none", label: "Não definido" },
+  { value: "Frio", label: "Frio" },
+  { value: "Morno", label: "Morno" },
+  { value: "Quente", label: "Quente" },
+] as const;
+
+/** Normaliza classificacao do banco (case-insensitive) para o formato do Select (Frio/Morno/Quente). */
+function normalizeClassificacao(
+  value: string | null | undefined
+): "Frio" | "Morno" | "Quente" | null {
+  if (!value || typeof value !== "string") return null;
+  const lower = value.trim().toLowerCase();
+  if (lower === "frio") return "Frio";
+  if (lower === "morno") return "Morno";
+  if (lower === "quente") return "Quente";
+  return null;
+}
 
 export default function LeadsPage() {
   const { userId } = useAuth();
@@ -137,6 +158,7 @@ export default function LeadsPage() {
       phone: "",
       external_id: "",
       status: "Novo",
+      classificacao: null,
       seller_id: "",
     },
   });
@@ -149,6 +171,7 @@ export default function LeadsPage() {
       phone: "",
       external_id: "",
       status: "Novo",
+      classificacao: null,
       seller_id: "",
     },
   });
@@ -191,7 +214,7 @@ export default function LeadsPage() {
     try {
       const { data, error } = await supabase
         .from("leads")
-        .select("id, name, email, phone, external_id, status, seller_id")
+        .select("id, name, email, phone, external_id, status, classificacao, seller_id")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -253,6 +276,20 @@ export default function LeadsPage() {
     }
   };
 
+  // Classificação Badge Color Helper (Frio, Morno, Quente)
+  const getClassificacaoColor = (classificacao: string | null) => {
+    switch (classificacao) {
+      case "Frio":
+        return "bg-blue-100 text-blue-700 hover:bg-blue-100";
+      case "Morno":
+        return "bg-yellow-100 text-yellow-700 hover:bg-yellow-100";
+      case "Quente":
+        return "bg-red-100 text-red-700 hover:bg-red-100";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
+
   // Create
   async function onSubmit(values: LeadFormValues) {
     if (!effectiveCompanyId || !userId) {
@@ -274,6 +311,7 @@ export default function LeadsPage() {
         external_id: values.external_id?.trim() || null,
         seller_id: values.seller_id || null,
         status: values.status,
+        classificacao: values.classificacao || null,
       });
 
       if (error) throw error;
@@ -289,6 +327,7 @@ export default function LeadsPage() {
         phone: "",
         external_id: "",
         status: "Novo",
+        classificacao: null,
         seller_id: "",
       });
       loadLeads();
@@ -313,12 +352,14 @@ export default function LeadsPage() {
   // Update
   function handleEditClick(lead: Lead) {
     setEditingLead(lead);
+    const normalizedClassificacao = normalizeClassificacao(lead.classificacao);
     editForm.reset({
       name: lead.name,
       email: lead.email ?? "",
       phone: lead.phone ?? "",
       external_id: lead.external_id ?? "",
       status: lead.status,
+      classificacao: normalizedClassificacao,
       seller_id: lead.seller_id ?? "",
     });
     setIsEditDialogOpen(true);
@@ -337,6 +378,7 @@ export default function LeadsPage() {
           external_id: values.external_id?.trim() || null,
           seller_id: values.seller_id || null,
           status: values.status,
+          classificacao: values.classificacao || null,
         })
         .eq("id", editingLead.id)
         .eq("company_id", effectiveCompanyId);
@@ -471,6 +513,26 @@ export default function LeadsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <Label>Classificação</Label>
+                  <Select
+                    value={form.watch("classificacao") ?? "none"}
+                    onValueChange={(v: string) =>
+                      form.setValue("classificacao", v === "none" ? null : (v as "Frio" | "Morno" | "Quente"))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CLASSIFICACAO_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Status Inicial</Label>
                   <Select
                     value={form.watch("status")}
@@ -556,7 +618,10 @@ export default function LeadsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[250px]">Lead</TableHead>
+              <TableHead className="w-[200px]">Nome</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Celular</TableHead>
+              <TableHead>Classificação</TableHead>
               <TableHead>External ID</TableHead>
               <TableHead>Vendedor</TableHead>
               <TableHead>Status</TableHead>
@@ -566,13 +631,13 @@ export default function LeadsPage() {
           <TableBody>
             {isFetching ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   Carregando...
                 </TableCell>
               </TableRow>
             ) : filteredLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   {searchQuery
                     ? "Nenhum lead encontrado para a busca."
                     : "Nenhum lead encontrado. Use o botão acima para cadastrar."}
@@ -581,13 +646,23 @@ export default function LeadsPage() {
             ) : (
               filteredLeads.map((lead) => (
                 <TableRow key={lead.id}>
+                  <TableCell className="font-medium text-gray-900">
+                    {lead.name}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {lead.email ?? "-"}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {lead.phone ?? "-"}
+                  </TableCell>
                   <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium text-gray-900">{lead.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {lead.email ?? "-"}
-                      </span>
-                    </div>
+                    {lead.classificacao ? (
+                      <Badge className={getClassificacaoColor(lead.classificacao)}>
+                        {lead.classificacao}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-gray-500">
                     {lead.external_id || "-"}
@@ -699,6 +774,26 @@ export default function LeadsPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Classificação</Label>
+                <Select
+                  value={editForm.watch("classificacao") ?? "none"}
+                  onValueChange={(v: string) =>
+                    editForm.setValue("classificacao", v === "none" ? null : (v as "Frio" | "Morno" | "Quente"))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLASSIFICACAO_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select

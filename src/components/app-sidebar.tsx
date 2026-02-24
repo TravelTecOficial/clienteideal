@@ -17,6 +17,7 @@ import {
   Settings,
   HandCoins,
   MessageSquare,
+  Bot,
 } from "lucide-react"
 
 import { SearchForm } from "@/components/search-form"
@@ -52,6 +53,7 @@ const navItemsBase = [
   { title: "Atendimentos", url: "/dashboard/atendimentos", icon: Headphones },
   { title: "Base de conhecimento", url: "/dashboard/base-conhecimento", icon: BookOpen },
   { title: "Chat de conhecimento", url: "/dashboard/chat-conhecimento", icon: MessageSquare },
+  { title: "Prompt de Atendimento", url: "/dashboard/prompt-atendimento", icon: Bot },
   { title: "Produtos & Serviços", url: "/dashboard/items", icon: Package, segmentFilter: "produtos" as const },
   { title: "Consórcios", url: "/dashboard/consorcio", icon: HandCoins, segmentFilter: "consorcio" as const },
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
