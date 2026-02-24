@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const supabaseUrl = env.VITE_SUPABASE_URL?.replace(/\/$/, '')
   const chatProxyUrl = supabaseUrl
-    ? `${supabaseUrl}/functions/v1/chat-conhecimento-proxy-fix2`
+    ? `${supabaseUrl}/functions/v1/chat-conhecimento-proxy`
     : null
 
   let chatProxy: Record<string, unknown> = {}

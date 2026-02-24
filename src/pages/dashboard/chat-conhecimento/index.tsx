@@ -159,7 +159,7 @@ export default function ChatConhecimento() {
       if (!token) throw new Error("Token indisponível.");
 
       const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-      const proxyUrl = isLocalhost ? "/api/chat-conhecimento" : `${SUPABASE_URL}/functions/v1/chat-conhecimento-proxy-fix2`;
+      const proxyUrl = isLocalhost ? "/api/chat-conhecimento" : `${SUPABASE_URL}/functions/v1/chat-conhecimento-proxy`;
 
       const response = await fetch(proxyUrl, {
         method: "POST",
