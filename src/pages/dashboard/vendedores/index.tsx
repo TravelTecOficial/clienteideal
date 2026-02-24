@@ -258,18 +258,38 @@ export default function VendedoresPage() {
     try {
       const canEditStatus = Boolean(editingEmail && editingClerkId);
       const statusToPersist = canEditStatus ? form.status : false;
-      const { error: vendErr } = await supabase.from("vendedores").upsert(
-        {
-          email,
-          company_id: companyId,
-          nome: form.nome.trim() || null,
-          celular: form.celular.trim() || null,
-          status: statusToPersist,
-        },
-        { onConflict: "email" }
-      );
+      const isEdit = Boolean(editingEmail);
+      const insertId = `vend_${crypto.randomUUID()}`;
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId:"post-fix",hypothesisId:"H8",location:"src/pages/dashboard/vendedores/index.tsx:265",message:"Saving vendedor payload",data:{isEdit,email,companyId,hasClerkId:Boolean(editingClerkId),hasIdInPayload:!isEdit,statusToPersist,insertId:!isEdit?insertId:null},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
+      const vendedorPayload = {
+        email,
+        company_id: companyId,
+        nome: form.nome.trim() || null,
+        celular: form.celular.trim() || null,
+        status: statusToPersist,
+      };
+      let vendErr: { message?: string; code?: string; details?: string; hint?: string } | null = null;
+      if (isEdit) {
+        const { error } = await supabase
+          .from("vendedores")
+          .update(vendedorPayload)
+          .eq("email", email)
+          .eq("company_id", companyId);
+        vendErr = error as { message?: string; code?: string; details?: string; hint?: string } | null;
+      } else {
+        const { error } = await supabase.from("vendedores").insert({
+          id: insertId,
+          ...vendedorPayload,
+        });
+        vendErr = error as { message?: string; code?: string; details?: string; hint?: string } | null;
+      }
 
       if (vendErr) {
+        // #region agent log
+        fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"ef5fa3"},body:JSON.stringify({sessionId:"ef5fa3",runId:"post-fix",hypothesisId:"H9",location:"src/pages/dashboard/vendedores/index.tsx:292",message:"Saving vendedor failed",data:{message:vendErr.message,code:String(vendErr.code ?? ""),details:String(vendErr.details ?? ""),hint:String(vendErr.hint ?? ""),isEdit},timestamp:Date.now()})}).catch(()=>{})
+        // #endregion
         setSaveError(vendErr.message ?? "Erro ao salvar vendedor.");
         return;
       }
