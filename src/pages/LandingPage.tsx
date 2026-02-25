@@ -82,14 +82,13 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <Link
             to="/"
-            className="text-2xl font-bold tracking-tighter flex items-center gap-2 text-secondary"
+            className="flex items-center text-secondary"
           >
             <img
               src="/logo-cliente-ideal.png"
-              alt="Cliente Ideal"
-              className="h-8 w-8 object-contain"
+              alt="CLIENTE IDEAL Online"
+              className="h-10 md:h-12 object-contain"
             />
-            CLIENTE <span className="text-primary font-extrabold">IDEAL</span>
           </Link>
 
           <div className="hidden lg:flex space-x-8 text-sm font-semibold text-foreground/70">
@@ -293,13 +292,12 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
             <div className="md:col-span-2">
-              <div className="flex items-center gap-2 text-2xl font-bold mb-6 text-primary-foreground">
+              <div className="mb-6">
                 <img
                   src="/logo-cliente-ideal.png"
-                  alt="Cliente Ideal"
-                  className="h-10 w-10 object-contain"
+                  alt="CLIENTE IDEAL Online"
+                  className="h-12 md:h-14 object-contain"
                 />
-                CLIENTE <span className="opacity-80 font-normal">IDEAL</span>
               </div>
               <p className="text-primary-foreground/70 max-w-sm mb-8 leading-relaxed">
                 O futuro do atendimento conversacional com design humanizado.
