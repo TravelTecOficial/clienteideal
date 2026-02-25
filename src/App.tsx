@@ -4,6 +4,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { AdminPage } from "@/pages/admin/AdminPage"
 import { AdminConfigPage } from "@/pages/admin/AdminConfigPage"
 import { AdminEvolutionPage } from "@/pages/admin/AdminEvolutionPage"
+import { AdminGtmPage } from "@/pages/admin/AdminGtmPage"
 import { AdminPreviewPage } from "@/pages/admin/AdminPreviewPage"
 import { AdminPersonasPage } from "@/pages/admin/AdminPersonasPage"
 import { AdminQualificacaoPage } from "@/pages/admin/AdminQualificacaoPage"
@@ -35,6 +36,7 @@ import { StyleguidePage } from "@/styleguide/StyleguidePage"
 import { componentShowcases, blockShowcases } from "@/styleguide/registry"
 import { LandingPage } from "@/pages/LandingPage"
 import { PrecosPage } from "@/pages/PrecosPage"
+import { GtmInjector } from "@/components/GtmInjector"
 
 function ShowcaseFallback() {
   return <div className="flex min-h-[200px] items-center justify-center p-8 text-muted-foreground">Carregando…</div>
@@ -60,6 +62,7 @@ function App() {
   return (
     <BrowserRouter>
       <Toaster />
+      <GtmInjector />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/precos" element={<PrecosPage />} />
@@ -263,6 +266,14 @@ function App() {
           element={
             <SupabaseProvider>
               <AdminEvolutionPage />
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/gtm"
+          element={
+            <SupabaseProvider>
+              <AdminGtmPage />
             </SupabaseProvider>
           }
         />

@@ -425,6 +425,12 @@ verify_jwt = false
 [functions.admin-evolution-config]
 verify_jwt = false
 
+[functions.admin-gtm-config]
+verify_jwt = false
+
+[functions.get-gtm-config]
+verify_jwt = false
+
 [functions.admin-qualificacao-templates]
 verify_jwt = false
 

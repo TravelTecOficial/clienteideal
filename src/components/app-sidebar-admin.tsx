@@ -44,6 +44,7 @@ const adminNavMain = [
     items: [
       { title: "Configurações", url: "/admin/configuracoes" },
       { title: "Evolution API", url: "/admin/evolution" },
+      { title: "Google Tag Manager", url: "/admin/gtm" },
       { title: "Planos", url: "/planos" },
     ],
   },
