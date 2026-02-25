@@ -298,6 +298,7 @@ export function LandingPage() {
                   alt="CLIENTE IDEAL Online"
                   className="h-12 md:h-14 object-contain"
                 />
+                <div className="mt-3 bg-white rounded-xl h-4 w-full max-w-[240px]" aria-hidden />
               </div>
               <p className="text-primary-foreground/70 max-w-sm mb-8 leading-relaxed">
                 O futuro do atendimento conversacional com design humanizado.
