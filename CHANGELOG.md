@@ -7,6 +7,32 @@ e o projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [1.1.5] - 2026-02-26
+
+### Adicionado
+
+- **Leads — Status "Cliente"** — Novo status quando oportunidade converte (stage=ganho). Trigger automático atualiza lead para Cliente.
+- **Leads — UTM e rastreamento** — Campos `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `utm_id`, `gclid`, `fbclid` para integrações (N8N, formulários).
+- **Leads — Demografia e localização** — Campos `data_nascimento`, `idade`, `cep`, `ip`, `item_id` (produto de interesse).
+- **Leads — Importação CSV** — Modal para importar leads em lote via arquivo CSV.
+- **Leads — Formulário em página dedicada** — Criação/edição de leads em rota `/dashboard/leads/novo` e `/dashboard/leads/:id`.
+- **Campanhas de Anúncios** — Nova tabela `campanhas_anuncios` para cadastro de campanhas por empresa (futura associação com Cliente Ideal).
+- **Configurações — Empresa expandida** — Mais opções de configuração na página de Configurações.
+- **Prompt de Atendimento** — Suporte multi-empresa e melhorias na interface.
+- **Documentação** — `docs/LEADS_API_PAYLOAD.md` com payload para integrações (N8N, webhooks, formulários).
+
+### Banco de Dados
+
+- **`leads`** — Status "Cliente", colunas UTM, demografia, `item_id`; constraint `leads_status_check` atualizada.
+- **`campanhas_anuncios`** — Nova tabela com RLS.
+- **Triggers** — `set_lead_cliente_on_opportunity_ganho` em `opportunities` (INSERT/UPDATE).
+
+### Documentos Relacionados
+
+- [LEADS_API_PAYLOAD.md](./docs/LEADS_API_PAYLOAD.md) — Payload para integrações.
+
+---
+
 ## [1.0.3] - 2026-02-26
 
 ### Adicionado

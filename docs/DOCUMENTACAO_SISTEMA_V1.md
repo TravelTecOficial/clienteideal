@@ -1,4 +1,4 @@
-# Documentação Completa — Cliente Ideal Online v1.1.0
+# Documentação Completa — Cliente Ideal Online v1.1.5
 
 ## Índice
 1. [Visão Geral](#1-visão-geral)
@@ -134,7 +134,9 @@ O sistema é **multitenant**: cada empresa (company) tem seus próprios dados is
 | `/dashboard` | Visão geral (Indicadores) |
 | `/dashboard/cliente-ideal` | Perfis de cliente ideal |
 | `/dashboard/qualificador` | Qualificadores |
-| `/dashboard/leads` | Leads |
+| `/dashboard/leads` | Leads (listagem) |
+| `/dashboard/leads/novo` | Novo lead (formulário) |
+| `/dashboard/leads/:id` | Editar lead (formulário) |
 | `/dashboard/oportunidades` | Oportunidades (pipeline) |
 | `/dashboard/agenda` | Agenda / Reuniões |
 | `/dashboard/atendimentos` | Atendimentos IA |
@@ -151,6 +153,7 @@ O sistema é **multitenant**: cada empresa (company) tem seus próprios dados is
 | `/admin/configuracoes` | Webhooks e Evolution API (Admin SaaS) |
 | `/admin/evolution` | Configuração Evolution API (Admin SaaS) |
 | `/admin/preview/:companyId` | Preview como empresa (Admin SaaS) |
+| `/admin/gtm` | Configuração Google Tag Manager (Admin SaaS) |
 
 ### 5.3 Fluxo de Seleção de Plano
 
@@ -547,6 +550,7 @@ Rota `/styleguide` — galeria de componentes e blocos para referência e desenv
 | Documento | Descrição |
 |-----------|-----------|
 | [DEPLOY.md](../DEPLOY.md) | Guia de deploy para produção |
+| [LEADS_API_PAYLOAD.md](./LEADS_API_PAYLOAD.md) | Payload de leads para integrações (N8N, webhooks, formulários) |
 | [AMBIENTES-DEV-PROD.md](./AMBIENTES-DEV-PROD.md) | Configuração dev vs prod |
 | [SETUP-CLERK-SUPABASE-AUTH.md](./SETUP-CLERK-SUPABASE-AUTH.md) | Integração Clerk + Supabase |
 | [SETUP-CLERK-SECRET.md](./SETUP-CLERK-SECRET.md) | Configuração de secrets do Clerk |

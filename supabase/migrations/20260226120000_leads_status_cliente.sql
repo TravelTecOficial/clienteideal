@@ -38,12 +38,14 @@ BEGIN
 END;
 $$;
 
--- 3. Triggers
+-- 3. Triggers (DROP IF EXISTS para idempotência em re-runs)
+DROP TRIGGER IF EXISTS trg_opportunities_set_lead_cliente_on_insert ON public.opportunities;
 CREATE TRIGGER trg_opportunities_set_lead_cliente_on_insert
   AFTER INSERT ON public.opportunities
   FOR EACH ROW
   EXECUTE FUNCTION public.set_lead_cliente_on_opportunity_ganho();
 
+DROP TRIGGER IF EXISTS trg_opportunities_set_lead_cliente_on_update ON public.opportunities;
 CREATE TRIGGER trg_opportunities_set_lead_cliente_on_update
   AFTER UPDATE ON public.opportunities
   FOR EACH ROW

@@ -64,6 +64,8 @@ npx supabase functions deploy evolution-proxy --project-ref $PROJECT_REF
 npx supabase functions deploy evolution-webhook --project-ref $PROJECT_REF
 npx supabase functions deploy chat-conhecimento-proxy --project-ref $PROJECT_REF
 npx supabase functions deploy upload-kb-to-webhook --project-ref $PROJECT_REF
+npx supabase functions deploy admin-gtm-config --project-ref $PROJECT_REF
+npx supabase functions deploy get-gtm-config --project-ref $PROJECT_REF
 ```
 
 ---
@@ -130,11 +132,29 @@ npx supabase functions deploy upload-kb-to-webhook --project-ref $PROJECT_REF
 
 ---
 
-## 8. Checklist Final
+## 8. Migrações Pendentes (Deploy 2026-02-26)
 
+Se este é o primeiro deploy após as alterações de v1.1.5, as seguintes migrações serão aplicadas automaticamente pelo `db push` (ordem por timestamp):
+
+| Migração | Descrição |
+|----------|-----------|
+| `20260226120000_leads_status_cliente.sql` | Status "Cliente" + trigger em opportunities |
+| `20260226130000_leads_flag_cliente.sql` | Flag cliente em leads |
+| `20260226140000_ideal_customers_identifying_phrase.sql` | Frase de identificação no Cliente Ideal |
+| `20260226150000_prompt_atendimento_multi_per_company.sql` | Prompt multi-empresa |
+| `20260226160000_campanhas_anuncios.sql` | Tabela campanhas_anuncios |
+| `20260226170000_leads_utm_demografia.sql` | UTM, demografia, item_id em leads |
+
+**Script opcional** (se precisar aplicar campanhas manualmente): `supabase/scripts/apply_campanhas_anuncios.sql`
+
+---
+
+## 9. Checklist Final
+
+- [ ] **Pré-deploy**: Commit e push de todas as alterações locais para `main`
 - [ ] Variáveis de ambiente configuradas
-- [ ] Migrações aplicadas no Supabase PROD (se necessário)
-- [ ] Edge Functions deployadas
+- [ ] Migrações aplicadas no Supabase PROD (`npx supabase db push`)
+- [ ] Edge Functions deployadas (se houver alterações)
 - [ ] Clerk: domínio e redirect URLs
 - [ ] Supabase: Site URL e Redirect URLs
 - [ ] n8n: CORS do domínio de produção

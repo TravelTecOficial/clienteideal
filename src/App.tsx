@@ -20,6 +20,7 @@ import { ClienteIdealPage } from "@/pages/dashboard/ClienteIdealPage"
 import { ClienteIdealFormPage } from "@/pages/dashboard/ideal-customer/ClienteIdealFormPage"
 import { QualificadorPage } from "@/pages/dashboard/QualificadorPage"
 import { LeadsPage } from "@/pages/dashboard/LeadsPage"
+import { LeadFormPage } from "@/pages/dashboard/leads/LeadFormPage"
 import { OportunidadesPage } from "@/pages/dashboard/OportunidadesPage"
 import { AgendaPage } from "@/pages/dashboard/AgendaPage"
 import { AtendimentosPage } from "@/pages/dashboard/AtendimentosPage"
@@ -137,6 +138,26 @@ function App() {
             <SupabaseProvider>
               <ProtectedRoute>
                 <QualificadorPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/leads/novo"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <LeadFormPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/leads/:id"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <LeadFormPage />
               </ProtectedRoute>
             </SupabaseProvider>
           }

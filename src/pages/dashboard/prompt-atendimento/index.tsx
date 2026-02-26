@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "@clerk/clerk-react"
 import { useForm } from "react-hook-form"
@@ -45,6 +45,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useSupabaseClient } from "@/lib/supabase-context"
 import { getErrorMessage } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -106,7 +112,7 @@ async function fetchCompanyId(
 }
 
 const formSchema = z.object({
-  name: z.string().optional(),
+  name: z.string().min(1, "Nome do prompt é obrigatório"),
   fluxo_objetivo: z.string().optional(),
   prompt_template_id: z.string().optional(),
   follow_up_active: z.boolean().default(false),
@@ -126,6 +132,20 @@ const formSchema = z.object({
 })
 
 type FormValues = z.infer<typeof formSchema>
+
+const DEFAULT_EMPTY_VALUES: FormValues = {
+  name: "",
+  fluxo_objetivo: "",
+  prompt_template_id: "",
+  follow_up_active: false,
+  follow_up_tempo: 24,
+  follow_up_tentativas: 3,
+  nome_atendente: "",
+  principais_instrucoes: "",
+  papel: "",
+  tom_voz: "",
+  persona_id: "",
+}
 
 function getDisplayLabel(row: PromptAtendimentoRow, personas: PersonaOption[]): string {
   if (row.name?.trim()) return row.name
@@ -186,11 +206,14 @@ function PromptForm({
   const followUpActive = form.watch("follow_up_active")
   const currentFluxo = form.watch("fluxo_objetivo")
 
+  // Reset apenas ao trocar de contexto (edição de outro item ou novo), não em re-renders do parent
+  const prevEditingIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (initialValues) {
-      form.reset(initialValues)
+    if (editingId !== prevEditingIdRef.current) {
+      prevEditingIdRef.current = editingId
+      form.reset(editingId && initialValues ? initialValues : DEFAULT_EMPTY_VALUES)
     }
-  }, [initialValues, form])
+  }, [editingId, initialValues, form])
 
   useEffect(() => {
     if (currentFluxo) onLoadTemplates(currentFluxo)
@@ -231,12 +254,17 @@ function PromptForm({
   return (
     <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
       <div className="space-y-2">
-        <Label htmlFor="prompt-name">Nome do prompt (opcional)</Label>
+        <Label htmlFor="prompt-name">Nome do prompt</Label>
         <Input
           id="prompt-name"
           placeholder="Ex: Atendimento B2B"
           {...form.register("name")}
         />
+        {form.formState.errors.name && (
+          <p className="text-xs text-destructive">
+            {form.formState.errors.name.message}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -608,6 +636,26 @@ export function PromptAtendimentoPage() {
   const editingRow = editingId ? prompts.find((p) => p.id === editingId) : null
   const editingValues = editingRow ? rowToFormValues(editingRow) : null
 
+  // Consistência: cada prompt deve ter um Persona. Só permite novo prompt se existir persona sem prompt.
+  const personaIdsWithPrompt = new Set(
+    prompts.filter((p) => p.persona_id).map((p) => p.persona_id as string)
+  )
+  const canCreateNewPrompt = personas.some((p) => !personaIdsWithPrompt.has(p.id))
+
+  function handleNovoPromptClick() {
+    if (!canCreateNewPrompt) {
+      toast({
+        variant: "destructive",
+        title: "Cliente Ideal necessário",
+        description:
+          "É preciso criar um novo Cliente Ideal para criar um novo prompt. Cada prompt deve estar associado a um Persona.",
+      })
+      return
+    }
+    setIsNewOpen(true)
+    setEditingId(null)
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -647,19 +695,58 @@ export function PromptAtendimentoPage() {
                   </CardTitle>
                   <CardDescription>
                     Crie múltiplos prompts e associe cada um a um cliente ideal (persona). A IA usará o prompt específico conforme o persona do lead.
+                    {!canCreateNewPrompt && companyId && (
+                      <span className="block mt-2 text-amber-600 dark:text-amber-500">
+                        {personas.length === 0 ? (
+                          <>
+                            Nenhum Cliente Ideal cadastrado.{" "}
+                            <Link
+                              to="/dashboard/cliente-ideal/novo?returnTo=/dashboard/prompt-atendimento"
+                              className="underline hover:no-underline font-medium"
+                            >
+                              Crie um Cliente Ideal
+                            </Link>{" "}
+                            para criar prompts.
+                          </>
+                        ) : (
+                          <>
+                            Todos os Clientes Ideais já possuem prompt.{" "}
+                            <Link
+                              to="/dashboard/cliente-ideal/novo?returnTo=/dashboard/prompt-atendimento"
+                              className="underline hover:no-underline font-medium"
+                            >
+                              Crie um novo Cliente Ideal
+                            </Link>{" "}
+                            para adicionar outro prompt.
+                          </>
+                        )}
+                      </span>
+                    )}
                   </CardDescription>
                 </div>
-                <Button
-                  onClick={() => {
-                    setIsNewOpen(true)
-                    setEditingId(null)
-                  }}
-                  disabled={!companyId}
-                  className="bg-[#556b2f] hover:bg-[#4a5f28] text-white"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Novo Prompt
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-block">
+                        <Button
+                          onClick={handleNovoPromptClick}
+                          disabled={!companyId || !canCreateNewPrompt}
+                          className="bg-[#556b2f] hover:bg-[#4a5f28] text-white disabled:opacity-50"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Novo Prompt
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {(!canCreateNewPrompt || !companyId) && (
+                      <TooltipContent side="bottom" className="max-w-xs">
+                        {!companyId
+                          ? "Aguarde o carregamento da empresa."
+                          : "É preciso criar um novo Cliente Ideal para criar um novo prompt. Cada prompt deve estar associado a um Persona."}
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </CardHeader>
             <CardContent>

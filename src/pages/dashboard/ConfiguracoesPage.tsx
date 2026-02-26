@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2 } from "lucide-react";
+import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2, Trash2, Pencil } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -82,6 +82,20 @@ interface Pagamento {
   valor: number;
 }
 
+interface Campanha {
+  id: string;
+  nome: string;
+  campaign_id: string;
+  plataforma: string;
+  ideal_customer_id: string | null;
+  ideal_customers?: { profile_name: string | null } | null;
+}
+
+interface IdealCustomerOption {
+  id: string;
+  profile_name: string | null;
+}
+
 // --- Helpers ---
 async function fetchCompanyId(
   supabase: SupabaseClient,
@@ -144,14 +158,30 @@ const evolutionFormSchema = z.object({
   evolution_instance_name: z.string().optional(),
 });
 
+const campanhaFormSchema = z.object({
+  nome: z.string().min(1, "Nome da campanha é obrigatório"),
+  campaign_id: z.string().min(1, "ID da campanha é obrigatório"),
+  plataforma: z.string().min(1, "Selecione a plataforma"),
+  ideal_customer_id: z.string().optional(),
+});
+
 type EmpresaFormValues = z.infer<typeof empresaFormSchema>;
 type DadosFormValues = z.infer<typeof dadosFormSchema>;
 type PagamentoFormValues = z.infer<typeof pagamentoFormSchema>;
+type CampanhaFormValues = z.infer<typeof campanhaFormSchema>;
 type EvolutionFormValues = z.infer<typeof evolutionFormSchema>;
 
 const PLATAFORMA_OPTIONS = [
   { value: "Google Ads", label: "Google Ads" },
   { value: "Meta Ads", label: "Meta Ads" },
+] as const;
+
+const PLATAFORMA_CAMPANHA_OPTIONS = [
+  { value: "Google Ads", label: "Google Ads" },
+  { value: "Meta Ads", label: "Meta Ads" },
+  { value: "TikTok Ads", label: "TikTok Ads" },
+  { value: "LinkedIn Ads", label: "LinkedIn Ads" },
+  { value: "Outro", label: "Outro" },
 ] as const;
 
 // --- Component ---
@@ -169,6 +199,12 @@ export function ConfiguracoesPage() {
   const [isFetchingPagamentos, setIsFetchingPagamentos] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSavingPagamento, setIsSavingPagamento] = useState(false);
+  const [campanhas, setCampanhas] = useState<Campanha[]>([]);
+  const [idealCustomers, setIdealCustomers] = useState<IdealCustomerOption[]>([]);
+  const [isFetchingCampanhas, setIsFetchingCampanhas] = useState(true);
+  const [isModalCampanhaOpen, setIsModalCampanhaOpen] = useState(false);
+  const [editingCampanha, setEditingCampanha] = useState<Campanha | null>(null);
+  const [isSavingCampanha, setIsSavingCampanha] = useState(false);
   const [isFetchingEvolution, setIsFetchingEvolution] = useState(true);
   const [isSavingEvolution, setIsSavingEvolution] = useState(false);
   const [qrCodeBase64, setQrCodeBase64] = useState<string | null>(null);
@@ -245,6 +281,16 @@ export function ConfiguracoesPage() {
       data: "",
       plataforma: undefined,
       valor: 0,
+    },
+  });
+
+  const campanhaForm = useForm<CampanhaFormValues>({
+    resolver: zodResolver(campanhaFormSchema),
+    defaultValues: {
+      nome: "",
+      campaign_id: "",
+      plataforma: "",
+      ideal_customer_id: "",
     },
   });
 
@@ -366,6 +412,65 @@ export function ConfiguracoesPage() {
   useEffect(() => {
     loadPagamentos();
   }, [loadPagamentos]);
+
+  // Carregar Personas (Clientes Ideais)
+  const loadIdealCustomers = useCallback(async () => {
+    if (!companyId) {
+      setIdealCustomers([]);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("ideal_customers")
+        .select("id, profile_name")
+        .eq("company_id", companyId)
+        .order("profile_name", { ascending: true });
+
+      if (error) throw error;
+      setIdealCustomers((data as IdealCustomerOption[]) ?? []);
+    } catch (err) {
+      console.error("Erro ao carregar Personas:", err);
+      setIdealCustomers([]);
+    }
+  }, [companyId, supabase]);
+
+  useEffect(() => {
+    loadIdealCustomers();
+  }, [loadIdealCustomers]);
+
+  // Carregar campanhas
+  const loadCampanhas = useCallback(async () => {
+    if (!companyId) {
+      setIsFetchingCampanhas(false);
+      setCampanhas([]);
+      return;
+    }
+    setIsFetchingCampanhas(true);
+    try {
+      const { data, error } = await supabase
+        .from("campanhas_anuncios")
+        .select("id, nome, campaign_id, plataforma, ideal_customer_id, ideal_customers(profile_name)")
+        .eq("company_id", companyId)
+        .order("nome", { ascending: true });
+
+      if (error) throw error;
+      setCampanhas((data as Campanha[]) ?? []);
+    } catch (err) {
+      console.error("Erro ao carregar campanhas:", err);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Falha ao carregar campanhas.",
+      });
+      setCampanhas([]);
+    } finally {
+      setIsFetchingCampanhas(false);
+    }
+  }, [companyId, supabase, toast]);
+
+  useEffect(() => {
+    loadCampanhas();
+  }, [loadCampanhas]);
 
   // Carregar configuração Evolution API (URL e API Key são configuradas apenas no Admin)
   const loadEvolution = useCallback(async () => {
@@ -524,6 +629,106 @@ export function ConfiguracoesPage() {
       });
     } finally {
       setIsSavingPagamento(false);
+    }
+  }
+
+  // Salvar campanha (modal) - criar ou editar
+  async function onCampanhaSubmit(values: CampanhaFormValues) {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Empresa não identificada.",
+      });
+      return;
+    }
+    setIsSavingCampanha(true);
+    try {
+      const payload = {
+        nome: values.nome.trim(),
+        campaign_id: values.campaign_id.trim(),
+        plataforma: values.plataforma,
+        ideal_customer_id: values.ideal_customer_id?.trim() || null,
+      };
+
+      if (editingCampanha) {
+        const { error } = await supabase
+          .from("campanhas_anuncios")
+          .update(payload)
+          .eq("id", editingCampanha.id)
+          .eq("company_id", companyId);
+
+        if (error) throw error;
+
+        toast({
+          title: "Campanha atualizada",
+          description: "A campanha foi atualizada com sucesso.",
+        });
+      } else {
+        const { error } = await supabase.from("campanhas_anuncios").insert({
+          company_id: companyId,
+          ...payload,
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Campanha cadastrada",
+          description: "A campanha foi registrada com sucesso.",
+        });
+      }
+
+      setIsModalCampanhaOpen(false);
+      setEditingCampanha(null);
+      campanhaForm.reset({
+        nome: "",
+        campaign_id: "",
+        plataforma: "",
+        ideal_customer_id: "",
+      });
+      loadCampanhas();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: editingCampanha ? "Erro ao atualizar" : "Erro ao cadastrar",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSavingCampanha(false);
+    }
+  }
+
+  // Abrir modal para editar campanha
+  function openCampanhaEdit(c: Campanha) {
+    setEditingCampanha(c);
+    campanhaForm.reset({
+      nome: c.nome,
+      campaign_id: c.campaign_id,
+      plataforma: c.plataforma,
+      ideal_customer_id: c.ideal_customer_id ?? "",
+    });
+    setIsModalCampanhaOpen(true);
+  }
+
+  // Excluir campanha
+  async function onCampanhaDelete(id: string) {
+    if (!companyId) return;
+    try {
+      const { error } = await supabase.from("campanhas_anuncios").delete().eq("id", id).eq("company_id", companyId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Campanha excluída",
+        description: "A campanha foi removida.",
+      });
+      loadCampanhas();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao excluir",
+        description: getErrorMessage(err),
+      });
     }
   }
 
@@ -1090,9 +1295,234 @@ export function ConfiguracoesPage() {
             </TabsContent>
 
             <TabsContent value="anuncios" className="space-y-4 pt-4">
-              <div className="flex flex-col gap-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold">Pagamentos</h3>
+              <div className="flex flex-col gap-6">
+                {/* Card Campanhas */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <CardTitle>Campanhas</CardTitle>
+                        <CardDescription>
+                          Cadastre campanhas de anúncios e associe a uma Persona (Cliente Ideal) para acompanhar performance.
+                        </CardDescription>
+                      </div>
+                      <Dialog
+                        open={isModalCampanhaOpen}
+                        onOpenChange={(open) => {
+                          setIsModalCampanhaOpen(open);
+                          if (!open) setEditingCampanha(null);
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <Button
+                            onClick={() => {
+                              setEditingCampanha(null);
+                              campanhaForm.reset({
+                                nome: "",
+                                campaign_id: "",
+                                plataforma: "",
+                                ideal_customer_id: "",
+                              });
+                            }}
+                            className="gap-2"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Nova Campanha
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                          <DialogHeader>
+                            <DialogTitle>
+                              {editingCampanha ? "Editar Campanha" : "Nova Campanha"}
+                            </DialogTitle>
+                            <DialogDescription>
+                              {editingCampanha
+                                ? "Altere os dados da campanha."
+                                : "Cadastre uma campanha de anúncio com nome, ID, plataforma e Persona (Cliente Ideal) de destino."}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <form
+                            onSubmit={campanhaForm.handleSubmit(onCampanhaSubmit)}
+                            className="grid gap-4 py-4"
+                          >
+                            <div className="space-y-2">
+                              <Label htmlFor="campanha_nome">Nome da Campanha</Label>
+                              <Input
+                                id="campanha_nome"
+                                type="text"
+                                placeholder="Ex: Campanha Black Friday"
+                                {...campanhaForm.register("nome")}
+                              />
+                              {campanhaForm.formState.errors.nome && (
+                                <p className="text-xs text-destructive">
+                                  {campanhaForm.formState.errors.nome.message}
+                                </p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="campanha_id">ID</Label>
+                              <Input
+                                id="campanha_id"
+                                type="text"
+                                placeholder="ID da campanha na plataforma"
+                                {...campanhaForm.register("campaign_id")}
+                              />
+                              {campanhaForm.formState.errors.campaign_id && (
+                                <p className="text-xs text-destructive">
+                                  {campanhaForm.formState.errors.campaign_id.message}
+                                </p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Plataforma</Label>
+                              <Select
+                                value={campanhaForm.watch("plataforma")}
+                                onValueChange={(v: string) =>
+                                  campanhaForm.setValue("plataforma", v)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {PLATAFORMA_CAMPANHA_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {campanhaForm.formState.errors.plataforma && (
+                                <p className="text-xs text-destructive">
+                                  {campanhaForm.formState.errors.plataforma.message}
+                                </p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Persona (Cliente Ideal)</Label>
+                              <Select
+                                value={campanhaForm.watch("ideal_customer_id") ?? "none"}
+                                onValueChange={(v: string) =>
+                                  campanhaForm.setValue("ideal_customer_id", v === "none" ? "" : v)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Nenhuma (opcional)" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Nenhuma</SelectItem>
+                                  {idealCustomers.map((ic) => (
+                                    <SelectItem key={ic.id} value={ic.id}>
+                                      {ic.profile_name ?? "Sem nome"}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground">
+                                Um Cliente Ideal pode ter 0, 1 ou mais campanhas associadas.
+                              </p>
+                            </div>
+                            <DialogFooter>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsModalCampanhaOpen(false)}
+                              >
+                                Cancelar
+                              </Button>
+                              <Button type="submit" disabled={isSavingCampanha}>
+                                {isSavingCampanha ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Salvando…
+                                  </>
+                                ) : (
+                                  "Salvar"
+                                )}
+                              </Button>
+                            </DialogFooter>
+                          </form>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {isFetchingCampanhas ? (
+                      <div className="flex min-h-[120px] items-center justify-center">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Nome</TableHead>
+                              <TableHead>ID</TableHead>
+                              <TableHead>Plataforma</TableHead>
+                              <TableHead>Persona</TableHead>
+                              <TableHead className="w-[100px]">Ações</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {campanhas.length === 0 ? (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={5}
+                                  className="h-24 text-center text-muted-foreground"
+                                >
+                                  Nenhuma campanha cadastrada. Clique em Nova Campanha para adicionar.
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              campanhas.map((c) => (
+                                <TableRow key={c.id}>
+                                  <TableCell>{c.nome}</TableCell>
+                                  <TableCell className="font-mono text-sm">{c.campaign_id}</TableCell>
+                                  <TableCell>{c.plataforma}</TableCell>
+                                  <TableCell>{c.ideal_customers?.profile_name ?? "—"}</TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => openCampanhaEdit(c)}
+                                        aria-label="Editar campanha"
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={() => onCampanhaDelete(c.id)}
+                                        aria-label="Excluir campanha"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Card Pagamentos */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <CardTitle>Pagamentos</CardTitle>
+                        <CardDescription>
+                          Registre pagamentos de anúncios (Google Ads ou Meta Ads).
+                        </CardDescription>
+                      </div>
                   <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                     <DialogTrigger asChild>
                       <Button
@@ -1210,8 +1640,9 @@ export function ConfiguracoesPage() {
                       </form>
                     </DialogContent>
                   </Dialog>
-                </div>
-
+                    </div>
+                  </CardHeader>
+                  <CardContent>
                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                   {isFetchingPagamentos ? (
                     <div className="flex min-h-[200px] items-center justify-center p-8">
@@ -1252,6 +1683,8 @@ export function ConfiguracoesPage() {
                     </Table>
                   )}
                 </div>
+                  </CardContent>
+                </Card>
               </div>
             </TabsContent>
           </Tabs>

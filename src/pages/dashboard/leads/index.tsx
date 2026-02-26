@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { Link } from "react-router-dom";
 import {
   PlusCircle,
   Pencil,
@@ -16,6 +14,7 @@ import {
   Trash2,
   Users,
   UserCheck,
+  Upload,
 } from "lucide-react";
 
 import {
@@ -27,15 +26,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -44,19 +34,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
+import { LeadImportModal } from "./LeadImportModal";
 
 // --- Interfaces ---
 interface ProfileRow {
@@ -73,6 +55,19 @@ interface Lead {
   classificacao: string | null;
   is_cliente?: boolean;
   seller_id?: string | null;
+  data_nascimento?: string | null;
+  idade?: number | null;
+  cep?: string | null;
+  item_id?: string | null;
+  items?: { name: string } | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_term?: string | null;
+  utm_content?: string | null;
+  utm_id?: string | null;
+  fbclid?: string | null;
+  gclid?: string | null;
 }
 
 interface VendedorOption {
@@ -99,46 +94,6 @@ async function fetchCompanyId(
   return profile?.company_id ?? null;
 }
 
-// --- Schema Zod ---
-const leadFormSchema = z.object({
-  name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres"),
-  email: z.string().optional(),
-  phone: z.string().optional(),
-  external_id: z.string().optional(),
-  status: z.enum(["Novo", "Em Contato", "Qualificado", "Perdido"]),
-  classificacao: z.enum(["Frio", "Morno", "Quente"]).optional().nullable(),
-  is_cliente: z.boolean().optional(),
-  seller_id: z.string().optional(),
-});
-
-type LeadFormValues = z.infer<typeof leadFormSchema>;
-
-const STATUS_OPTIONS = [
-  { value: "Novo", label: "Novo" },
-  { value: "Em Contato", label: "Em Contato" },
-  { value: "Qualificado", label: "Qualificado" },
-  { value: "Perdido", label: "Perdido" },
-] as const;
-
-const CLASSIFICACAO_OPTIONS = [
-  { value: "none", label: "Não definido" },
-  { value: "Frio", label: "Frio" },
-  { value: "Morno", label: "Morno" },
-  { value: "Quente", label: "Quente" },
-] as const;
-
-/** Normaliza classificacao do banco (case-insensitive) para o formato do Select (Frio/Morno/Quente). */
-function normalizeClassificacao(
-  value: string | null | undefined
-): "Frio" | "Morno" | "Quente" | null {
-  if (!value || typeof value !== "string") return null;
-  const lower = value.trim().toLowerCase();
-  if (lower === "frio") return "Frio";
-  if (lower === "morno") return "Morno";
-  if (lower === "quente") return "Quente";
-  return null;
-}
-
 export default function LeadsPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
@@ -147,43 +102,12 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [editingLead, setEditingLead] = useState<Lead | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"leads" | "clientes">("leads");
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const effectiveCompanyId = companyId;
-
-  const form = useForm<LeadFormValues>({
-    resolver: zodResolver(leadFormSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      external_id: "",
-      status: "Novo",
-      classificacao: null,
-      is_cliente: false,
-      seller_id: "",
-    },
-  });
-
-  const editForm = useForm<LeadFormValues>({
-    resolver: zodResolver(leadFormSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      external_id: "",
-      status: "Novo",
-      classificacao: null,
-      is_cliente: false,
-      seller_id: "",
-    },
-  });
 
   // Buscar company_id
   useEffect(() => {
@@ -223,7 +147,7 @@ export default function LeadsPage() {
     try {
       const { data, error } = await supabase
         .from("leads")
-        .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id")
+        .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id, data_nascimento, idade, cep, item_id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, fbclid, gclid, items(name)")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -258,7 +182,8 @@ export default function LeadsPage() {
     ? leadsByTab.filter(
         (l) =>
           l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (l.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+          (l.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+          (l.cep?.includes(searchQuery.replace(/\D/g, "")) ?? false)
       )
     : leadsByTab;
 
@@ -301,124 +226,6 @@ export default function LeadsPage() {
         return "bg-gray-100 text-gray-700";
     }
   };
-
-  // Create
-  async function onSubmit(values: LeadFormValues) {
-    if (!effectiveCompanyId || !userId) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Usuário ou empresa não identificados.",
-      });
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const { error } = await supabase.from("leads").insert({
-        company_id: effectiveCompanyId,
-        user_id: userId,
-        name: values.name.trim(),
-        email: values.email?.trim() || null,
-        phone: values.phone?.trim() || null,
-        external_id: values.external_id?.trim() || null,
-        seller_id: values.seller_id || null,
-        status: values.status,
-        classificacao: values.classificacao || null,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Lead criado",
-        description: `${values.name} foi cadastrado com sucesso.`,
-      });
-      setIsDialogOpen(false);
-      form.reset({
-        name: "",
-        email: "",
-        phone: "",
-        external_id: "",
-        status: "Novo",
-        classificacao: null,
-        seller_id: "",
-      });
-      loadLeads();
-    } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : (err && typeof err === "object" && "message" in err)
-            ? String((err as { message: unknown }).message)
-            : "Erro desconhecido";
-      console.error("Erro ao criar lead:", err);
-      toast({
-        variant: "destructive",
-        title: "Erro ao criar",
-        description: msg,
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  // Update
-  function handleEditClick(lead: Lead) {
-    setEditingLead(lead);
-    const normalizedClassificacao = normalizeClassificacao(lead.classificacao);
-    // Status "Cliente" é legado (pré-migration); tratar como Qualificado
-    const normalizedStatus =
-      lead.status === "Cliente" ? "Qualificado" : lead.status;
-    editForm.reset({
-      name: lead.name,
-      email: lead.email ?? "",
-      phone: lead.phone ?? "",
-      external_id: lead.external_id ?? "",
-      status: normalizedStatus,
-      classificacao: normalizedClassificacao,
-      is_cliente: lead.is_cliente ?? false,
-      seller_id: lead.seller_id ?? "",
-    });
-    setIsEditDialogOpen(true);
-  }
-
-  async function onEditSubmit(values: LeadFormValues) {
-    if (!editingLead || !effectiveCompanyId) return;
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from("leads")
-        .update({
-          name: values.name.trim(),
-          email: values.email?.trim() || null,
-          phone: values.phone?.trim() || null,
-          external_id: values.external_id?.trim() || null,
-          seller_id: values.seller_id || null,
-          status: values.status,
-          classificacao: values.classificacao || null,
-          is_cliente: values.is_cliente ?? false,
-        })
-        .eq("id", editingLead.id)
-        .eq("company_id", effectiveCompanyId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Lead atualizado",
-        description: "As alterações foram salvas.",
-      });
-      setIsEditDialogOpen(false);
-      setEditingLead(null);
-      loadLeads();
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao atualizar",
-        description: err instanceof Error ? err.message : "Erro desconhecido",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  }
 
   // Delete
   async function handleDelete(lead: Lead) {
@@ -464,160 +271,18 @@ export default function LeadsPage() {
           </p>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setImportModalOpen(true)}>
+            <Upload className="h-4 w-4" />
+            Importar CSV
+          </Button>
+          <Button className="gap-2" asChild>
+            <Link to="/dashboard/leads/novo">
               <PlusCircle className="h-4 w-4" />
               Novo Lead
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[525px]">
-            <DialogHeader>
-              <DialogTitle>Cadastrar Novo Lead</DialogTitle>
-              <DialogDescription>
-                Preencha as informações básicas para iniciar o rastreio do lead.
-              </DialogDescription>
-            </DialogHeader>
-
-            <form
-              className="grid gap-4 py-4"
-              onSubmit={form.handleSubmit(onSubmit)}
-            >
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome Completo</Label>
-                  <Input
-                    id="name"
-                    placeholder="Ex: João Silva"
-                    {...form.register("name")}
-                  />
-                  {form.formState.errors.name && (
-                    <p className="text-xs text-destructive">
-                      {form.formState.errors.name.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="external_id">External ID</Label>
-                  <Input
-                    id="external_id"
-                    placeholder="ID do CRM"
-                    {...form.register("external_id")}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="email@exemplo.com"
-                    {...form.register("email")}
-                  />
-                  {form.formState.errors.email && (
-                    <p className="text-xs text-destructive">
-                      {form.formState.errors.email.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Telefone</Label>
-                  <Input
-                    id="phone"
-                    placeholder="(00) 00000-0000"
-                    {...form.register("phone")}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Classificação</Label>
-                  <Select
-                    value={form.watch("classificacao") ?? "none"}
-                    onValueChange={(v: string) =>
-                      form.setValue("classificacao", v === "none" ? null : (v as "Frio" | "Morno" | "Quente"))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CLASSIFICACAO_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Status Inicial</Label>
-                  <Select
-                    value={form.watch("status")}
-                    onValueChange={(v: string) =>
-                      form.setValue("status", v as LeadFormValues["status"])
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUS_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Atribuir Vendedor</Label>
-                  <Select
-                    value={form.watch("seller_id") || "none"}
-                    onValueChange={(v: string) =>
-                      form.setValue("seller_id", v === "none" ? "" : v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
-                      {vendedores.map((vendedor) => (
-                        <SelectItem key={vendedor.id} value={vendedor.id}>
-                          {vendedor.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <DialogFooter className="mt-4">
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => setIsDialogOpen(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    "Salvar Lead"
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "leads" | "clientes")} className="w-full">
@@ -655,6 +320,9 @@ export default function LeadsPage() {
               <TableHead className="w-[200px]">Nome</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Celular</TableHead>
+              <TableHead>Idade</TableHead>
+              <TableHead>CEP</TableHead>
+              <TableHead>Produto/Serviço</TableHead>
               <TableHead>Classificação</TableHead>
               <TableHead>External ID</TableHead>
               <TableHead>Vendedor</TableHead>
@@ -665,13 +333,13 @@ export default function LeadsPage() {
           <TableBody>
             {isFetching ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                   Carregando...
                 </TableCell>
               </TableRow>
             ) : filteredLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                   {searchQuery
                     ? "Nenhum lead encontrado para a busca."
                     : "Nenhum lead encontrado. Use o botão acima para cadastrar."}
@@ -688,6 +356,15 @@ export default function LeadsPage() {
                   </TableCell>
                   <TableCell className="text-sm">
                     {lead.phone ?? "-"}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {lead.idade != null ? lead.idade : "-"}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {lead.cep ?? "-"}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {lead.items?.name ?? "-"}
                   </TableCell>
                   <TableCell>
                     {lead.classificacao ? (
@@ -734,11 +411,13 @@ export default function LeadsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                        <DropdownMenuItem
-                          className="gap-2 cursor-pointer"
-                          onClick={() => handleEditClick(lead)}
-                        >
-                          <Pencil className="h-4 w-4" /> Editar Lead
+                        <DropdownMenuItem asChild>
+                          <Link
+                            to={`/dashboard/leads/${lead.id}`}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Pencil className="h-4 w-4" /> Editar Lead
+                          </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="gap-2 cursor-pointer text-red-600"
@@ -757,165 +436,12 @@ export default function LeadsPage() {
       </div>
       </Tabs>
 
-      {/* Dialog de Edição */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle>Editar Lead</DialogTitle>
-            <DialogDescription>
-              Altere as informações do lead conforme necessário.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form
-            className="grid gap-4 py-4"
-            onSubmit={editForm.handleSubmit(onEditSubmit)}
-          >
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">Nome Completo</Label>
-                <Input
-                  id="edit-name"
-                  placeholder="Ex: João Silva"
-                  {...editForm.register("name")}
-                />
-                {editForm.formState.errors.name && (
-                  <p className="text-xs text-destructive">
-                    {editForm.formState.errors.name.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-external_id">External ID</Label>
-                <Input
-                  id="edit-external_id"
-                  placeholder="ID do CRM"
-                  {...editForm.register("external_id")}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-email">Email</Label>
-                <Input
-                  id="edit-email"
-                  type="email"
-                  placeholder="email@exemplo.com"
-                  {...editForm.register("email")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-phone">Telefone</Label>
-                <Input
-                  id="edit-phone"
-                  placeholder="(00) 00000-0000"
-                  {...editForm.register("phone")}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Classificação</Label>
-                <Select
-                  value={editForm.watch("classificacao") ?? "none"}
-                  onValueChange={(v: string) =>
-                    editForm.setValue("classificacao", v === "none" ? null : (v as "Frio" | "Morno" | "Quente"))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CLASSIFICACAO_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select
-                  value={editForm.watch("status")}
-                  onValueChange={(v: string) =>
-                    editForm.setValue(
-                      "status",
-                      v as LeadFormValues["status"]
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Vendedor</Label>
-                <Select
-                  value={editForm.watch("seller_id") || "none"}
-                  onValueChange={(v: string) =>
-                    editForm.setValue("seller_id", v === "none" ? "" : v)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {vendedores.map((vendedor) => (
-                      <SelectItem key={vendedor.id} value={vendedor.id}>
-                        {vendedor.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="edit-is_cliente"
-                  checked={editForm.watch("is_cliente") ?? false}
-                  onCheckedChange={(checked) =>
-                    editForm.setValue("is_cliente", checked)
-                  }
-                />
-                <Label htmlFor="edit-is_cliente" className="cursor-pointer">
-                  Marcar como cliente (convertido)
-                </Label>
-              </div>
-            </div>
-
-            <DialogFooter className="mt-4">
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => setIsEditDialogOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  "Salvar Alterações"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <LeadImportModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        companyId={effectiveCompanyId}
+        onSuccess={loadLeads}
+      />
     </div>
   );
 }
