@@ -8,6 +8,7 @@ import { AdminGtmPage } from "@/pages/admin/AdminGtmPage"
 import { AdminPreviewPage } from "@/pages/admin/AdminPreviewPage"
 import { AdminPersonasPage } from "@/pages/admin/AdminPersonasPage"
 import { AdminQualificacaoPage } from "@/pages/admin/AdminQualificacaoPage"
+import { AdminBriefingPage } from "@/pages/admin/AdminBriefingPage"
 import { AdminPromptTemplatesPage } from "@/pages/admin/prompt-templates"
 import { TemplateFormPage } from "@/pages/admin/prompt-templates/TemplateFormPage"
 import { DashboardPage } from "@/pages/dashboard/DashboardPage"
@@ -332,6 +333,14 @@ function App() {
           element={
             <SupabaseProvider>
               <AdminQualificacaoPage />
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/briefing"
+          element={
+            <SupabaseProvider>
+              <AdminBriefingPage />
             </SupabaseProvider>
           }
         />

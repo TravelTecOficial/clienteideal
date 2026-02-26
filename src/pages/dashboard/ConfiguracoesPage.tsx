@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2, Trash2, Pencil } from "lucide-react";
+import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2, Trash2, Pencil, Plug2, MapPin, MessageSquare, Sparkles } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -45,7 +45,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -54,10 +53,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useEvolutionProxy } from "@/hooks/use-evolution-proxy";
+import { ChatBriefingModal } from "@/components/chat-briefing/ChatBriefingModal";
 
 // --- Interfaces ---
 interface ProfileRow {
@@ -66,10 +67,21 @@ interface ProfileRow {
 
 interface CompanyRow {
   name: string | null;
-  description: string | null;
-  history: string | null;
+  nome_fantasia: string | null;
+  cnpj: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  uf: string | null;
+  cep: string | null;
+  site_oficial: string | null;
   celular_atendimento: string | null;
   email_atendimento: string | null;
+  horario_funcionamento: string | null;
+  instagram_url: string | null;
+  facebook_url: string | null;
+  linkedin_url: string | null;
   estancia_whatsapp: string | null;
   whatsapp_group_image_url: string | null;
   evolution_instance_name: string | null;
@@ -130,16 +142,27 @@ function formatValor(valor: number): string {
 
 // --- Schemas ---
 const empresaFormSchema = z.object({
-  name: z.string().min(1, "Nome da empresa é obrigatório"),
-  description: z.string().optional(),
-  history: z.string().optional(),
-});
-
-const dadosFormSchema = z.object({
+  name: z.string().min(1, "Razão Social é obrigatória"),
+  nome_fantasia: z.string().optional(),
+  cnpj: z.string().optional(),
+  logradouro: z.string().optional(),
+  numero: z.string().optional(),
+  bairro: z.string().optional(),
+  cidade: z.string().optional(),
+  uf: z.string().optional(),
+  cep: z.string().optional(),
+  site_oficial: z.string().optional(),
   celular_atendimento: z.string().optional(),
   email_atendimento: z
     .union([z.string().email("E-mail inválido"), z.literal("")])
     .optional(),
+  horario_funcionamento: z.string().optional(),
+  instagram_url: z.string().optional(),
+  facebook_url: z.string().optional(),
+  linkedin_url: z.string().optional(),
+});
+
+const dadosFormSchema = z.object({
   estancia_whatsapp: z.string().optional(),
 });
 
@@ -214,6 +237,8 @@ export function ConfiguracoesPage() {
   const [whatsappImageUrl, setWhatsappImageUrl] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const whatsappImageInputRef = useRef<HTMLInputElement>(null);
+  const [briefingCompleted, setBriefingCompleted] = useState(false);
+  const [isBriefingModalOpen, setIsBriefingModalOpen] = useState(false);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
   const evolutionForm = useForm<EvolutionFormValues>({
@@ -261,16 +286,27 @@ export function ConfiguracoesPage() {
     resolver: zodResolver(empresaFormSchema),
     defaultValues: {
       name: "",
-      description: "",
-      history: "",
+      nome_fantasia: "",
+      cnpj: "",
+      logradouro: "",
+      numero: "",
+      bairro: "",
+      cidade: "",
+      uf: "",
+      cep: "",
+      site_oficial: "",
+      celular_atendimento: "",
+      email_atendimento: "",
+      horario_funcionamento: "",
+      instagram_url: "",
+      facebook_url: "",
+      linkedin_url: "",
     },
   });
 
   const dadosForm = useForm<DadosFormValues>({
     resolver: zodResolver(dadosFormSchema),
     defaultValues: {
-      celular_atendimento: "",
-      email_atendimento: "",
       estancia_whatsapp: "",
     },
   });
@@ -304,7 +340,7 @@ export function ConfiguracoesPage() {
     init();
   }, [userId, supabase]);
 
-  // Carregar informações básicas da empresa (nome, apresentação, histórico)
+  // Carregar informações cadastrais da empresa
   const loadEmpresa = useCallback(async () => {
     if (!companyId) {
       setIsFetchingEmpresa(false);
@@ -314,16 +350,33 @@ export function ConfiguracoesPage() {
     try {
       const { data, error } = await supabase
         .from("companies")
-        .select("name, description, history")
+        .select(
+          "name, nome_fantasia, cnpj, logradouro, numero, bairro, cidade, uf, cep, " +
+          "site_oficial, celular_atendimento, email_atendimento, horario_funcionamento, " +
+          "instagram_url, facebook_url, linkedin_url"
+        )
         .eq("id", companyId)
         .maybeSingle();
 
       if (error) throw error;
-      const row = data as { name: string | null; description: string | null; history: string | null } | null;
+      const row = data as Partial<CompanyRow> | null;
       empresaForm.reset({
         name: row?.name ?? "",
-        description: row?.description ?? "",
-        history: row?.history ?? "",
+        nome_fantasia: row?.nome_fantasia ?? "",
+        cnpj: row?.cnpj ?? "",
+        logradouro: row?.logradouro ?? "",
+        numero: row?.numero ?? "",
+        bairro: row?.bairro ?? "",
+        cidade: row?.cidade ?? "",
+        uf: row?.uf ?? "",
+        cep: row?.cep ?? "",
+        site_oficial: row?.site_oficial ?? "",
+        celular_atendimento: row?.celular_atendimento ?? "",
+        email_atendimento: row?.email_atendimento ?? "",
+        horario_funcionamento: row?.horario_funcionamento ?? "",
+        instagram_url: row?.instagram_url ?? "",
+        facebook_url: row?.facebook_url ?? "",
+        linkedin_url: row?.linkedin_url ?? "",
       });
     } catch (err) {
       console.error("Erro ao carregar dados da empresa:", err);
@@ -472,6 +525,29 @@ export function ConfiguracoesPage() {
     loadCampanhas();
   }, [loadCampanhas]);
 
+  // Carregar status do briefing (company_briefing_responses: count > 0 = realizado)
+  const loadBriefingStatus = useCallback(async () => {
+    if (!companyId) {
+      setBriefingCompleted(false);
+      return;
+    }
+    try {
+      const { count, error } = await supabase
+        .from("company_briefing_responses")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", companyId);
+
+      if (error) throw error;
+      setBriefingCompleted((count ?? 0) > 0);
+    } catch {
+      setBriefingCompleted(false);
+    }
+  }, [companyId, supabase]);
+
+  useEffect(() => {
+    loadBriefingStatus();
+  }, [loadBriefingStatus]);
+
   // Carregar configuração Evolution API (URL e API Key são configuradas apenas no Admin)
   const loadEvolution = useCallback(async () => {
     if (!companyId) {
@@ -529,8 +605,21 @@ export function ConfiguracoesPage() {
         .from("companies")
         .update({
           name: values.name?.trim() || null,
-          description: values.description?.trim() || null,
-          history: values.history?.trim() || null,
+          nome_fantasia: values.nome_fantasia?.trim() || null,
+          cnpj: values.cnpj?.trim() || null,
+          logradouro: values.logradouro?.trim() || null,
+          numero: values.numero?.trim() || null,
+          bairro: values.bairro?.trim() || null,
+          cidade: values.cidade?.trim() || null,
+          uf: values.uf?.trim() || null,
+          cep: values.cep?.trim() || null,
+          site_oficial: values.site_oficial?.trim() || null,
+          celular_atendimento: values.celular_atendimento?.trim() || null,
+          email_atendimento: values.email_atendimento?.trim() || null,
+          horario_funcionamento: values.horario_funcionamento?.trim() || null,
+          instagram_url: values.instagram_url?.trim() || null,
+          facebook_url: values.facebook_url?.trim() || null,
+          linkedin_url: values.linkedin_url?.trim() || null,
         })
         .eq("id", companyId);
 
@@ -551,7 +640,46 @@ export function ConfiguracoesPage() {
     }
   }
 
-  // Salvar dados (aba Dados)
+  // Buscar endereço por CEP (ViaCEP - API pública, sem credenciais)
+  async function handleBuscarCep() {
+    const cep = empresaForm.getValues("cep")?.replace(/\D/g, "") ?? "";
+    if (cep.length !== 8) {
+      toast({
+        variant: "destructive",
+        title: "CEP inválido",
+        description: "Informe um CEP com 8 dígitos.",
+      });
+      return;
+    }
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        toast({
+          variant: "destructive",
+          title: "CEP não encontrado",
+          description: "Verifique o CEP informado.",
+        });
+        return;
+      }
+      empresaForm.setValue("logradouro", data.logradouro ?? "");
+      empresaForm.setValue("bairro", data.bairro ?? "");
+      empresaForm.setValue("cidade", data.localidade ?? "");
+      empresaForm.setValue("uf", data.uf ?? "");
+      toast({
+        title: "Endereço preenchido",
+        description: "Os campos foram preenchidos com base no CEP.",
+      });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Falha ao buscar endereço. Tente novamente.",
+      });
+    }
+  }
+
+  // Salvar dados (aba Dados - Estância WhatsApp e imagem)
   async function onDadosSubmit(values: DadosFormValues) {
     if (!companyId) {
       toast({
@@ -566,8 +694,6 @@ export function ConfiguracoesPage() {
       const { error } = await supabase
         .from("companies")
         .update({
-          celular_atendimento: values.celular_atendimento?.trim() || null,
-          email_atendimento: values.email_atendimento?.trim() || null,
           estancia_whatsapp: values.estancia_whatsapp?.trim() || null,
         })
         .eq("id", companyId);
@@ -576,7 +702,7 @@ export function ConfiguracoesPage() {
 
       toast({
         title: "Dados salvos",
-        description: "As informações de atendimento foram atualizadas.",
+        description: "As informações de integração foram atualizadas.",
       });
     } catch (err) {
       toast({
@@ -896,12 +1022,15 @@ export function ConfiguracoesPage() {
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           <Tabs defaultValue="empresa" className="w-full">
-            <TabsList className="grid w-full max-w-[1000px] grid-cols-4">
+            <TabsList className="grid w-full max-w-[1200px] grid-cols-5">
               <TabsTrigger value="empresa" className="gap-2">
                 <Building2 className="h-4 w-4" /> Empresa
               </TabsTrigger>
               <TabsTrigger value="dados" className="gap-2">
                 <Database className="h-4 w-4" /> Dados
+              </TabsTrigger>
+              <TabsTrigger value="integracoes" className="gap-2">
+                <Plug2 className="h-4 w-4" /> Integrações
               </TabsTrigger>
               <TabsTrigger value="evolution" className="gap-2">
                 <Smartphone className="h-4 w-4" /> Evolution API
@@ -914,9 +1043,48 @@ export function ConfiguracoesPage() {
             <TabsContent value="empresa" className="space-y-4 pt-4">
               <Card>
                 <CardHeader>
+                  <div className="flex flex-1 items-center justify-between gap-4">
+                    <div className="space-y-1.5">
+                      <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        Prepare sua Estratégia de IA
+                      </CardTitle>
+                      <CardDescription>
+                        Para que seu SDR e suas campanhas sejam eficientes, precisamos entender o DNA do seu negócio. Vamos fazer seu briefing agora?
+                      </CardDescription>
+                    </div>
+                    {briefingCompleted && (
+                      <Badge variant="secondary" className="shrink-0">
+                        Briefing Realizado
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    type="button"
+                    onClick={() => setIsBriefingModalOpen(true)}
+                    disabled={!companyId}
+                    className="gap-2"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Iniciar Chat de Briefing
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <ChatBriefingModal
+                open={isBriefingModalOpen}
+                onOpenChange={setIsBriefingModalOpen}
+                companyId={companyId}
+                onCompleted={loadBriefingStatus}
+              />
+
+              <Card>
+                <CardHeader>
                   <CardTitle>Informações da empresa</CardTitle>
                   <CardDescription>
-                    Nome, apresentação e histórico da sua empresa. Essas informações podem ser usadas em atendimentos e materiais.
+                    Dados cadastrais estruturados da sua empresa.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -927,53 +1095,210 @@ export function ConfiguracoesPage() {
                   ) : (
                     <form
                       onSubmit={empresaForm.handleSubmit(onEmpresaSubmit)}
-                      className="grid gap-4 sm:grid-cols-2"
+                      className="space-y-6"
                     >
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="empresa_name">Nome da empresa</Label>
-                        <Input
-                          id="empresa_name"
-                          type="text"
-                          placeholder="Ex: Minha Empresa Ltda"
-                          {...empresaForm.register("name")}
-                        />
-                        {empresaForm.formState.errors.name && (
-                          <p className="text-xs text-destructive">
-                            {empresaForm.formState.errors.name.message}
-                          </p>
-                        )}
+                      {/* Bloco Institucional */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-foreground">Institucional</h4>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_name">Razão Social</Label>
+                            <Input
+                              id="empresa_name"
+                              type="text"
+                              placeholder="Ex: Minha Empresa Ltda"
+                              {...empresaForm.register("name")}
+                            />
+                            {empresaForm.formState.errors.name && (
+                              <p className="text-xs text-destructive">
+                                {empresaForm.formState.errors.name.message}
+                              </p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_nome_fantasia">Nome Fantasia</Label>
+                            <Input
+                              id="empresa_nome_fantasia"
+                              type="text"
+                              placeholder="Ex: Minha Empresa"
+                              {...empresaForm.register("nome_fantasia")}
+                            />
+                          </div>
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="empresa_cnpj">CNPJ (opcional)</Label>
+                            <Input
+                              id="empresa_cnpj"
+                              type="text"
+                              placeholder="00.000.000/0001-00"
+                              {...empresaForm.register("cnpj")}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="empresa_description">Apresentação</Label>
-                        <Textarea
-                          id="empresa_description"
-                          placeholder="Descreva sua empresa: o que faz, missão, diferenciais..."
-                          rows={4}
-                          className="resize-none"
-                          {...empresaForm.register("description")}
-                        />
-                        {empresaForm.formState.errors.description && (
-                          <p className="text-xs text-destructive">
-                            {empresaForm.formState.errors.description?.message}
-                          </p>
-                        )}
+
+                      {/* Bloco Localização */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-foreground">Localização</h4>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2 sm:col-span-2 flex gap-2">
+                            <div className="flex-1 space-y-2">
+                              <Label htmlFor="empresa_cep">CEP</Label>
+                              <Input
+                                id="empresa_cep"
+                                type="text"
+                                placeholder="00000-000"
+                                {...empresaForm.register("cep")}
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleBuscarCep}
+                                className="gap-2"
+                              >
+                                <MapPin className="h-4 w-4" />
+                                Buscar por CEP
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="empresa_logradouro">Logradouro</Label>
+                            <Input
+                              id="empresa_logradouro"
+                              type="text"
+                              placeholder="Rua, Avenida..."
+                              {...empresaForm.register("logradouro")}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_numero">Número</Label>
+                            <Input
+                              id="empresa_numero"
+                              type="text"
+                              placeholder="123"
+                              {...empresaForm.register("numero")}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_bairro">Bairro</Label>
+                            <Input
+                              id="empresa_bairro"
+                              type="text"
+                              placeholder="Centro"
+                              {...empresaForm.register("bairro")}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_cidade">Cidade</Label>
+                            <Input
+                              id="empresa_cidade"
+                              type="text"
+                              placeholder="São Paulo"
+                              {...empresaForm.register("cidade")}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_uf">UF</Label>
+                            <Input
+                              id="empresa_uf"
+                              type="text"
+                              placeholder="SP"
+                              maxLength={2}
+                              {...empresaForm.register("uf")}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="empresa_history">Histórico</Label>
-                        <Textarea
-                          id="empresa_history"
-                          placeholder="Conte a história da empresa: fundação, marcos, evolução..."
-                          rows={4}
-                          className="resize-none"
-                          {...empresaForm.register("history")}
-                        />
-                        {empresaForm.formState.errors.history && (
-                          <p className="text-xs text-destructive">
-                            {empresaForm.formState.errors.history?.message}
-                          </p>
-                        )}
+
+                      {/* Bloco Contato e Presença */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-foreground">Contato e Presença</h4>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="empresa_site">Site Oficial</Label>
+                            <Input
+                              id="empresa_site"
+                              type="url"
+                              placeholder="https://www.empresa.com.br"
+                              {...empresaForm.register("site_oficial")}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_email">E-mail Principal</Label>
+                            <Input
+                              id="empresa_email"
+                              type="email"
+                              placeholder="contato@empresa.com.br"
+                              {...empresaForm.register("email_atendimento")}
+                            />
+                            {empresaForm.formState.errors.email_atendimento && (
+                              <p className="text-xs text-destructive">
+                                {empresaForm.formState.errors.email_atendimento.message}
+                              </p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_celular">Telefone/WhatsApp de Atendimento</Label>
+                            <Input
+                              id="empresa_celular"
+                              type="tel"
+                              placeholder="(00) 00000-0000"
+                              {...empresaForm.register("celular_atendimento")}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="sm:col-span-2">
+
+                      {/* Bloco Operação */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-foreground">Operação</h4>
+                        <div className="space-y-2">
+                          <Label htmlFor="empresa_horario">Horário de Funcionamento</Label>
+                          <Input
+                            id="empresa_horario"
+                            type="text"
+                            placeholder="Ex: Segunda a Sexta, 08h às 18h"
+                            {...empresaForm.register("horario_funcionamento")}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Redes Sociais */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-foreground">Redes Sociais</h4>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_instagram">Instagram</Label>
+                            <Input
+                              id="empresa_instagram"
+                              type="url"
+                              placeholder="https://instagram.com/empresa"
+                              {...empresaForm.register("instagram_url")}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_facebook">Facebook</Label>
+                            <Input
+                              id="empresa_facebook"
+                              type="url"
+                              placeholder="https://facebook.com/empresa"
+                              {...empresaForm.register("facebook_url")}
+                            />
+                          </div>
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="empresa_linkedin">LinkedIn</Label>
+                            <Input
+                              id="empresa_linkedin"
+                              type="url"
+                              placeholder="https://linkedin.com/company/empresa"
+                              {...empresaForm.register("linkedin_url")}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
                         <Button type="submit" disabled={isSavingEmpresa}>
                           {isSavingEmpresa ? (
                             <>
@@ -997,10 +1322,9 @@ export function ConfiguracoesPage() {
             <TabsContent value="dados" className="space-y-4 pt-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Dados do atendimento</CardTitle>
+                  <CardTitle>Dados de integração</CardTitle>
                   <CardDescription>
-                    Celular, e-mail e Estância Whatsapp para contato de
-                    atendimento.
+                    Estância Whatsapp e imagem para grupos. Celular e e-mail estão na aba Empresa.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1013,44 +1337,6 @@ export function ConfiguracoesPage() {
                       onSubmit={dadosForm.handleSubmit(onDadosSubmit)}
                       className="grid gap-4 sm:grid-cols-2"
                     >
-                      <div className="space-y-2">
-                        <Label htmlFor="celular_atendimento">
-                          Celular do atendimento
-                        </Label>
-                        <Input
-                          id="celular_atendimento"
-                          type="tel"
-                          placeholder="(00) 00000-0000"
-                          {...dadosForm.register("celular_atendimento")}
-                        />
-                        {dadosForm.formState.errors.celular_atendimento && (
-                          <p className="text-xs text-destructive">
-                            {
-                              dadosForm.formState.errors.celular_atendimento
-                                .message
-                            }
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="email_atendimento">
-                          E-mail do atendimento
-                        </Label>
-                        <Input
-                          id="email_atendimento"
-                          type="email"
-                          placeholder="atendimento@empresa.com"
-                          {...dadosForm.register("email_atendimento")}
-                        />
-                        {dadosForm.formState.errors.email_atendimento && (
-                          <p className="text-xs text-destructive">
-                            {
-                              dadosForm.formState.errors.email_atendimento
-                                .message
-                            }
-                          </p>
-                        )}
-                      </div>
                       <div className="space-y-2">
                         <Label htmlFor="estancia_whatsapp">
                           Estância Whatsapp
@@ -1165,6 +1451,65 @@ export function ConfiguracoesPage() {
                       </div>
                     </form>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="integracoes" className="space-y-4 pt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Integrações</CardTitle>
+                  <CardDescription>
+                    Conecte suas plataformas de marketing e vendas. Em breve você poderá integrar com os principais serviços.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {[
+                      {
+                        id: "google-ads",
+                        name: "Google Ads",
+                        icon: "🔍",
+                        description: "Google Ads",
+                      },
+                      {
+                        id: "meta-ads",
+                        name: "Meta Ads",
+                        icon: "📱",
+                        description: "Facebook e Instagram Ads",
+                      },
+                      {
+                        id: "google-meu-negocio",
+                        name: "Google Meu Negócio",
+                        icon: "📍",
+                        description: "Google Meu Negócio",
+                      },
+                      {
+                        id: "rd-station",
+                        name: "RD Station",
+                        icon: "📊",
+                        description: "RD Station Marketing",
+                      },
+                    ].map((platform) => (
+                      <Card key={platform.id}>
+                        <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-2xl">
+                            {platform.icon}
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <CardTitle className="text-base">{platform.name}</CardTitle>
+                            <CardDescription>{platform.description}</CardDescription>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">Em breve</Badge>
+                            <Button disabled size="sm">
+                              Conectar
+                            </Button>
+                          </div>
+                        </CardHeader>
+                      </Card>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
