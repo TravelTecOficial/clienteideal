@@ -14,6 +14,8 @@ import {
   Filter,
   Loader2,
   Trash2,
+  Users,
+  UserCheck,
 } from "lucide-react";
 
 import {
@@ -51,6 +53,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
 
@@ -67,6 +71,7 @@ interface Lead {
   external_id: string | null;
   status: "Novo" | "Em Contato" | "Qualificado" | "Perdido";
   classificacao: string | null;
+  is_cliente?: boolean;
   seller_id?: string | null;
 }
 
@@ -102,6 +107,7 @@ const leadFormSchema = z.object({
   external_id: z.string().optional(),
   status: z.enum(["Novo", "Em Contato", "Qualificado", "Perdido"]),
   classificacao: z.enum(["Frio", "Morno", "Quente"]).optional().nullable(),
+  is_cliente: z.boolean().optional(),
   seller_id: z.string().optional(),
 });
 
@@ -147,6 +153,7 @@ export default function LeadsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"leads" | "clientes">("leads");
 
   const effectiveCompanyId = companyId;
 
@@ -159,6 +166,7 @@ export default function LeadsPage() {
       external_id: "",
       status: "Novo",
       classificacao: null,
+      is_cliente: false,
       seller_id: "",
     },
   });
@@ -172,6 +180,7 @@ export default function LeadsPage() {
       external_id: "",
       status: "Novo",
       classificacao: null,
+      is_cliente: false,
       seller_id: "",
     },
   });
@@ -214,7 +223,7 @@ export default function LeadsPage() {
     try {
       const { data, error } = await supabase
         .from("leads")
-        .select("id, name, email, phone, external_id, status, classificacao, seller_id")
+        .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -241,14 +250,17 @@ export default function LeadsPage() {
     loadLeads();
   }, [loadLeads]);
 
-  // Filtro local por nome/email
+  // Filtro por tab (leads vs clientes) e por nome/email
+  const leadsByTab = leads.filter((l) =>
+    activeTab === "leads" ? !(l.is_cliente ?? false) : (l.is_cliente ?? false)
+  );
   const filteredLeads = searchQuery.trim()
-    ? leads.filter(
+    ? leadsByTab.filter(
         (l) =>
           l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (l.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
       )
-    : leads;
+    : leadsByTab;
 
   const vendedorMap = useCallback(
     () => new Map(vendedores.map((v) => [v.id, v.nome])),
@@ -353,13 +365,17 @@ export default function LeadsPage() {
   function handleEditClick(lead: Lead) {
     setEditingLead(lead);
     const normalizedClassificacao = normalizeClassificacao(lead.classificacao);
+    // Status "Cliente" é legado (pré-migration); tratar como Qualificado
+    const normalizedStatus =
+      lead.status === "Cliente" ? "Qualificado" : lead.status;
     editForm.reset({
       name: lead.name,
       email: lead.email ?? "",
       phone: lead.phone ?? "",
       external_id: lead.external_id ?? "",
-      status: lead.status,
+      status: normalizedStatus,
       classificacao: normalizedClassificacao,
+      is_cliente: lead.is_cliente ?? false,
       seller_id: lead.seller_id ?? "",
     });
     setIsEditDialogOpen(true);
@@ -379,6 +395,7 @@ export default function LeadsPage() {
           seller_id: values.seller_id || null,
           status: values.status,
           classificacao: values.classificacao || null,
+          is_cliente: values.is_cliente ?? false,
         })
         .eq("id", editingLead.id)
         .eq("company_id", effectiveCompanyId);
@@ -437,9 +454,13 @@ export default function LeadsPage() {
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Leads</h2>
+          <h2 className="text-3xl font-bold tracking-tight">
+            {activeTab === "leads" ? "Leads" : "Clientes"}
+          </h2>
           <p className="text-muted-foreground">
-            Gerencie seus leads e atribua vendedores.
+            {activeTab === "leads"
+              ? "Leads em tratamento. Atribua vendedores e acompanhe o pipeline."
+              : "Clientes convertidos. Ações de pós-venda e comunicação."}
           </p>
         </div>
 
@@ -599,22 +620,35 @@ export default function LeadsPage() {
         </Dialog>
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome ou email..."
-            className="pl-8"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "leads" | "clientes")} className="w-full">
+        <div className="flex items-center justify-between gap-4">
+          <TabsList className="grid w-full max-w-[300px] grid-cols-2">
+            <TabsTrigger value="leads" className="gap-2">
+              <Users className="h-4 w-4" />
+              Leads
+            </TabsTrigger>
+            <TabsTrigger value="clientes" className="gap-2">
+              <UserCheck className="h-4 w-4" />
+              Clientes
+            </TabsTrigger>
+          </TabsList>
+          <div className="flex items-center gap-2 flex-1 max-w-sm">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou email..."
+                className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button variant="outline" className="gap-2 shrink-0">
+              <Filter className="h-4 w-4" /> Filtros
+            </Button>
+          </div>
         </div>
-        <Button variant="outline" className="gap-2">
-          <Filter className="h-4 w-4" /> Filtros
-        </Button>
-      </div>
 
-      <div className="rounded-md border bg-white">
+        <div className="rounded-md border bg-white mt-4">
         <Table>
           <TableHeader>
             <TableRow>
@@ -680,9 +714,16 @@ export default function LeadsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge className={getStatusColor(lead.status)}>
-                      {lead.status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusColor(lead.status)}>
+                        {lead.status === "Cliente" ? "Qualificado" : lead.status}
+                      </Badge>
+                      {(lead.is_cliente ?? false) && (
+                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                          Cliente
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
@@ -714,6 +755,7 @@ export default function LeadsPage() {
           </TableBody>
         </Table>
       </div>
+      </Tabs>
 
       {/* Dialog de Edição */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -837,6 +879,18 @@ export default function LeadsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="edit-is_cliente"
+                  checked={editForm.watch("is_cliente") ?? false}
+                  onCheckedChange={(checked) =>
+                    editForm.setValue("is_cliente", checked)
+                  }
+                />
+                <Label htmlFor="edit-is_cliente" className="cursor-pointer">
+                  Marcar como cliente (convertido)
+                </Label>
               </div>
             </div>
 
