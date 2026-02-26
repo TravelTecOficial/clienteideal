@@ -5,6 +5,7 @@ import { Loader2, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useSupabaseClient } from "@/lib/supabase-context"
 import { isSaasAdmin } from "@/lib/use-saas-admin"
+import { getAdminPreviewCompanyId } from "@/lib/admin-preview-storage"
 
 const PLAN_CHECK_KEY = "plan_check_passed"
 const PLAN_CHECK_TTL_MS = 10 * 60 * 1000 // 10 min
@@ -189,6 +190,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
     // Se já está em rota admin (ex: /admin/preview/:companyId), permitir acesso.
     if (location.pathname.startsWith("/admin")) {
+      return <>{children}</>
+    }
+    // Admin visualizando dashboard de cliente (sessionStorage com companyId) → permitir navegação.
+    if (location.pathname.startsWith("/dashboard") && getAdminPreviewCompanyId()) {
       return <>{children}</>
     }
     return <Navigate to="/admin" replace />

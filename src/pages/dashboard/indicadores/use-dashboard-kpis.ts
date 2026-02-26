@@ -5,15 +5,11 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@clerk/clerk-react"
-import type { SupabaseClient } from "@supabase/supabase-js"
 import { addDays, parseISO } from "date-fns"
 import { formatISO } from "date-fns"
 import { useSupabaseClient } from "@/lib/supabase-context"
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id"
 import type { PeriodRange } from "./period-utils"
-
-interface ProfileRow {
-  company_id: string | null
-}
 
 interface PagamentoRow {
   valor: number
@@ -25,24 +21,6 @@ export interface DashboardKpis {
   agendamentos: number
   reunioes: number
   vendas: number
-}
-
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle()
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error)
-    return null
-  }
-  const profile = data as ProfileRow | null
-  return profile?.company_id ?? null
 }
 
 /**
@@ -57,8 +35,7 @@ function getEndExclusiveForTimestamptz(end: string): string {
 export function useDashboardKpis(periodo: PeriodRange) {
   const { userId } = useAuth()
   const supabase = useSupabaseClient()
-
-  const [companyId, setCompanyId] = useState<string | null>(null)
+  const companyId = useEffectiveCompanyId()
   const [kpis, setKpis] = useState<DashboardKpis>({
     investimentoAds: 0,
     atendimentos: 0,
@@ -208,11 +185,6 @@ export function useDashboardKpis(periodo: PeriodRange) {
       setIsLoading(false)
     }
   }, [companyId, supabase, periodo.start, periodo.end, userId])
-
-  useEffect(() => {
-    if (!userId || !supabase) return
-    fetchCompanyId(supabase, userId).then(setCompanyId)
-  }, [userId, supabase])
 
   useEffect(() => {
     if (companyId) {

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +22,7 @@ import {
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 import {
   DndContext,
   closestCenter,
@@ -44,10 +44,6 @@ import { Plus, Loader2, Trash2, Pencil, GripVertical, Copy } from "lucide-react"
 import { cn } from "@/lib/utils";
 
 // --- Interfaces ---
-interface ProfileRow {
-  company_id: string | null;
-}
-
 const PONTOS_TIPO = { fria: 1, morna: 5, quente: 10 } as const;
 
 interface Qualificador {
@@ -84,24 +80,6 @@ interface QualificacaoTemplateRow {
 }
 
 // --- Helpers ---
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 function generateId(): string {
   return Math.random().toString(36).slice(2, 11);
 }
@@ -280,10 +258,10 @@ export default function QualificacaoPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const effectiveCompanyId = useEffectiveCompanyId();
 
   const [qualificadores, setQualificadores] = useState<Qualificador[]>([]);
   const [personas, setPersonas] = useState<{ id: string; profile_name: string }[]>([]);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -300,18 +278,6 @@ export default function QualificacaoPage() {
   const [isLoadingTemplatesCopy, setIsLoadingTemplatesCopy] = useState(false);
   const [copyingTemplateId, setCopyingTemplateId] = useState<string | null>(null);
   const [companySegmentType, setCompanySegmentType] = useState<string>("produtos");
-
-  const effectiveCompanyId = companyId;
-
-  // Buscar company_id
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   // Buscar Personas (ideal_customers)
   const loadPersonas = useCallback(async () => {

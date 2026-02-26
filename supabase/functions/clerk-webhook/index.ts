@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     )
   }
 
-  if (evt.type !== "user.created") {
+  if (evt.type !== "user.created" && evt.type !== "user.updated") {
     console.log("[clerk-webhook] Evento ignorado:", evt.type)
     return new Response(
       JSON.stringify({ received: true, type: evt.type }),
@@ -95,14 +95,11 @@ Deno.serve(async (req) => {
   }
 
   const { id, email_addresses = [], primary_email_address_id, first_name, last_name, public_metadata } = evt.data
+  const isSaasAdmin = public_metadata?.role === "admin"
   const primaryEmail = primary_email_address_id
     ? email_addresses.find((e) => e.id === primary_email_address_id)?.email_address
     : email_addresses[0]?.email_address
   const fullName = [first_name, last_name].filter(Boolean).join(" ").trim() || null
-
-  const invitedCompanyId = typeof public_metadata?.company_id === "string"
-    ? public_metadata.company_id
-    : null
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -115,6 +112,38 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  // user.updated: apenas sincronizar saas_admin do publicMetadata
+  if (evt.type === "user.updated") {
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ saas_admin: isSaasAdmin })
+        .eq("id", id)
+      if (error) {
+        console.error("[clerk-webhook] Erro ao atualizar saas_admin:", error)
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
+      console.log("[clerk-webhook] saas_admin atualizado:", { userId: id, saas_admin: isSaasAdmin })
+      return new Response(
+        JSON.stringify({ success: true, type: "user.updated", saas_admin: isSaasAdmin }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    } catch (err) {
+      console.error("[clerk-webhook] Erro ao processar user.updated:", err)
+      return new Response(
+        JSON.stringify({ error: String(err) }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+  }
+
+  const invitedCompanyId = typeof public_metadata?.company_id === "string"
+    ? public_metadata.company_id
+    : null
 
   try {
     let companyId: string
@@ -166,6 +195,7 @@ Deno.serve(async (req) => {
       full_name: fullName,
       company_id: companyId,
       role,
+      saas_admin: isSaasAdmin,
     }, { onConflict: "id" })
 
     if (profileError) {

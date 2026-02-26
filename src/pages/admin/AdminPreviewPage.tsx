@@ -3,6 +3,8 @@ import { useUser } from "@clerk/clerk-react"
 import { useSupabaseClient } from "@/lib/supabase-context"
 import { useEffect, useState } from "react"
 import { CompanyPreviewProvider } from "@/lib/company-preview-context"
+import { setAdminPreviewCompanyId, clearAdminPreviewCompanyId } from "@/lib/admin-preview-storage"
+import { AdminPreviewBanner } from "@/components/AdminPreviewBanner"
 import { isSaasAdmin } from "@/lib/use-saas-admin"
 import {
   SidebarInset,
@@ -31,6 +33,7 @@ export function AdminPreviewPage() {
       setStatus("error")
       return
     }
+    setAdminPreviewCompanyId(companyId)
     supabase
       .from("companies")
       .select("name")
@@ -68,17 +71,19 @@ export function AdminPreviewPage() {
 
   return (
     <CompanyPreviewProvider companyId={companyId}>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+      <AdminPreviewBanner />
+      <div className="pt-14">
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
                   <BreadcrumbLink asChild>
-                    <Link to="/admin">Admin</Link>
+                    <Link to="/admin" onClick={clearAdminPreviewCompanyId}>Admin</Link>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
@@ -102,6 +107,7 @@ export function AdminPreviewPage() {
           </div>
         </SidebarInset>
       </SidebarProvider>
+      </div>
     </CompanyPreviewProvider>
   )
 }

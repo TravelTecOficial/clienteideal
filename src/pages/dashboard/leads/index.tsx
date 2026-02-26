@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { Link } from "react-router-dom";
 import {
@@ -38,13 +37,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 import { LeadImportModal } from "./LeadImportModal";
 
 // --- Interfaces ---
-interface ProfileRow {
-  company_id: string | null;
-}
-
 interface Lead {
   id: string;
   name: string;
@@ -75,49 +71,18 @@ interface VendedorOption {
   nome: string;
 }
 
-// --- Helpers ---
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 export default function LeadsPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const effectiveCompanyId = useEffectiveCompanyId();
 
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"leads" | "clientes">("leads");
   const [importModalOpen, setImportModalOpen] = useState(false);
-
-  const effectiveCompanyId = companyId;
-
-  // Buscar company_id
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   // Buscar vendedores
   const loadVendedores = useCallback(async () => {

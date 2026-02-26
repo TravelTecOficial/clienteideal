@@ -1,6 +1,7 @@
 import { Suspense, Component, type ReactNode } from "react"
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { DashboardRouteWrapper } from "@/components/DashboardRouteWrapper"
 import { AdminPage } from "@/pages/admin/AdminPage"
 import { AdminConfigPage } from "@/pages/admin/AdminConfigPage"
 import { AdminEvolutionPage } from "@/pages/admin/AdminEvolutionPage"
@@ -88,7 +89,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <DashboardPage />
+                <DashboardRouteWrapper>
+                  <DashboardPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -98,7 +101,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <ProfilePage />
+                <DashboardRouteWrapper>
+                  <ProfilePage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -108,7 +113,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <VendedoresPage />
+                <DashboardRouteWrapper>
+                  <VendedoresPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -118,7 +125,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <ClienteIdealPage />
+                <DashboardRouteWrapper>
+                  <ClienteIdealPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -128,7 +137,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <ClienteIdealFormPage />
+                <DashboardRouteWrapper>
+                  <ClienteIdealFormPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -138,7 +149,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <QualificadorPage />
+                <DashboardRouteWrapper>
+                  <QualificadorPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -148,7 +161,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <LeadFormPage />
+                <DashboardRouteWrapper>
+                  <LeadFormPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -158,7 +173,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <LeadFormPage />
+                <DashboardRouteWrapper>
+                  <LeadFormPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -168,7 +185,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <LeadsPage />
+                <DashboardRouteWrapper>
+                  <LeadsPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -178,7 +197,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <OportunidadesPage />
+                <DashboardRouteWrapper>
+                  <OportunidadesPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -188,7 +209,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <AgendaPage />
+                <DashboardRouteWrapper>
+                  <AgendaPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -198,7 +221,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <AtendimentosPage />
+                <DashboardRouteWrapper>
+                  <AtendimentosPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -208,7 +233,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <BaseConhecimentoPage />
+                <DashboardRouteWrapper>
+                  <BaseConhecimentoPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -218,7 +245,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <ChatConhecimentoPage />
+                <DashboardRouteWrapper>
+                  <ChatConhecimentoPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -228,7 +257,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <ProdutosServicosPage />
+                <DashboardRouteWrapper>
+                  <ProdutosServicosPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -238,7 +269,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <PromptAtendimentoPage />
+                <DashboardRouteWrapper>
+                  <PromptAtendimentoPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -248,7 +281,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <ConfiguracoesPage />
+                <DashboardRouteWrapper>
+                  <ConfiguracoesPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -258,7 +293,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <ConsorcioPage />
+                <DashboardRouteWrapper>
+                  <ConsorcioPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
@@ -268,7 +305,9 @@ function App() {
           element={
             <SupabaseProvider>
               <ProtectedRoute>
-                <IndicadoresPage />
+                <DashboardRouteWrapper>
+                  <IndicadoresPage />
+                </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }

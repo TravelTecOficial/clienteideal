@@ -3,7 +3,6 @@ import { useAuth } from "@clerk/clerk-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { useParams, useNavigate, Link } from "react-router-dom";
 
 import {
@@ -50,12 +49,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ProfileDropdown } from "@/components/profile-dropdown";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 
 // --- Interfaces ---
-interface ProfileRow {
-  company_id: string | null;
-}
-
 interface VendedorOption {
   id: string;
   nome: string;
@@ -68,23 +64,6 @@ interface ItemOption {
 }
 
 // --- Helpers ---
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 const cepRegex = /^\d{5}-?\d{3}$/;
 
 const leadFormSchema = z.object({
@@ -174,30 +153,19 @@ export function LeadFormPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const effectiveCompanyId = useEffectiveCompanyId();
 
   const isNew = id === "novo";
   const editingId = isNew ? null : id ?? null;
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
   const [items, setItems] = useState<ItemOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(!isNew);
 
-  const effectiveCompanyId = companyId;
-
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadFormSchema),
     defaultValues: defaultFormValues,
   });
-
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   const loadVendedores = useCallback(async () => {
     if (!effectiveCompanyId) return;

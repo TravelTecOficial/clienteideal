@@ -1,33 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { useNavigate } from "react-router-dom";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase";
 import { getErrorMessage } from "@/lib/utils";
-
-// --- Helpers ---
-interface ProfileRow {
-  company_id: string | null;
-}
-
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 
 import {
   Dialog,
@@ -92,8 +69,8 @@ export default function IdealCustomerPage() {
   const { userId, getToken } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const effectiveCompanyId = useEffectiveCompanyId();
   const [isFetching, setIsFetching] = useState(true);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [clientes, setClientes] = useState<IdealCustomerRow[]>([]);
   const [generatingAvatarId, setGeneratingAvatarId] = useState<string | null>(null);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
@@ -104,18 +81,6 @@ export default function IdealCustomerPage() {
   const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
   const [previewAvatarUrl, setPreviewAvatarUrl] = useState<string | null>(null);
   const [previewAvatarName, setPreviewAvatarName] = useState<string>("persona");
-
-  const effectiveCompanyId = companyId;
-
-  // Buscar company_id do perfil (como nas outras páginas do dashboard)
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   const loadClientes = useCallback(async () => {
     if (!effectiveCompanyId) {
