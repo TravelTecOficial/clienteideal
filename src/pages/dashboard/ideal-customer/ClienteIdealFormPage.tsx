@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase";
 import { getErrorMessage } from "@/lib/utils";
@@ -93,6 +93,8 @@ type IdealCustomerFormValues = z.infer<typeof idealCustomerSchema>;
 export function ClienteIdealFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo") ?? searchParams.get("from");
   const { userId, getToken } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
@@ -249,13 +251,17 @@ export function ClienteIdealFormPage() {
           title: "Cadastrado!",
           description: "Cliente ideal cadastrado com sucesso.",
         });
+        if (returnTo) {
+          navigate(returnTo);
+          return;
+        }
         if (data?.id) {
           navigate(`/dashboard/cliente-ideal/${data.id}`);
           return;
         }
       }
 
-      navigate("/dashboard/cliente-ideal");
+      navigate(returnTo ?? "/dashboard/cliente-ideal");
     } catch (err: unknown) {
       console.error("[Cliente Ideal] Erro ao gravar:", err);
       toast({
