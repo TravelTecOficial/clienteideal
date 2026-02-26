@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
+import { useNavigate } from "react-router-dom";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase";
@@ -28,16 +29,6 @@ async function fetchCompanyId(
   return profile?.company_id ?? null;
 }
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -53,32 +44,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { User, Brain, ShoppingCart, Save, Loader2, Plus, Edit2, Trash2, ImageIcon, Copy } from "lucide-react";
-
-// Schema de Validação
-const idealCustomerSchema = z.object({
-  profile_name: z.string().min(2, "O nome do perfil é obrigatório"),
-  age_range: z.string().optional(),
-  gender: z.string().optional(),
-  location: z.string().optional(),
-  income_level: z.string().optional(),
-  job_title: z.string().optional(),
-  goals_dreams: z.string().optional(),
-  pain_points: z.string().optional(),
-  values_list: z.string().optional(),
-  hobbies_interests: z.string().optional(),
-  buying_journey: z.string().optional(),
-  decision_criteria: z.string().optional(),
-  common_objections: z.string().optional(),
-  target_product: z.string().optional(),
-});
-
-type IdealCustomerFormValues = z.infer<typeof idealCustomerSchema>;
+import { User, Loader2, Plus, Edit2, Trash2, ImageIcon, Copy } from "lucide-react";
 
 interface IdealCustomerRow {
   id: string;
   profile_name: string | null;
+  identifying_phrase: string | null;
   job_title: string | null;
   location: string | null;
   avatar_url: string | null;
@@ -87,6 +60,7 @@ interface IdealCustomerRow {
 interface IdealCustomerRowWithoutAvatar {
   id: string;
   profile_name: string | null;
+  identifying_phrase?: string | null;
   job_title: string | null;
   location: string | null;
 }
@@ -95,6 +69,7 @@ interface PersonaTemplateRow {
   id: string;
   profile_name: string | null;
   description: string | null;
+  identifying_phrase?: string | null;
   job_title: string | null;
   location: string | null;
   avatar_url?: string | null;
@@ -113,17 +88,14 @@ interface PersonaTemplateRow {
 }
 
 export default function IdealCustomerPage() {
+  const navigate = useNavigate();
   const { userId, getToken } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [clientes, setClientes] = useState<IdealCustomerRow[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [generatingAvatarId, setGeneratingAvatarId] = useState<string | null>(null);
-  const [editingAvatarUrl, setEditingAvatarUrl] = useState<string | null>(null);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [templates, setTemplates] = useState<PersonaTemplateRow[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
@@ -145,17 +117,6 @@ export default function IdealCustomerPage() {
     init();
   }, [userId, supabase]);
 
-  const form = useForm<IdealCustomerFormValues>({
-    resolver: zodResolver(idealCustomerSchema),
-    defaultValues: {
-      profile_name: "",
-      job_title: "",
-      goals_dreams: "",
-      pain_points: "",
-      common_objections: "",
-    },
-  });
-
   const loadClientes = useCallback(async () => {
     if (!effectiveCompanyId) {
       setIsFetching(false);
@@ -166,15 +127,14 @@ export default function IdealCustomerPage() {
     try {
       let { data, error } = await supabase
         .from("ideal_customers")
-        .select("id, profile_name, job_title, location, avatar_url")
+        .select("id, profile_name, identifying_phrase, job_title, location, avatar_url")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
-      const missingAvatarColumn =
-        (error as { code?: string; message?: string } | null)?.code === "42703" &&
-        ((error as { message?: string } | null)?.message ?? "").includes("avatar_url");
+      const missingColumn =
+        (error as { code?: string; message?: string } | null)?.code === "42703";
 
-      if (missingAvatarColumn) {
+      if (missingColumn) {
         const fallback = await supabase
           .from("ideal_customers")
           .select("id, profile_name, job_title, location")
@@ -184,6 +144,7 @@ export default function IdealCustomerPage() {
         error = fallback.error;
         data = ((fallback.data as IdealCustomerRowWithoutAvatar[] | null) ?? []).map((row) => ({
           ...row,
+          identifying_phrase: null,
           avatar_url: null,
         }));
       }
@@ -229,7 +190,7 @@ export default function IdealCustomerPage() {
     try {
       const { data, error } = await supabase
         .from("persona_templates")
-        .select("id, profile_name, description, job_title, location, avatar_url, segment_type, age_range, gender, income_level, goals_dreams, pain_points, values_list, hobbies_interests, buying_journey, decision_criteria, common_objections, target_product")
+        .select("id, profile_name, description, identifying_phrase, job_title, location, avatar_url, segment_type, age_range, gender, income_level, goals_dreams, pain_points, values_list, hobbies_interests, buying_journey, decision_criteria, common_objections, target_product")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -269,6 +230,7 @@ export default function IdealCustomerPage() {
     try {
       const payload = {
         profile_name: t.profile_name ?? "",
+        identifying_phrase: t.identifying_phrase ?? null,
         age_range: t.age_range ?? null,
         gender: t.gender ?? null,
         location: t.location ?? null,
@@ -309,144 +271,6 @@ export default function IdealCustomerPage() {
     }
   }
 
-  const handleOpenNew = () => {
-    setEditingId(null);
-    setEditingAvatarUrl(null);
-    form.reset({
-      profile_name: "",
-      age_range: "",
-      gender: "",
-      location: "",
-      income_level: "",
-      job_title: "",
-      goals_dreams: "",
-      pain_points: "",
-      values_list: "",
-      hobbies_interests: "",
-      buying_journey: "",
-      decision_criteria: "",
-      common_objections: "",
-      target_product: "",
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEdit = async (id: string) => {
-    setEditingId(id);
-    try {
-      const { data, error } = await supabase
-        .from("ideal_customers")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error) throw error;
-      if (data) {
-        form.reset({
-          profile_name: data.profile_name ?? "",
-          age_range: data.age_range ?? "",
-          gender: data.gender ?? "",
-          location: data.location ?? "",
-          income_level: data.income_level ?? "",
-          job_title: data.job_title ?? "",
-          goals_dreams: data.goals_dreams ?? "",
-          pain_points: data.pain_points ?? "",
-          values_list: data.values_list ?? "",
-          hobbies_interests: data.hobbies_interests ?? "",
-          buying_journey: data.buying_journey ?? "",
-          decision_criteria: data.decision_criteria ?? "",
-          common_objections: data.common_objections ?? "",
-          target_product: data.target_product ?? "",
-        });
-        setEditingAvatarUrl(data.avatar_url ?? null);
-      }
-    } catch {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Falha ao carregar dados do cliente ideal.",
-      });
-    }
-    setIsModalOpen(true);
-  };
-
-  async function onSubmit(values: IdealCustomerFormValues) {
-    if (!userId) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao salvar",
-        description: "Sessão inválida. Faça login novamente.",
-      });
-      return;
-    }
-    if (!effectiveCompanyId) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao salvar",
-        description: "Empresa não vinculada. Configure sua empresa em Configurações.",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const payload = {
-        profile_name: values.profile_name.trim(),
-        age_range: values.age_range?.trim() || null,
-        gender: values.gender?.trim() || null,
-        location: values.location?.trim() || null,
-        income_level: values.income_level?.trim() || null,
-        job_title: values.job_title?.trim() || null,
-        goals_dreams: values.goals_dreams?.trim() || null,
-        pain_points: values.pain_points?.trim() || null,
-        values_list: values.values_list?.trim() || null,
-        hobbies_interests: values.hobbies_interests?.trim() || null,
-        buying_journey: values.buying_journey?.trim() || null,
-        decision_criteria: values.decision_criteria?.trim() || null,
-        common_objections: values.common_objections?.trim() || null,
-        target_product: values.target_product?.trim() || null,
-        user_id: userId,
-        company_id: effectiveCompanyId,
-      };
-
-      if (editingId) {
-        const { error } = await supabase
-          .from("ideal_customers")
-          .update(payload)
-          .eq("id", editingId)
-          .eq("company_id", effectiveCompanyId);
-
-        if (error) throw error;
-        toast({
-          title: "Atualizado!",
-          description: "Cliente ideal atualizado com sucesso.",
-        });
-      } else {
-        const { error } = await supabase
-          .from("ideal_customers")
-          .insert(payload);
-
-        if (error) throw error;
-        toast({
-          title: "Cadastrado!",
-          description: "Cliente ideal cadastrado com sucesso.",
-        });
-      }
-
-      setIsModalOpen(false);
-      loadClientes();
-    } catch (err: unknown) {
-      console.error("[Cliente Ideal] Erro ao gravar:", err);
-      toast({
-        variant: "destructive",
-        title: "Erro ao salvar",
-        description: getErrorMessage(err, "Erro ao salvar."),
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   async function handleGenerateAvatar(c: IdealCustomerRow) {
     if (!effectiveCompanyId) return;
     setGeneratingAvatarId(c.id);
@@ -473,7 +297,6 @@ export default function IdealCustomerPage() {
       if (data?.error) throw new Error(data.error);
 
       toast({ title: "Rosto gerado!", description: "O avatar do persona foi criado com sucesso." });
-      if (data?.avatar_url) setEditingAvatarUrl(data.avatar_url);
       loadClientes();
     } catch (err) {
       console.error("[Cliente Ideal] Erro ao gerar rosto:", err);
@@ -538,7 +361,10 @@ export default function IdealCustomerPage() {
           <Button variant="outline" onClick={handleOpenCopyModal} disabled={!effectiveCompanyId}>
             <Copy className="mr-2 h-4 w-4" /> Copiar de modelo
           </Button>
-          <Button onClick={handleOpenNew} disabled={!effectiveCompanyId}>
+          <Button
+            onClick={() => navigate("/dashboard/cliente-ideal/novo")}
+            disabled={!effectiveCompanyId}
+          >
             <Plus className="mr-2 h-4 w-4" /> Novo Cliente Ideal
           </Button>
         </div>
@@ -550,6 +376,7 @@ export default function IdealCustomerPage() {
             <TableRow>
               <TableHead className="text-foreground w-24">Rosto</TableHead>
               <TableHead className="text-foreground">Perfil</TableHead>
+              <TableHead className="text-foreground">Frase</TableHead>
               <TableHead className="text-foreground">Cargo</TableHead>
               <TableHead className="text-foreground">Localização</TableHead>
               <TableHead className="text-right text-foreground">Ações</TableHead>
@@ -558,14 +385,14 @@ export default function IdealCustomerPage() {
           <TableBody>
             {isFetching ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10">
+                <TableCell colSpan={6} className="text-center py-10">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : clientes.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="text-center py-10 text-muted-foreground"
                 >
                   Nenhum cliente ideal cadastrado. Clique em &quot;Novo Cliente Ideal&quot; para começar.
@@ -597,6 +424,9 @@ export default function IdealCustomerPage() {
                   <TableCell className="font-medium text-foreground">
                     {c.profile_name ?? "—"}
                   </TableCell>
+                  <TableCell className="text-muted-foreground max-w-[200px] truncate" title={c.identifying_phrase ?? undefined}>
+                    {c.identifying_phrase ?? "—"}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {c.job_title ?? "—"}
                   </TableCell>
@@ -622,7 +452,7 @@ export default function IdealCustomerPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleOpenEdit(c.id)}
+                        onClick={() => navigate(`/dashboard/cliente-ideal/${c.id}`)}
                         aria-label={`Editar ${c.profile_name ?? "cliente"}`}
                       >
                         <Edit2 className="h-4 w-4" />
@@ -644,200 +474,6 @@ export default function IdealCustomerPage() {
           </TableBody>
         </Table>
       </div>
-
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">
-              {editingId ? "Editar Cliente Ideal" : "Novo Cliente Ideal"}
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Preencha as informações para que a IA conheça seu público-alvo.
-            </DialogDescription>
-          </DialogHeader>
-
-          {editingId && (
-            <div className="flex items-center gap-4 py-2 border-b border-border">
-              <div className="flex-shrink-0">
-                {editingAvatarUrl ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleOpenAvatarPreview(
-                        editingAvatarUrl,
-                        form.getValues("profile_name") || null
-                      )
-                    }
-                    className="rounded-full focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    aria-label="Abrir foto do persona"
-                  >
-                    <img
-                      src={editingAvatarUrl}
-                      alt="Rosto do persona"
-                      className="h-16 w-16 rounded-full object-cover border border-border cursor-zoom-in transition-transform hover:scale-105"
-                    />
-                  </button>
-                ) : (
-                  <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                    <User className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-muted-foreground mb-1">Rosto do persona</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleGenerateAvatar({ id: editingId, profile_name: null, job_title: null, location: null, avatar_url: editingAvatarUrl })}
-                  disabled={generatingAvatarId === editingId}
-                >
-                  {generatingAvatarId === editingId ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                  )}
-                  {editingAvatarUrl ? "Gerar novo rosto" : "Gerar rosto"}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <Tabs defaultValue="demographics" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4">
-                <TabsTrigger value="demographics">
-                  <User className="w-4 h-4 mr-2" /> Demográficos
-                </TabsTrigger>
-                <TabsTrigger value="psychographics">
-                  <Brain className="w-4 h-4 mr-2" /> Psicográficos
-                </TabsTrigger>
-                <TabsTrigger value="behavior">
-                  <ShoppingCart className="w-4 h-4 mr-2" /> Comportamento
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="demographics">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Dados Demográficos</CardTitle>
-                    <CardDescription>Quem é o seu cliente ideal?</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Nome Fictício do Perfil</Label>
-                        <Input
-                          {...form.register("profile_name")}
-                          placeholder="Ex: Pedro Empreendedor"
-                        />
-                        {form.formState.errors.profile_name && (
-                          <p className="text-red-500 text-xs">
-                            {form.formState.errors.profile_name.message}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Cargo / Profissão</Label>
-                        <Input
-                          {...form.register("job_title")}
-                          placeholder="Ex: Diretor de Vendas"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Faixa Etária</Label>
-                        <Input
-                          {...form.register("age_range")}
-                          placeholder="Ex: 30-45 anos"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Localização</Label>
-                        <Input
-                          {...form.register("location")}
-                          placeholder="Ex: São Paulo / Brasil"
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="psychographics">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Dados Psicográficos</CardTitle>
-                    <CardDescription>O que seu cliente pensa e sente?</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Dores e Problemas (O que tira o sono dele?)</Label>
-                      <Textarea
-                        {...form.register("pain_points")}
-                        placeholder="Descreva as dificuldades atuais..."
-                        className="min-h-[100px]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Objetivos e Sonhos (Onde ele quer chegar?)</Label>
-                      <Textarea
-                        {...form.register("goals_dreams")}
-                        placeholder="O que ele deseja conquistar..."
-                        className="min-h-[100px]"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="behavior">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Comportamento de Compra</CardTitle>
-                    <CardDescription>Como ele toma decisões de compra?</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Objeções Comuns (Por que ele não compraria?)</Label>
-                      <Textarea
-                        {...form.register("common_objections")}
-                        placeholder="Ex: Preço alto, falta de tempo..."
-                        className="min-h-[100px]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Critérios de Decisão</Label>
-                      <Textarea
-                        {...form.register("decision_criteria")}
-                        placeholder="Ex: Atendimento, Suporte, Preço"
-                        className="min-h-[100px]"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-
-            <div className="flex justify-end gap-3 pt-6 border-t border-border mt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsModalOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                {editingId ? "Atualizar" : "Salvar"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={isCopyModalOpen} onOpenChange={setIsCopyModalOpen}>
         <DialogContent className="max-w-lg">

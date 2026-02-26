@@ -59,6 +59,7 @@ import {
 const templateSchema = z.object({
   profile_name: z.string().min(2, "O nome do perfil é obrigatório"),
   description: z.string().optional(),
+  identifying_phrase: z.string().optional(),
   age_range: z.string().optional(),
   gender: z.string().optional(),
   location: z.string().optional(),
@@ -81,6 +82,7 @@ interface PersonaTemplateRow {
   id: string
   profile_name: string | null
   description: string | null
+  identifying_phrase?: string | null
   job_title: string | null
   location: string | null
   age_range?: string | null
@@ -173,6 +175,7 @@ export function AdminPersonasPage() {
     form.reset({
       profile_name: "",
       description: "",
+      identifying_phrase: "",
       age_range: "",
       gender: "",
       location: "",
@@ -198,6 +201,7 @@ export function AdminPersonasPage() {
     form.reset({
       profile_name: t.profile_name ?? "",
       description: t.description ?? "",
+      identifying_phrase: t.identifying_phrase ?? "",
       age_range: t.age_range ?? "",
       gender: t.gender ?? "",
       location: t.location ?? "",
@@ -234,6 +238,7 @@ export function AdminPersonasPage() {
         id: editingId ?? undefined,
         profile_name: values.profile_name.trim(),
         description: values.description?.trim() || null,
+        identifying_phrase: values.identifying_phrase?.trim() || null,
         age_range: values.age_range?.trim() || null,
         gender: values.gender?.trim() || null,
         location: values.location?.trim() || null,
@@ -543,6 +548,13 @@ export function AdminPersonasPage() {
                       <Input
                         {...form.register("description")}
                         placeholder="Ex: Empreendedor B2B, 35-50 anos"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Frase de identificação</Label>
+                      <Input
+                        {...form.register("identifying_phrase")}
+                        placeholder="Ex: Quero sair do aluguel, quero comprar meu carro novo"
                       />
                     </div>
                     <div className="space-y-2">

@@ -7,6 +7,23 @@ e o projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [1.0.3] - 2026-02-26
+
+### Adicionado
+
+- **Cliente Ideal — Frase de identificação** — Novo campo para identificar o perfil (ex: "Quero sair do aluguel", "Quero comprar meu carro novo").
+
+### Alterado
+
+- **Cliente Ideal — Formulário em página completa** — Criação e edição de perfis agora abrem em página dedicada em vez de modal.
+
+### Banco de Dados
+
+- **`ideal_customers`** — Nova coluna `identifying_phrase`.
+- **`persona_templates`** — Nova coluna `identifying_phrase` (paridade ao copiar modelos).
+
+---
+
 ## [1.1.0] - 2026-02-18
 
 ### Adicionado

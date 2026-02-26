@@ -51,6 +51,7 @@ async function debugLog(params: {
 interface TemplatePayload {
   profile_name?: string
   description?: string | null
+  identifying_phrase?: string | null
   age_range?: string | null
   gender?: string | null
   location?: string | null
@@ -75,6 +76,7 @@ interface RequestBody {
   id?: string
   profile_name?: string
   description?: string | null
+  identifying_phrase?: string | null
   age_range?: string | null
   gender?: string | null
   location?: string | null
@@ -96,6 +98,7 @@ function toTemplatePayload(body: RequestBody): TemplatePayload {
   return {
     profile_name: body.profile_name,
     description: body.description ?? null,
+    identifying_phrase: body.identifying_phrase ?? null,
     age_range: body.age_range ?? null,
     gender: body.gender ?? null,
     location: body.location ?? null,
