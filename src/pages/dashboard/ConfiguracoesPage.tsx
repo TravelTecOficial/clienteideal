@@ -57,7 +57,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
-import { getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useEvolutionProxy } from "@/hooks/use-evolution-proxy";
 import { ChatBriefingModal } from "@/components/chat-briefing/ChatBriefingModal";
@@ -221,6 +221,11 @@ export function ConfiguracoesPage() {
   const whatsappImageInputRef = useRef<HTMLInputElement>(null);
   const [briefingCompleted, setBriefingCompleted] = useState(false);
   const [isBriefingModalOpen, setIsBriefingModalOpen] = useState(false);
+  const [googleAdsOAuthOpen, setGoogleAdsOAuthOpen] = useState(false);
+  const [googleAdsOAuthStep, setGoogleAdsOAuthStep] = useState<"login" | "account" | "success">("login");
+  const [googleAdsOAuthEmail, setGoogleAdsOAuthEmail] = useState("");
+  const [googleAdsSelectedAccount, setGoogleAdsSelectedAccount] = useState<string | null>(null);
+  const [isGoogleAdsConnecting, setIsGoogleAdsConnecting] = useState(false);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
   const evolutionForm = useForm<EvolutionFormValues>({
@@ -1495,13 +1500,32 @@ export function ConfiguracoesPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Google Ads - Simulado OAuth */}
+                    <Card>
+                      <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-2xl">
+                          🔍
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <CardTitle className="text-base">Google Ads</CardTitle>
+                          <CardDescription>Google Ads</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setGoogleAdsOAuthStep("login");
+                              setGoogleAdsOAuthEmail("");
+                              setGoogleAdsSelectedAccount(null);
+                              setGoogleAdsOAuthOpen(true);
+                            }}
+                          >
+                            Conectar Google Ads
+                          </Button>
+                        </div>
+                      </CardHeader>
+                    </Card>
                     {[
-                      {
-                        id: "google-ads",
-                        name: "Google Ads",
-                        icon: "🔍",
-                        description: "Google Ads",
-                      },
                       {
                         id: "meta-ads",
                         name: "Meta Ads",
@@ -1542,6 +1566,163 @@ export function ConfiguracoesPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Modal simulado OAuth Google Ads */}
+              <Dialog
+                open={googleAdsOAuthOpen}
+                onOpenChange={(open) => {
+                  setGoogleAdsOAuthOpen(open);
+                  if (!open) {
+                    setGoogleAdsOAuthStep("login");
+                    setGoogleAdsOAuthEmail("");
+                    setGoogleAdsSelectedAccount(null);
+                  }
+                }}
+              >
+                <DialogContent className="max-w-md">
+                  {googleAdsOAuthStep === "login" && (
+                    <>
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <span className="flex h-8 w-8 items-center justify-center rounded bg-[#4285F4] text-white text-sm font-bold">
+                            G
+                          </span>
+                          Conectar Google Ads
+                        </DialogTitle>
+                        <DialogDescription>
+                          Faça login com sua conta Google para conectar o Google Ads.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="google-oauth-email">E-mail ou telefone</Label>
+                          <Input
+                            id="google-oauth-email"
+                            type="email"
+                            placeholder="seu@email.com"
+                            value={googleAdsOAuthEmail}
+                            onChange={(e) => setGoogleAdsOAuthEmail(e.target.value)}
+                            className="border-2"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Simulado: digite qualquer e-mail para continuar.
+                        </p>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          onClick={() => {
+                            if (googleAdsOAuthEmail.trim()) {
+                              setGoogleAdsOAuthStep("account");
+                            } else {
+                              toast({
+                                title: "Informe o e-mail",
+                                description: "Digite um e-mail para continuar o login.",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                          className="w-full sm:w-auto"
+                        >
+                          Próximo
+                        </Button>
+                      </DialogFooter>
+                    </>
+                  )}
+                  {googleAdsOAuthStep === "account" && (
+                    <>
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <span className="flex h-8 w-8 items-center justify-center rounded bg-[#4285F4] text-white text-sm font-bold">
+                            G
+                          </span>
+                          Escolher conta
+                        </DialogTitle>
+                        <DialogDescription>
+                          Selecione a conta do Google Ads que deseja conectar.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-2 py-4">
+                        {[
+                          { id: "acc-1", name: "Empresa XYZ", customerId: "123-456-7890" },
+                          { id: "acc-2", name: "Minha Conta Ads", customerId: "987-654-3210" },
+                          { id: "acc-3", name: "Agência Digital", customerId: "555-123-4567" },
+                        ].map((acc) => (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            onClick={() => setGoogleAdsSelectedAccount(acc.id)}
+                            className={cn(
+                              "flex w-full items-center justify-between rounded-lg border-2 p-4 text-left transition-colors",
+                              googleAdsSelectedAccount === acc.id
+                                ? "border-[#4285F4] bg-[#4285F4]/5"
+                                : "border-border hover:border-muted-foreground/30"
+                            )}
+                          >
+                            <div>
+                              <p className="font-medium">{acc.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                ID: {acc.customerId}
+                              </p>
+                            </div>
+                            {googleAdsSelectedAccount === acc.id && (
+                              <Check className="h-5 w-5 text-[#4285F4]" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          onClick={() => setGoogleAdsOAuthStep("login")}
+                        >
+                          Voltar
+                        </Button>
+                        <Button
+                          disabled={!googleAdsSelectedAccount || isGoogleAdsConnecting}
+                          onClick={async () => {
+                            setIsGoogleAdsConnecting(true);
+                            await new Promise((r) => setTimeout(r, 1500));
+                            setIsGoogleAdsConnecting(false);
+                            setGoogleAdsOAuthStep("success");
+                            toast({
+                              title: "Google Ads conectado",
+                              description: "A integração foi configurada com sucesso (simulado).",
+                            });
+                          }}
+                        >
+                          {isGoogleAdsConnecting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Conectando…
+                            </>
+                          ) : (
+                            "Conectar"
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </>
+                  )}
+                  {googleAdsOAuthStep === "success" && (
+                    <>
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Check className="h-8 w-8 text-success" />
+                          Conectado com sucesso
+                        </DialogTitle>
+                        <DialogDescription>
+                          Sua conta Google Ads foi conectada. Esta é uma simulação — em produção, os dados seriam sincronizados via API.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button onClick={() => setGoogleAdsOAuthOpen(false)}>
+                          Fechar
+                        </Button>
+                      </DialogFooter>
+                    </>
+                  )}
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             <TabsContent value="evolution" className="space-y-4 pt-4">

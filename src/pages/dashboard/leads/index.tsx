@@ -146,14 +146,21 @@ export default function LeadsPage() {
   );
   const trimmedQuery = searchQuery.trim();
   const shouldFilter = trimmedQuery.length >= 3;
+  const queryDigits = trimmedQuery.replace(/\D/g, "");
+  const queryLower = trimmedQuery.toLowerCase();
+
   const filteredLeads = shouldFilter
-    ? leadsByTab.filter(
-        (l) =>
-          (l.name ?? "").toLowerCase().includes(trimmedQuery.toLowerCase()) ||
-          (l.email?.toLowerCase().includes(trimmedQuery.toLowerCase()) ?? false) ||
-          (l.cep?.includes(trimmedQuery.replace(/\D/g, "")) ?? false) ||
-          (l.conversao?.toLowerCase().includes(trimmedQuery.toLowerCase()) ?? false)
-      )
+    ? leadsByTab.filter((l) => {
+        const nameMatch = (l.name ?? "").toLowerCase().includes(queryLower);
+        const emailMatch = (l.email ?? "").toLowerCase().includes(queryLower);
+        const conversaoMatch = (l.conversao ?? "").toLowerCase().includes(queryLower);
+        const phoneMatch =
+          queryDigits.length > 0 &&
+          ((l.phone ?? "").replace(/\D/g, "").includes(queryDigits));
+        const cepMatch =
+          queryDigits.length > 0 && ((l.cep ?? "").replace(/\D/g, "").includes(queryDigits));
+        return nameMatch || emailMatch || conversaoMatch || phoneMatch || cepMatch;
+      })
     : leadsByTab;
 
 
@@ -271,14 +278,14 @@ export default function LeadsPage() {
             <div className="relative flex-1 space-y-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome ou email (mín. 3 letras)..."
+                placeholder="Buscar por nome, email ou telefone (mín. 3 letras)..."
                 className="pl-8"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               {trimmedQuery.length > 0 && trimmedQuery.length < 3 && (
                 <p className="text-xs text-muted-foreground pl-1">
-                  Digite pelo menos 3 letras para filtrar os leads
+                  Digite pelo menos 3 letras para filtrar os {activeTab === "leads" ? "leads" : "clientes"}
                 </p>
               )}
             </div>
@@ -316,8 +323,8 @@ export default function LeadsPage() {
               <TableRow>
                 <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                   {shouldFilter
-                    ? "Nenhum lead encontrado para a busca."
-                    : "Nenhum lead encontrado. Use o botão acima para cadastrar."}
+                    ? `Nenhum ${activeTab === "leads" ? "lead" : "cliente"} encontrado para a busca.`
+                    : `Nenhum ${activeTab === "leads" ? "lead" : "cliente"} encontrado. Use o botão acima para cadastrar.`}
                 </TableCell>
               </TableRow>
             ) : (
