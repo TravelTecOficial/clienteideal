@@ -106,9 +106,20 @@ function looksLikeDataRow(row: string[]): boolean {
   return false;
 }
 
+/** Torna headers únicos: duplicatas recebem sufixo " (2)", " (3)", etc. */
+function makeHeadersUnique(rawHeaders: string[]): string[] {
+  const counts = new Map<string, number>();
+  return rawHeaders.map((h) => {
+    const count = (counts.get(h) ?? 0) + 1;
+    counts.set(h, count);
+    return count === 1 ? h : `${h} (${count})`;
+  });
+}
+
 /**
  * Parseia CSV com papaparse. Detecta cabeçalho automaticamente.
  * Suporta vírgula, ponto-e-vírgula e valores entre aspas.
+ * Headers duplicados recebem sufixo " (2)", " (3)" para permitir mapeamento correto.
  */
 export function parseCsvFile(text: string): ParsedCsvResult {
   const parsed = Papa.parse<string[]>(text, {
@@ -128,9 +139,10 @@ export function parseCsvFile(text: string): ParsedCsvResult {
     (firstRowLooksLikeHeader(firstRow) ||
       (secondRow && looksLikeDataRow(secondRow) && !looksLikeDataRow(firstRow)));
 
-  const headers = hasHeader
+  const rawHeaders = hasHeader
     ? firstRow.map((h, i) => String(h ?? "").trim() || `Coluna ${i + 1}`)
     : firstRow.map((_, i) => `Coluna ${i + 1}`);
+  const headers = makeHeadersUnique(rawHeaders);
   const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
 
   const rows: Record<string, string>[] = dataRows.map((row) => {
@@ -163,9 +175,10 @@ function rawRowsToResult(rawRows: unknown[][]): ParsedCsvResult {
     (firstRowLooksLikeHeader(firstRow) ||
       (secondRow && looksLikeDataRow(secondRow) && !looksLikeDataRow(firstRow)));
 
-  const headers = hasHeader
+  const rawHeaders = hasHeader
     ? firstRow.map((h, i) => String(h ?? "").trim() || `Coluna ${i + 1}`)
     : firstRow.map((_, i) => `Coluna ${i + 1}`);
+  const headers = makeHeadersUnique(rawHeaders);
   const dataRows = hasHeader ? rows.slice(1) : rows;
 
   const resultRows: Record<string, string>[] = dataRows.map((row) => {
@@ -416,7 +429,7 @@ export function suggestMapping(headers: string[]): ColumnMapping {
     { keys: ["utm_id", "utm id"], field: "utm_id" },
     { keys: ["fbclid", "fb_clid"], field: "fbclid" },
     { keys: ["gclid", "gcl_id"], field: "gclid" },
-    { keys: ["produto", "serviço", "servico", "item", "product", "service"], field: "item_name" },
+    { keys: ["produto", "serviço", "servico", "item", "product", "service", "ramo"], field: "item_name" },
   ];
 
   headers.forEach((header, i) => {
