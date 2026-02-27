@@ -17,6 +17,7 @@ interface PagamentoRow {
 
 export interface DashboardKpis {
   investimentoAds: number
+  acessos: number
   atendimentos: number
   agendamentos: number
   reunioes: number
@@ -38,6 +39,7 @@ export function useDashboardKpis(periodo: PeriodRange) {
   const companyId = useEffectiveCompanyId()
   const [kpis, setKpis] = useState<DashboardKpis>({
     investimentoAds: 0,
+    acessos: 0,
     atendimentos: 0,
     agendamentos: 0,
     reunioes: 0,
@@ -60,7 +62,7 @@ export function useDashboardKpis(periodo: PeriodRange) {
 
       const [
         investimentoRes,
-        atendimentosRes,
+        atendimentosIaCount,
         agendamentosRes,
         reunioesRes,
         vendasRes,
@@ -84,7 +86,7 @@ export function useDashboardKpis(periodo: PeriodRange) {
             return total
           })(),
 
-          // Atendimentos - atendimentos_ia (created_at é timestamptz)
+          // Acessos e Atendimentos - atendimentos_ia (cada registro = 1 acesso)
           (async () => {
             let query = supabase
               .from("atendimentos_ia")
@@ -166,7 +168,8 @@ export function useDashboardKpis(periodo: PeriodRange) {
 
       setKpis({
         investimentoAds: investimentoRes,
-        atendimentos: atendimentosRes,
+        acessos: atendimentosIaCount,
+        atendimentos: atendimentosIaCount,
         agendamentos: agendamentosRes,
         reunioes: reunioesRes,
         vendas: vendasRes,
@@ -176,6 +179,7 @@ export function useDashboardKpis(periodo: PeriodRange) {
       setError("Não foi possível carregar os indicadores.")
       setKpis({
         investimentoAds: 0,
+        acessos: 0,
         atendimentos: 0,
         agendamentos: 0,
         reunioes: 0,

@@ -21,6 +21,7 @@ import {
   BarChart3,
   Calendar,
   DollarSign,
+  Eye,
   Headphones,
   ShoppingCart,
 } from "lucide-react"
@@ -200,8 +201,8 @@ export default function IndicadoresPageContent() {
         </TabsList>
 
         <TabsContent value="comercial" className="mt-6 space-y-6">
-          {/* KPIs - Padrão ShadCN: 4 cards + Financeiro em destaque */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* KPIs - Padrão ShadCN: 5 cards + Financeiro em destaque */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -226,6 +227,27 @@ export default function IndicadoresPageContent() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Acessos
+                </CardTitle>
+                <Eye className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <div className="text-2xl font-bold">
+                    {kpis.acessos.toLocaleString("pt-BR")}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground pt-1">
+                  {showVariacao ? "— vs. mês anterior" : "—"}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
                   Atendimentos
                 </CardTitle>
                 <Headphones className="h-4 w-4 text-muted-foreground" />
@@ -238,7 +260,7 @@ export default function IndicadoresPageContent() {
                     {kpis.atendimentos.toLocaleString("pt-BR")}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground pt-1">
                   {showVariacao ? "— vs. mês anterior" : "—"}
                 </p>
               </CardContent>
