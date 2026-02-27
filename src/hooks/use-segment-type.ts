@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useCompanyPreview } from "@/lib/company-preview-context";
+import { getAdminPreviewCompanyId } from "@/lib/admin-preview-storage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 interface ProfileRow {
@@ -55,25 +56,27 @@ export function useSegmentType(): { segmentType: string; isLoading: boolean } {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { companyId: previewCompanyId } = useCompanyPreview();
+  const storagePreviewId = getAdminPreviewCompanyId();
+  const effectivePreviewId = previewCompanyId ?? storagePreviewId;
   const [segmentType, setSegmentType] = useState<string>("produtos");
   const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!userId && !previewCompanyId) {
+    if (!userId && !effectivePreviewId) {
       setIsLoading(false);
       setSegmentType("produtos");
       return;
     }
     setIsLoading(true);
     try {
-      const value = await fetchSegmentType(supabase, userId ?? "", previewCompanyId);
+      const value = await fetchSegmentType(supabase, userId ?? "", effectivePreviewId);
       setSegmentType(value);
     } catch {
       setSegmentType("produtos");
     } finally {
       setIsLoading(false);
     }
-  }, [userId, supabase, previewCompanyId]);
+  }, [userId, supabase, effectivePreviewId]);
 
   useEffect(() => {
     load();

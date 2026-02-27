@@ -22,6 +22,8 @@ import {
 
 import { SearchForm } from "@/components/search-form"
 import { useSegmentType } from "@/hooks/use-segment-type"
+import { useCompanyPreview } from "@/lib/company-preview-context"
+import { getPreviewUrlSuffix } from "@/lib/admin-preview-storage"
 import {
   Collapsible,
   CollapsibleContent,
@@ -73,7 +75,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { signOut } = useClerk()
   const { segmentType } = useSegmentType()
+  const { companyId: previewCompanyId } = useCompanyPreview()
   const UsuariosIcon = usuariosNav.icon
+
+  const previewSuffix = previewCompanyId ? getPreviewUrlSuffix(previewCompanyId) : ""
 
   const navItems = navItemsBase.filter((item) => {
     const filter = (item as { segmentFilter?: "produtos" | "consorcio" }).segmentFilter
@@ -91,9 +96,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <div className="mx-2 rounded-lg border border-border bg-white p-2 shadow-sm">
           <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton size="lg" asChild className="h-auto p-2">
-                <Link to="/dashboard" className="flex items-center justify-center">
+                <SidebarMenuItem>
+                  <SidebarMenuButton size="lg" asChild className="h-auto p-2">
+                    <Link to={previewSuffix ? `/dashboard${previewSuffix}` : "/dashboard"} className="flex items-center justify-center">
                   <img
                     src="/logo-cliente-ideal.png"
                     alt="CLIENTE IDEAL Online"
@@ -111,10 +116,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenu>
             {navItems.map((item) => {
               const Icon = item.icon
+              const url = previewSuffix ? `${item.url}${previewSuffix}` : item.url
               return (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link to={item.url} className="flex items-center gap-2">
+                    <Link to={url} className="flex items-center gap-2">
                       <Icon className="size-4 shrink-0" />
                       {item.title}
                     </Link>
