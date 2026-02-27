@@ -183,7 +183,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!isSignedIn) {
     clearPlanCheckPassed()
-    return <Navigate to="/entrar" replace state={{ from: location }} />
+    const from = `${location.pathname}${location.search}`
+    return <Navigate to={`/entrar?redirect=${encodeURIComponent(from)}`} replace state={{ from: location }} />
   }
 
   // Admin do SaaS (publicMetadata.role === "admin") → /admin. Note: UI-level check. API enforcement required.
