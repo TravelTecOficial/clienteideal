@@ -1,4 +1,4 @@
-# Documentação Completa — Cliente Ideal Online v1.1.5
+# Documentação Completa — Cliente Ideal Online v1.1.6
 
 ## Índice
 1. [Visão Geral](#1-visão-geral)
@@ -154,6 +154,7 @@ O sistema é **multitenant**: cada empresa (company) tem seus próprios dados is
 | `/admin/evolution` | Configuração Evolution API (Admin SaaS) |
 | `/admin/preview/:companyId` | Preview como empresa (Admin SaaS) |
 | `/admin/gtm` | Configuração Google Tag Manager (Admin SaaS) |
+| `/admin/briefing` | Gestão de perguntas do Briefing Estratégico (Admin SaaS) |
 
 ### 5.3 Fluxo de Seleção de Plano
 
@@ -306,7 +307,7 @@ Módulo específico para gestão de consórcios.
 
 **Rota:** `/dashboard/configuracoes`
 
-Configurações da empresa (acessível apenas por usuários autorizados).
+Configurações da empresa (acessível apenas por usuários autorizados). Inclui o **Chat de Briefing Estratégico** — modal que guia a empresa por um questionário de 5 pilares (DNA, Produto/Oferta, Público/Persona, Mercado/Concorrência, Objetivos/Metas). As respostas são salvas em `company_briefing_responses` e enviadas ao webhook n8n (`https://jobs.traveltec.com.br/webhook/briefing`).
 
 ---
 
@@ -323,12 +324,14 @@ Configurações da empresa (acessível apenas por usuários autorizados).
 
 ### 6.14 Admin (SaaS)
 
-**Rotas:** `/admin`, `/admin/configuracoes`, `/admin/evolution`, `/admin/preview/:companyId`
+**Rotas:** `/admin`, `/admin/configuracoes`, `/admin/evolution`, `/admin/preview/:companyId`, `/admin/gtm`, `/admin/briefing`
 
 - **Admin:** Lista de usuários do sistema (profiles + companies)
 - **Admin Configurações:** Webhooks n8n (Consórcio, Produtos, Chat de Conhecimento)
 - **Admin Evolution:** URL e API Key da Evolution API (WhatsApp)
-- **Admin Preview:** Visualizar dashboard como empresa específica
+- **Admin Preview:** Visualizar dashboard como empresa específica (respeita `companies.support_access_enabled`)
+- **Admin GTM:** Configuração Google Tag Manager
+- **Admin Briefing:** Gestão de perguntas do Questionário de Briefing Estratégico (`briefing_questions`)
 - Acesso restrito a `publicMetadata.role === "admin"`
 
 ---
@@ -340,7 +343,7 @@ Configurações da empresa (acessível apenas por usuários autorizados).
 | Tabela | Descrição |
 |-------|-----------|
 | `profiles` | Usuários (id = Clerk user ID, company_id, role) |
-| `companies` | Empresas (id, name, slug, plan_type, status) |
+| `companies` | Empresas (id, name, slug, plan_type, status, support_access_enabled) |
 | `ideal_customers` | Perfis de cliente ideal |
 | `qualificadores` | Qualificadores (nome, persona) |
 | `qualificacao_perguntas` | Perguntas de cada qualificador |
@@ -355,6 +358,8 @@ Configurações da empresa (acessível apenas por usuários autorizados).
 | `horarios` | Horários de trabalho dos vendedores |
 | `admin_evolution_config` | URL e API Key da Evolution API (global) |
 | `admin_webhook_config` | Webhooks n8n (consórcio, produtos, chat) |
+| `briefing_questions` | Perguntas do Briefing Estratégico (admin gerencia) |
+| `company_briefing_responses` | Respostas das empresas ao questionário de briefing |
 
 ### 7.2 Esquema Resumido
 
@@ -362,7 +367,7 @@ Configurações da empresa (acessível apenas por usuários autorizados).
 profiles (id TEXT PK, company_id, email, full_name, role)
   └── company_id → companies(id)
 
-companies (id TEXT PK, name, slug, plan_type, status)
+companies (id TEXT PK, name, slug, plan_type, status, support_access_enabled)
 
 ideal_customers (id, company_id, profile_name, ...)
 
@@ -417,6 +422,9 @@ O JWT do Clerk é enviado em cada requisição Supabase; o template `supabase` g
 | **evolution-webhook** | Webhook Evolution | Recebe mensagens MESSAGES_UPSERT da Evolution |
 | **chat-conhecimento-proxy** | Chamada do frontend | Proxy para Chat de Conhecimento; monta payload e encaminha ao n8n |
 | **upload-kb-to-webhook** | Chamada do frontend | Envia arquivos da base de conhecimento ao webhook n8n |
+| **admin-gtm-config** | Chamada do frontend | Configuração Google Tag Manager |
+| **get-gtm-config** | Chamada do frontend | Retorna configuração GTM para o frontend |
+| **admin-briefing-questions** | Chamada do frontend | CRUD de perguntas do Briefing Estratégico (admin SaaS) |
 
 ### Integração Evolution API (WhatsApp)
 
@@ -557,4 +565,4 @@ Rota `/styleguide` — galeria de componentes e blocos para referência e desenv
 
 ---
 
-*Documentação atualizada em fevereiro de 2026 — Versão 1.1.0.*
+*Documentação atualizada em fevereiro de 2026 — Versão 1.1.6.*

@@ -7,6 +7,30 @@ e o projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [1.1.6] - 2026-02-27
+
+### Adicionado
+
+- **Chat de Briefing Estratégico** — Questionário guiado por IA (5 pilares: DNA da empresa, Produto/Oferta, Público/Persona, Mercado/Concorrência, Objetivos/Metas). Modal na página de Configurações; respostas salvas em `company_briefing_responses`.
+- **Admin — Briefing Estratégico** — Nova rota `/admin/briefing` para gestão de perguntas globais (`briefing_questions`). Admin SaaS pode criar/editar perguntas por categoria.
+- **Empresas — Acesso de suporte** — Nova coluna `support_access_enabled` em `companies` para controlar se o suporte pode acessar a licença via modo preview.
+
+### Banco de Dados
+
+- **`briefing_questions`** — Tabela de perguntas globais (admin gerencia). Categorias: `dna_empresa`, `produto_oferta`, `publico_persona`, `mercado_concorrencia`, `objetivos_metas`. Campos: `slug`, `input_type`, `is_atrito`, `options`.
+- **`company_briefing_responses`** — Respostas das empresas ao questionário (uma por pergunta por empresa).
+- **`companies`** — Nova coluna `support_access_enabled` (boolean, default true).
+
+### Integrações
+
+- **Webhook de Briefing** — `https://jobs.traveltec.com.br/webhook/briefing` (n8n). O Chat de Briefing envia `action` e `company_id`; n8n retorna perguntas e processa respostas.
+
+### Edge Functions
+
+- **admin-briefing-questions** — CRUD de perguntas de briefing (admin SaaS).
+
+---
+
 ## [1.1.5] - 2026-02-26
 
 ### Adicionado

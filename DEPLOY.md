@@ -66,6 +66,7 @@ npx supabase functions deploy chat-conhecimento-proxy --project-ref $PROJECT_REF
 npx supabase functions deploy upload-kb-to-webhook --project-ref $PROJECT_REF
 npx supabase functions deploy admin-gtm-config --project-ref $PROJECT_REF
 npx supabase functions deploy get-gtm-config --project-ref $PROJECT_REF
+npx supabase functions deploy admin-briefing-questions --project-ref $PROJECT_REF
 ```
 
 ---
@@ -93,7 +94,8 @@ npx supabase functions deploy get-gtm-config --project-ref $PROJECT_REF
 
 - O **Chat de Conhecimento** usa a Edge Function `chat-conhecimento-proxy` (não chama n8n diretamente)
 - O proxy envia o payload ao webhook configurado em **Admin → Configurações → Chat de Conhecimento**
-- n8n deve permitir requisições do domínio do Supabase (Edge Functions)
+- O **Chat de Briefing Estratégico** (Configurações) chama diretamente `https://jobs.traveltec.com.br/webhook/briefing`
+- n8n deve permitir requisições do domínio do Supabase (Edge Functions) e do frontend (Briefing)
 - Webhook configurado para "Respond: When Last Node Finishes"
 
 **Se o webhook não aparecer após configurar no Admin**, verifique:
@@ -132,9 +134,9 @@ npx supabase functions deploy get-gtm-config --project-ref $PROJECT_REF
 
 ---
 
-## 8. Migrações Pendentes (Deploy 2026-02-26)
+## 8. Migrações Pendentes (Deploy 2026-02-27)
 
-Se este é o primeiro deploy após as alterações de v1.1.5, as seguintes migrações serão aplicadas automaticamente pelo `db push` (ordem por timestamp):
+Se este é o primeiro deploy após as alterações de v1.1.6, as seguintes migrações serão aplicadas automaticamente pelo `db push` (ordem por timestamp):
 
 | Migração | Descrição |
 |----------|-----------|
@@ -144,6 +146,8 @@ Se este é o primeiro deploy após as alterações de v1.1.5, as seguintes migra
 | `20260226150000_prompt_atendimento_multi_per_company.sql` | Prompt multi-empresa |
 | `20260226160000_campanhas_anuncios.sql` | Tabela campanhas_anuncios |
 | `20260226170000_leads_utm_demografia.sql` | UTM, demografia, item_id em leads |
+| `20260226190000_briefing_questions_responses.sql` | Tabelas briefing_questions e company_briefing_responses |
+| `20260227103000_companies_support_access.sql` | Coluna support_access_enabled em companies |
 
 **Script opcional** (se precisar aplicar campanhas manualmente): `supabase/scripts/apply_campanhas_anuncios.sql`
 
