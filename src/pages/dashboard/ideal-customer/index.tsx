@@ -83,11 +83,6 @@ export default function IdealCustomerPage() {
   const [previewAvatarName, setPreviewAvatarName] = useState<string>("persona");
 
   const loadClientes = useCallback(async () => {
-    // #region agent log
-    const loadStartPayload = {sessionId:'8ad401',runId:'cliente-ideal-pre-fix',hypothesisId:'H3',location:'ideal-customer/index.tsx:loadClientes:start',message:'Start loadClientes',data:{effectiveCompanyId,path:typeof window!=='undefined'?window.location.pathname:null,search:typeof window!=='undefined'?window.location.search:null},timestamp:Date.now()};
-    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify(loadStartPayload)}).catch(()=>{});
-    console.log('[debug 8ad401]', loadStartPayload);
-    // #endregion
     if (!effectiveCompanyId) {
       setIsFetching(false);
       setClientes([]);
@@ -120,18 +115,8 @@ export default function IdealCustomerPage() {
       }
 
       if (error) throw error;
-      // #region agent log
-      const loadSuccessPayload = {sessionId:'8ad401',runId:'cliente-ideal-pre-fix',hypothesisId:'H8',location:'ideal-customer/index.tsx:loadClientes:success',message:'loadClientes success',data:{effectiveCompanyId,count:Array.isArray(data)?data.length:0,firstIds:Array.isArray(data)?data.slice(0,3).map((row)=>row?.id):[],missingColumn,supabaseUrl:SUPABASE_URL},timestamp:Date.now()};
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify(loadSuccessPayload)}).catch(()=>{});
-      console.log('[debug 8ad401]', loadSuccessPayload);
-      // #endregion
       setClientes((data as IdealCustomerRow[]) ?? []);
     } catch (err) {
-      // #region agent log
-      const loadErrorPayload = {sessionId:'8ad401',runId:'cliente-ideal-pre-fix',hypothesisId:'H4',location:'ideal-customer/index.tsx:loadClientes:error',message:'loadClientes failed',data:{effectiveCompanyId,errorMessage:err instanceof Error?err.message:String(err)},timestamp:Date.now()};
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify(loadErrorPayload)}).catch(()=>{});
-      console.log('[debug 8ad401]', loadErrorPayload);
-      // #endregion
       console.error("Erro ao carregar clientes ideais:", err);
       toast({
         variant: "destructive",
@@ -160,11 +145,6 @@ export default function IdealCustomerPage() {
         return;
       }
       const segment = (data as { segment_type?: string | null } | null)?.segment_type;
-      // #region agent log
-      const segmentPayload = {sessionId:'8ad401',runId:'cliente-ideal-pre-fix',hypothesisId:'H9',location:'ideal-customer/index.tsx:companySegment',message:'Company segment loaded',data:{effectiveCompanyId,segment,hasCompanyRow:Boolean(data),supabaseUrl:SUPABASE_URL},timestamp:Date.now()};
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify(segmentPayload)}).catch(()=>{});
-      console.log('[debug 8ad401]', segmentPayload);
-      // #endregion
       if (segment) setCompanySegmentType(segment);
     }
     loadCompanySegment();

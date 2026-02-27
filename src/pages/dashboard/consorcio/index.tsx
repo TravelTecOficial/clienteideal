@@ -126,13 +126,13 @@ export default function ConsorcioPage() {
         .from("cotas_imoveis")
         .select("id, meses, credito, mensal")
         .eq("company_id", companyId)
-        .order("meses", { ascending: true });
+        .order("credito", { ascending: true });
 
       const { data: veiculos, error: errVeiculos } = await supabase
         .from("cotas_veiculos")
         .select("id, meses, credito, pf_mensal, pj_mensal")
         .eq("company_id", companyId)
-        .order("meses", { ascending: true });
+        .order("credito", { ascending: true });
 
       if (errImoveis) throw errImoveis;
       if (errVeiculos) throw errVeiculos;

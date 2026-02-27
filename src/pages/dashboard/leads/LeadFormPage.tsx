@@ -169,34 +169,6 @@ export function LeadFormPage() {
     setIsFetching(!isNew);
   }, [isNew]);
 
-  useEffect(() => {
-    // #region agent log
-    const leadFormUiPayload = {
-      sessionId: "8ad401",
-      runId: "leads-debug",
-      hypothesisId: "H20",
-      location: "LeadFormPage.tsx:useEffect:ui-state",
-      message: "Lead form UI state snapshot",
-      data: {
-        isNew,
-        isFetching,
-        effectiveCompanyId,
-        vendedoresCount: vendedores.length,
-        itemsCount: items.length,
-        pathname: typeof window !== "undefined" ? window.location.pathname : null,
-        search: typeof window !== "undefined" ? window.location.search : null,
-      },
-      timestamp: Date.now(),
-    };
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-      body: JSON.stringify(leadFormUiPayload),
-    }).catch(() => {});
-    console.log("[debug 8ad401]", leadFormUiPayload);
-    // #endregion
-  }, [isNew, isFetching, effectiveCompanyId, vendedores.length, items.length]);
-
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadFormSchema),
     defaultValues: defaultFormValues,
@@ -212,70 +184,13 @@ export function LeadFormPage() {
         .eq("status", true);
       if (error) throw error;
       setVendedores((data as VendedorOption[]) ?? []);
-      // #region agent log
-      const vendedoresPayload = {
-        sessionId: "8ad401",
-        runId: "leads-debug",
-        hypothesisId: "H12",
-        location: "LeadFormPage.tsx:loadVendedores:success",
-        message: "Loaded vendedores for lead form",
-        data: {
-          effectiveCompanyId,
-          count: Array.isArray(data) ? data.length : 0,
-        },
-        timestamp: Date.now(),
-      };
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-        body: JSON.stringify(vendedoresPayload),
-      }).catch(() => {});
-      console.log("[debug 8ad401]", vendedoresPayload);
-      // #endregion
     } catch (err) {
       console.error("Erro ao carregar vendedores:", err);
-      // #region agent log
-      const vendedoresErrorPayload = {
-        sessionId: "8ad401",
-        runId: "leads-debug",
-        hypothesisId: "H13",
-        location: "LeadFormPage.tsx:loadVendedores:error",
-        message: "Failed loading vendedores",
-        data: {
-          effectiveCompanyId,
-          errorMessage: err instanceof Error ? err.message : String(err),
-        },
-        timestamp: Date.now(),
-      };
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-        body: JSON.stringify(vendedoresErrorPayload),
-      }).catch(() => {});
-      console.log("[debug 8ad401]", vendedoresErrorPayload);
-      // #endregion
     }
   }, [effectiveCompanyId, supabase]);
 
   const loadItems = useCallback(async () => {
     if (!effectiveCompanyId) return;
-    // #region agent log
-    const loadItemsStartPayload = {
-      sessionId: "8ad401",
-      runId: "leads-debug",
-      hypothesisId: "H17",
-      location: "LeadFormPage.tsx:loadItems:start",
-      message: "Starting loadItems for lead form",
-      data: { effectiveCompanyId },
-      timestamp: Date.now(),
-    };
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-      body: JSON.stringify(loadItemsStartPayload),
-    }).catch(() => {});
-    console.log("[debug 8ad401]", loadItemsStartPayload);
-    // #endregion
     try {
       const { data, error } = await supabase
         .from("items")
@@ -290,71 +205,14 @@ export function LeadFormPage() {
           type: r.type === "service" ? "service" : "product",
         }))
       );
-      // #region agent log
-      const loadItemsSuccessPayload = {
-        sessionId: "8ad401",
-        runId: "leads-debug",
-        hypothesisId: "H17",
-        location: "LeadFormPage.tsx:loadItems:success",
-        message: "loadItems succeeded",
-        data: {
-          effectiveCompanyId,
-          count: Array.isArray(data) ? data.length : 0,
-        },
-        timestamp: Date.now(),
-      };
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-        body: JSON.stringify(loadItemsSuccessPayload),
-      }).catch(() => {});
-      console.log("[debug 8ad401]", loadItemsSuccessPayload);
-      // #endregion
     } catch (err) {
       console.error("Erro ao carregar produtos e serviços:", err);
-      // #region agent log
-      const loadItemsErrorPayload = {
-        sessionId: "8ad401",
-        runId: "leads-debug",
-        hypothesisId: "H18",
-        location: "LeadFormPage.tsx:loadItems:error",
-        message: "loadItems failed",
-        data: {
-          effectiveCompanyId,
-          errorMessage: err instanceof Error ? err.message : String(err),
-        },
-        timestamp: Date.now(),
-      };
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-        body: JSON.stringify(loadItemsErrorPayload),
-      }).catch(() => {});
-      console.log("[debug 8ad401]", loadItemsErrorPayload);
-      // #endregion
     }
   }, [effectiveCompanyId, supabase]);
 
   const loadLead = useCallback(async () => {
     if (!editingId || !effectiveCompanyId) return;
     setIsFetching(true);
-    // #region agent log
-    const loadLeadStartPayload = {
-      sessionId: "8ad401",
-      runId: "leads-debug",
-      hypothesisId: "H12",
-      location: "LeadFormPage.tsx:loadLead:start",
-      message: "Starting loadLead",
-      data: { editingId, effectiveCompanyId },
-      timestamp: Date.now(),
-    };
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-      body: JSON.stringify(loadLeadStartPayload),
-    }).catch(() => {});
-    console.log("[debug 8ad401]", loadLeadStartPayload);
-    // #endregion
     try {
       const { data, error } = await supabase
         .from("leads")
@@ -390,41 +248,7 @@ export function LeadFormPage() {
           gclid: data.gclid ?? "",
         });
       }
-      // #region agent log
-      const loadLeadSuccessPayload = {
-        sessionId: "8ad401",
-        runId: "leads-debug",
-        hypothesisId: "H12",
-        location: "LeadFormPage.tsx:loadLead:success",
-        message: "loadLead succeeded",
-        data: { editingId, effectiveCompanyId, found: Boolean(data) },
-        timestamp: Date.now(),
-      };
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-        body: JSON.stringify(loadLeadSuccessPayload),
-      }).catch(() => {});
-      console.log("[debug 8ad401]", loadLeadSuccessPayload);
-      // #endregion
     } catch {
-      // #region agent log
-      const loadLeadErrorPayload = {
-        sessionId: "8ad401",
-        runId: "leads-debug",
-        hypothesisId: "H13",
-        location: "LeadFormPage.tsx:loadLead:error",
-        message: "loadLead failed",
-        data: { editingId, effectiveCompanyId },
-        timestamp: Date.now(),
-      };
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-        body: JSON.stringify(loadLeadErrorPayload),
-      }).catch(() => {});
-      console.log("[debug 8ad401]", loadLeadErrorPayload);
-      // #endregion
       toast({
         variant: "destructive",
         title: "Erro",

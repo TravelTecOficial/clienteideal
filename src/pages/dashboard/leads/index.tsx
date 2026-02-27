@@ -84,30 +84,6 @@ export default function LeadsPage() {
   const [activeTab, setActiveTab] = useState<"leads" | "clientes">("leads");
   const [importModalOpen, setImportModalOpen] = useState(false);
 
-  useEffect(() => {
-    // #region agent log
-    const leadsRenderPayload = {
-      sessionId: "8ad401",
-      runId: "leads-debug",
-      hypothesisId: "H16",
-      location: "leads/index.tsx:useEffect:mount",
-      message: "Leads content mounted",
-      data: {
-        effectiveCompanyId,
-        path: typeof window !== "undefined" ? window.location.pathname : null,
-        search: typeof window !== "undefined" ? window.location.search : null,
-      },
-      timestamp: Date.now(),
-    };
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-      body: JSON.stringify(leadsRenderPayload),
-    }).catch(() => {});
-    console.log("[debug 8ad401]", leadsRenderPayload);
-    // #endregion
-  }, [effectiveCompanyId]);
-
   // Buscar vendedores
   const loadVendedores = useCallback(async () => {
     if (!effectiveCompanyId) return;
@@ -127,27 +103,6 @@ export default function LeadsPage() {
 
   // Buscar leads
   const loadLeads = useCallback(async () => {
-    // #region agent log
-    const leadsStartPayload = {
-      sessionId: "8ad401",
-      runId: "leads-debug",
-      hypothesisId: "H10",
-      location: "leads/index.tsx:loadLeads:start",
-      message: "Starting loadLeads",
-      data: {
-        effectiveCompanyId,
-        path: typeof window !== "undefined" ? window.location.pathname : null,
-        search: typeof window !== "undefined" ? window.location.search : null,
-      },
-      timestamp: Date.now(),
-    };
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-      body: JSON.stringify(leadsStartPayload),
-    }).catch(() => {});
-    console.log("[debug 8ad401]", leadsStartPayload);
-    // #endregion
     if (!effectiveCompanyId) {
       setIsFetching(false);
       setLeads([]);
@@ -163,49 +118,8 @@ export default function LeadsPage() {
 
       if (error) throw error;
       setLeads((data as Lead[]) ?? []);
-      // #region agent log
-      const leadsSuccessPayload = {
-        sessionId: "8ad401",
-        runId: "leads-debug",
-        hypothesisId: "H10",
-        location: "leads/index.tsx:loadLeads:success",
-        message: "loadLeads success",
-        data: {
-          effectiveCompanyId,
-          count: Array.isArray(data) ? data.length : 0,
-          firstIds: Array.isArray(data) ? data.slice(0, 3).map((x) => x?.id) : [],
-        },
-        timestamp: Date.now(),
-      };
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-        body: JSON.stringify(leadsSuccessPayload),
-      }).catch(() => {});
-      console.log("[debug 8ad401]", leadsSuccessPayload);
-      // #endregion
     } catch (err) {
       console.error("Erro ao carregar leads:", err);
-      // #region agent log
-      const leadsErrorPayload = {
-        sessionId: "8ad401",
-        runId: "leads-debug",
-        hypothesisId: "H11",
-        location: "leads/index.tsx:loadLeads:error",
-        message: "loadLeads failed",
-        data: {
-          effectiveCompanyId,
-          errorMessage: err instanceof Error ? err.message : String(err),
-        },
-        timestamp: Date.now(),
-      };
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-        body: JSON.stringify(leadsErrorPayload),
-      }).catch(() => {});
-      console.log("[debug 8ad401]", leadsErrorPayload);
-      // #endregion
       toast({
         variant: "destructive",
         title: "Erro",
@@ -238,32 +152,6 @@ export default function LeadsPage() {
       )
     : leadsByTab;
 
-  useEffect(() => {
-    // #region agent log
-    const leadsUiStatePayload = {
-      sessionId: "8ad401",
-      runId: "leads-debug",
-      hypothesisId: "H19",
-      location: "leads/index.tsx:useEffect:ui-state",
-      message: "Leads UI state snapshot",
-      data: {
-        isFetching,
-        leadsCount: leads.length,
-        leadsByTabCount: leadsByTab.length,
-        filteredCount: filteredLeads.length,
-        searchQuery,
-        activeTab,
-      },
-      timestamp: Date.now(),
-    };
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
-      body: JSON.stringify(leadsUiStatePayload),
-    }).catch(() => {});
-    console.log("[debug 8ad401]", leadsUiStatePayload);
-    // #endregion
-  }, [isFetching, leads.length, leadsByTab.length, filteredLeads.length, searchQuery, activeTab]);
 
   const vendedorMap = useCallback(
     () => new Map(vendedores.map((v) => [v.id, v.nome])),

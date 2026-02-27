@@ -34,6 +34,12 @@ interface CompanyRow {
   evolution_instance_name: string | null
   celular_atendimento: string | null
   evolution_api_url: string | null
+  support_access_enabled?: boolean | null
+}
+
+interface ProfileRow {
+  company_id: string | null
+  saas_admin?: boolean | null
 }
 
 function jsonResponse(data: unknown, status = 200) {
@@ -94,24 +100,33 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-  // Verificar se o usuário pertence à empresa
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", sub)
-    .maybeSingle()
+  // Buscar perfil (company_id, saas_admin) e empresa em paralelo
+  const [{ data: profile }, { data: company, error: companyError }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("company_id, saas_admin")
+      .eq("id", sub)
+      .maybeSingle(),
+    supabase
+      .from("companies")
+      .select("evolution_instance_name, celular_atendimento, evolution_api_url, support_access_enabled")
+      .eq("id", companyId)
+      .maybeSingle(),
+  ])
 
-  const userCompanyId = (profile as { company_id: string | null } | null)?.company_id
-  if (userCompanyId !== companyId) {
+  const profileRow = profile as ProfileRow | null
+  const userCompanyId = profileRow?.company_id ?? null
+  const isSaasAdmin = Boolean(profileRow?.saas_admin)
+
+  // Autorização: usuário pertence à empresa OU admin SaaS com support_access habilitado
+  const belongsToCompany = userCompanyId === companyId
+  const companyRow = company as CompanyRow | null
+  const supportAccessEnabled = Boolean(companyRow?.support_access_enabled)
+  const adminPreviewAllowed = isSaasAdmin && supportAccessEnabled
+
+  if (!belongsToCompany && !adminPreviewAllowed) {
     return jsonResponse({ error: "Empresa não autorizada." }, 403)
   }
-
-  // Buscar dados da empresa
-  const { data: company, error: companyError } = await supabase
-    .from("companies")
-    .select("evolution_instance_name, celular_atendimento, evolution_api_url")
-    .eq("id", companyId)
-    .maybeSingle()
 
   if (companyError || !company) {
     return jsonResponse({ error: "Empresa não encontrada." }, 404)
