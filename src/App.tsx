@@ -4,6 +4,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { DashboardRouteWrapper } from "@/components/DashboardRouteWrapper"
 import { AdminPage } from "@/pages/admin/AdminPage"
 import { AdminConfigPage } from "@/pages/admin/AdminConfigPage"
+import PrecificacaoPage from "@/pages/admin/precificacao"
 import { AdminEvolutionPage } from "@/pages/admin/AdminEvolutionPage"
 import { AdminGtmPage } from "@/pages/admin/AdminGtmPage"
 import { AdminPreviewPage } from "@/pages/admin/AdminPreviewPage"
@@ -330,6 +331,14 @@ function App() {
           element={
             <SupabaseProvider>
               <AdminConfigPage />
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/admin/precificacao"
+          element={
+            <SupabaseProvider>
+              <PrecificacaoPage />
             </SupabaseProvider>
           }
         />
