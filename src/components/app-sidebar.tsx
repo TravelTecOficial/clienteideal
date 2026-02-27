@@ -23,7 +23,7 @@ import {
 import { SearchForm } from "@/components/search-form"
 import { useSegmentType } from "@/hooks/use-segment-type"
 import { useCompanyPreview } from "@/lib/company-preview-context"
-import { getPreviewUrlSuffix } from "@/lib/admin-preview-storage"
+import { getAdminPreviewCompanyId, getPreviewUrlSuffix } from "@/lib/admin-preview-storage"
 import {
   Collapsible,
   CollapsibleContent,
@@ -76,9 +76,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { signOut } = useClerk()
   const { segmentType } = useSegmentType()
   const { companyId: previewCompanyId } = useCompanyPreview()
+  const storagePreviewId = getAdminPreviewCompanyId()
+  const effectivePreviewId = previewCompanyId ?? storagePreviewId
   const UsuariosIcon = usuariosNav.icon
 
-  const previewSuffix = previewCompanyId ? getPreviewUrlSuffix(previewCompanyId) : ""
+  const previewSuffix = effectivePreviewId ? getPreviewUrlSuffix(effectivePreviewId) : ""
 
   const navItems = navItemsBase.filter((item) => {
     const filter = (item as { segmentFilter?: "produtos" | "consorcio" }).segmentFilter

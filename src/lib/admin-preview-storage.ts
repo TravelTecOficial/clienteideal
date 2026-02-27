@@ -7,6 +7,8 @@
 const ADMIN_PREVIEW_COMPANY_KEY = "admin_preview_company_id"
 const URL_PARAM_PREVIEW = "preview"
 
+const ADMIN_PREVIEW_PATH_PREFIX = "/admin/preview/"
+
 export function getAdminPreviewCompanyId(): string | null {
   if (typeof sessionStorage !== "undefined") {
     const fromStorage = sessionStorage.getItem(ADMIN_PREVIEW_COMPANY_KEY)
@@ -16,6 +18,11 @@ export function getAdminPreviewCompanyId(): string | null {
     const params = new URLSearchParams(window.location.search)
     const fromUrl = params.get(URL_PARAM_PREVIEW)?.trim()
     if (fromUrl) return fromUrl
+    const path = window.location.pathname || ""
+    if (path.startsWith(ADMIN_PREVIEW_PATH_PREFIX)) {
+      const companyId = path.slice(ADMIN_PREVIEW_PATH_PREFIX.length).split("/")[0]?.trim()
+      if (companyId) return decodeURIComponent(companyId)
+    }
   }
   return null
 }
