@@ -70,6 +70,9 @@ export function useSegmentType(): { segmentType: string; isLoading: boolean } {
     setIsLoading(true);
     try {
       const value = await fetchSegmentType(supabase, userId ?? "", effectivePreviewId);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify({sessionId:'8ad401',runId:'cliente-ideal-pre-fix',hypothesisId:'H5',location:'use-segment-type.ts:load',message:'Resolved segment type',data:{userId,effectivePreviewId,value,path:typeof window!=='undefined'?window.location.pathname:null,search:typeof window!=='undefined'?window.location.search:null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setSegmentType(value);
     } catch {
       setSegmentType("produtos");
