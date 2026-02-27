@@ -238,6 +238,33 @@ export default function LeadsPage() {
       )
     : leadsByTab;
 
+  useEffect(() => {
+    // #region agent log
+    const leadsUiStatePayload = {
+      sessionId: "8ad401",
+      runId: "leads-debug",
+      hypothesisId: "H19",
+      location: "leads/index.tsx:useEffect:ui-state",
+      message: "Leads UI state snapshot",
+      data: {
+        isFetching,
+        leadsCount: leads.length,
+        leadsByTabCount: leadsByTab.length,
+        filteredCount: filteredLeads.length,
+        searchQuery,
+        activeTab,
+      },
+      timestamp: Date.now(),
+    };
+    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
+      body: JSON.stringify(leadsUiStatePayload),
+    }).catch(() => {});
+    console.log("[debug 8ad401]", leadsUiStatePayload);
+    // #endregion
+  }, [isFetching, leads.length, leadsByTab.length, filteredLeads.length, searchQuery, activeTab]);
+
   const vendedorMap = useCallback(
     () => new Map(vendedores.map((v) => [v.id, v.nome])),
     [vendedores]

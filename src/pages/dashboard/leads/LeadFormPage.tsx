@@ -162,6 +162,34 @@ export function LeadFormPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(!isNew);
 
+  useEffect(() => {
+    // #region agent log
+    const leadFormUiPayload = {
+      sessionId: "8ad401",
+      runId: "leads-debug",
+      hypothesisId: "H20",
+      location: "LeadFormPage.tsx:useEffect:ui-state",
+      message: "Lead form UI state snapshot",
+      data: {
+        isNew,
+        isFetching,
+        effectiveCompanyId,
+        vendedoresCount: vendedores.length,
+        itemsCount: items.length,
+        pathname: typeof window !== "undefined" ? window.location.pathname : null,
+        search: typeof window !== "undefined" ? window.location.search : null,
+      },
+      timestamp: Date.now(),
+    };
+    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
+      body: JSON.stringify(leadFormUiPayload),
+    }).catch(() => {});
+    console.log("[debug 8ad401]", leadFormUiPayload);
+    // #endregion
+  }, [isNew, isFetching, effectiveCompanyId, vendedores.length, items.length]);
+
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadFormSchema),
     defaultValues: defaultFormValues,
