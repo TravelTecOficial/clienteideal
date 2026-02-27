@@ -224,6 +224,23 @@ export function LeadFormPage() {
 
   const loadItems = useCallback(async () => {
     if (!effectiveCompanyId) return;
+    // #region agent log
+    const loadItemsStartPayload = {
+      sessionId: "8ad401",
+      runId: "leads-debug",
+      hypothesisId: "H17",
+      location: "LeadFormPage.tsx:loadItems:start",
+      message: "Starting loadItems for lead form",
+      data: { effectiveCompanyId },
+      timestamp: Date.now(),
+    };
+    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
+      body: JSON.stringify(loadItemsStartPayload),
+    }).catch(() => {});
+    console.log("[debug 8ad401]", loadItemsStartPayload);
+    // #endregion
     try {
       const { data, error } = await supabase
         .from("items")
@@ -238,8 +255,48 @@ export function LeadFormPage() {
           type: r.type === "service" ? "service" : "product",
         }))
       );
+      // #region agent log
+      const loadItemsSuccessPayload = {
+        sessionId: "8ad401",
+        runId: "leads-debug",
+        hypothesisId: "H17",
+        location: "LeadFormPage.tsx:loadItems:success",
+        message: "loadItems succeeded",
+        data: {
+          effectiveCompanyId,
+          count: Array.isArray(data) ? data.length : 0,
+        },
+        timestamp: Date.now(),
+      };
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
+        body: JSON.stringify(loadItemsSuccessPayload),
+      }).catch(() => {});
+      console.log("[debug 8ad401]", loadItemsSuccessPayload);
+      // #endregion
     } catch (err) {
       console.error("Erro ao carregar produtos e serviços:", err);
+      // #region agent log
+      const loadItemsErrorPayload = {
+        sessionId: "8ad401",
+        runId: "leads-debug",
+        hypothesisId: "H18",
+        location: "LeadFormPage.tsx:loadItems:error",
+        message: "loadItems failed",
+        data: {
+          effectiveCompanyId,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        },
+        timestamp: Date.now(),
+      };
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8ad401" },
+        body: JSON.stringify(loadItemsErrorPayload),
+      }).catch(() => {});
+      console.log("[debug 8ad401]", loadItemsErrorPayload);
+      // #endregion
     }
   }, [effectiveCompanyId, supabase]);
 
