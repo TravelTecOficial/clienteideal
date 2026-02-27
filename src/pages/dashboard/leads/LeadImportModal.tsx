@@ -70,10 +70,6 @@ async function fetchItemsMap(
     .from("items")
     .select("id, name")
     .eq("company_id", companyId);
-  // #region agent log
-  const sampleKeys = (data ?? []).map((r: { name?: string }) => (r.name ?? "").trim().toLowerCase()).filter(Boolean).slice(0, 10);
-  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5b0ed'},body:JSON.stringify({sessionId:'a5b0ed',location:'LeadImportModal.tsx:fetchItemsMap',message:'itemsMap fetch result',data:{error:error?.message,count:data?.length??0,sampleKeys},hypothesisId:'A',timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (error) return new Map();
   const map = new Map<string, string>();
   for (const row of data ?? []) {
@@ -206,11 +202,6 @@ export function LeadImportModal({
     setResult(null);
 
     try {
-      // #region agent log
-      const itemNameHeader = Object.keys(mapping).find((h) => mapping[h] === "item_name");
-      const sampleItemValues = parsed.rows.slice(0, 3).map((r) => r[itemNameHeader ?? ""] ?? "").filter(Boolean);
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5b0ed'},body:JSON.stringify({sessionId:'a5b0ed',location:'LeadImportModal.tsx:handleImport',message:'item_name mapping check',data:{itemNameHeader,mappingKeys:Object.keys(mapping),sampleItemValues},hypothesisId:'D',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       const itemsMap = await fetchItemsMap(supabase, companyId);
       const payloads: LeadImportPayload[] = [];
 

@@ -56,6 +56,7 @@ interface Lead {
   cep?: string | null;
   item_id?: string | null;
   items?: { name: string } | null;
+  conversao?: string | null;
   utm_source?: string | null;
   utm_medium?: string | null;
   utm_campaign?: string | null;
@@ -112,7 +113,7 @@ export default function LeadsPage() {
     try {
       const { data, error } = await supabase
         .from("leads")
-        .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id, data_nascimento, idade, cep, item_id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, fbclid, gclid, items(name)")
+        .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id, data_nascimento, idade, cep, item_id, conversao, utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, fbclid, gclid, items(name)")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -148,7 +149,8 @@ export default function LeadsPage() {
         (l) =>
           l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (l.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
-          (l.cep?.includes(searchQuery.replace(/\D/g, "")) ?? false)
+          (l.cep?.includes(searchQuery.replace(/\D/g, "")) ?? false) ||
+          (l.conversao?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
       )
     : leadsByTab;
 
@@ -288,7 +290,7 @@ export default function LeadsPage() {
               <TableHead>Celular</TableHead>
               <TableHead>Idade</TableHead>
               <TableHead>CEP</TableHead>
-              <TableHead>Produto/Serviço</TableHead>
+              <TableHead>Ramo / Conversão</TableHead>
               <TableHead>Classificação</TableHead>
               <TableHead>External ID</TableHead>
               <TableHead>Vendedor</TableHead>
@@ -330,7 +332,7 @@ export default function LeadsPage() {
                     {lead.cep ?? "-"}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {lead.items?.name ?? "-"}
+                    {lead.conversao ?? lead.items?.name ?? "-"}
                   </TableCell>
                   <TableCell>
                     {lead.classificacao ? (

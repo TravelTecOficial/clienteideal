@@ -20,7 +20,8 @@ export type LeadFieldId =
   | "utm_id"
   | "fbclid"
   | "gclid"
-  | "item_name";
+  | "item_name"
+  | "conversao";
 
 export const LEAD_FIELD_OPTIONS: { value: LeadFieldId | ""; label: string }[] = [
   { value: "", label: "— Ignorar" },
@@ -42,6 +43,7 @@ export const LEAD_FIELD_OPTIONS: { value: LeadFieldId | ""; label: string }[] = 
   { value: "fbclid", label: "FBCLID" },
   { value: "gclid", label: "GCLID" },
   { value: "item_name", label: "Produto/Serviço (nome)" },
+  { value: "conversao", label: "Conversão (o que comprou)" },
 ];
 
 export interface ParsedCsvResult {
@@ -106,14 +108,26 @@ function looksLikeDataRow(row: string[]): boolean {
   return false;
 }
 
-/** Torna headers únicos: duplicatas recebem sufixo " (2)", " (3)", etc. */
-function makeHeadersUnique(rawHeaders: string[]): string[] {
-  const counts = new Map<string, number>();
-  return rawHeaders.map((h) => {
-    const count = (counts.get(h) ?? 0) + 1;
-    counts.set(h, count);
-    return count === 1 ? h : `${h} (${count})`;
+/** Remove headers duplicados: mantém apenas a primeira ocorrência de cada nome. */
+function deduplicateHeaders(rawHeaders: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const h of rawHeaders) {
+    if (!seen.has(h)) {
+      seen.add(h);
+      result.push(h);
+    }
+  }
+  return result;
+}
+
+/** Mapeia cada header único para o índice da primeira coluna correspondente. */
+function buildHeaderToIndex(rawHeaders: string[]): Map<string, number> {
+  const map = new Map<string, number>();
+  rawHeaders.forEach((h, i) => {
+    if (!map.has(h)) map.set(h, i);
   });
+  return map;
 }
 
 /**
@@ -142,13 +156,15 @@ export function parseCsvFile(text: string): ParsedCsvResult {
   const rawHeaders = hasHeader
     ? firstRow.map((h, i) => String(h ?? "").trim() || `Coluna ${i + 1}`)
     : firstRow.map((_, i) => `Coluna ${i + 1}`);
-  const headers = makeHeadersUnique(rawHeaders);
+  const headers = deduplicateHeaders(rawHeaders);
+  const headerToIndex = buildHeaderToIndex(rawHeaders);
   const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
 
   const rows: Record<string, string>[] = dataRows.map((row) => {
     const obj: Record<string, string> = {};
-    headers.forEach((h, i) => {
-      obj[h] = String(row[i] ?? "").trim();
+    headers.forEach((h) => {
+      const idx = headerToIndex.get(h) ?? -1;
+      obj[h] = String(row[idx] ?? "").trim();
     });
     return obj;
   });
@@ -178,14 +194,16 @@ function rawRowsToResult(rawRows: unknown[][]): ParsedCsvResult {
   const rawHeaders = hasHeader
     ? firstRow.map((h, i) => String(h ?? "").trim() || `Coluna ${i + 1}`)
     : firstRow.map((_, i) => `Coluna ${i + 1}`);
-  const headers = makeHeadersUnique(rawHeaders);
+  const headers = deduplicateHeaders(rawHeaders);
+  const headerToIndex = buildHeaderToIndex(rawHeaders);
   const dataRows = hasHeader ? rows.slice(1) : rows;
 
   const resultRows: Record<string, string>[] = dataRows.map((row) => {
     const obj: Record<string, string> = {};
     const arr = row as unknown[];
-    headers.forEach((h, i) => {
-      obj[h] = String(arr[i] ?? "").trim();
+    headers.forEach((h) => {
+      const idx = headerToIndex.get(h) ?? -1;
+      obj[h] = String(arr[idx] ?? "").trim();
     });
     return obj;
   });
@@ -337,6 +355,7 @@ export interface LeadImportPayload {
   utm_id: string | null;
   fbclid: string | null;
   gclid: string | null;
+  conversao: string | null;
 }
 
 export type ColumnMapping = Record<string, LeadFieldId | "">;
@@ -366,14 +385,7 @@ export function rowToPayload(
   const statusVal = getVal("status");
   const classificacaoVal = getVal("classificacao");
   const itemNameVal = getVal("item_name");
-
-  // #region agent log
-  if (itemNameVal) {
-    const lookupKey = itemNameVal.trim().toLowerCase();
-    const foundId = meta.itemsMap.get(lookupKey) ?? null;
-    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5b0ed'},body:JSON.stringify({sessionId:'a5b0ed',location:'csv-leads-import.ts:rowToPayload',message:'item_name lookup',data:{raw:itemNameVal,lookupKey,foundId,mapSize:meta.itemsMap.size},hypothesisId:'B',timestamp:Date.now()})}).catch(()=>{});
-  }
-  // #endregion
+  const conversaoVal = getVal("conversao");
 
   const { phone: phoneVal } = normalizePhoneToSingle(getVal("phone"));
 
@@ -399,6 +411,7 @@ export function rowToPayload(
     utm_id: getVal("utm_id") || null,
     fbclid: getVal("fbclid") || null,
     gclid: getVal("gclid") || null,
+    conversao: conversaoVal || null,
   };
 
   return payload;
@@ -429,7 +442,8 @@ export function suggestMapping(headers: string[]): ColumnMapping {
     { keys: ["utm_id", "utm id"], field: "utm_id" },
     { keys: ["fbclid", "fb_clid"], field: "fbclid" },
     { keys: ["gclid", "gcl_id"], field: "gclid" },
-    { keys: ["produto", "serviço", "servico", "item", "product", "service", "ramo"], field: "item_name" },
+    { keys: ["produto", "serviço", "servico", "item", "product", "service"], field: "item_name" },
+    { keys: ["ramo", "conversao", "conversão", "comprou", "serviço comprado", "produto comprado"], field: "conversao" },
   ];
 
   headers.forEach((header, i) => {

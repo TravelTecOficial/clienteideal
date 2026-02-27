@@ -89,6 +89,7 @@ const leadFormSchema = z.object({
       message: "CEP inválido (use 12345-678 ou 12345678)",
     }),
   item_id: z.string().optional(),
+  conversao: z.string().optional(),
   utm_source: z.string().optional(),
   utm_medium: z.string().optional(),
   utm_campaign: z.string().optional(),
@@ -137,6 +138,7 @@ const defaultFormValues: LeadFormValues = {
   idade: "",
   cep: "",
   item_id: "",
+  conversao: "",
   utm_source: "",
   utm_medium: "",
   utm_campaign: "",
@@ -216,7 +218,7 @@ export function LeadFormPage() {
     try {
       const { data, error } = await supabase
         .from("leads")
-        .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id, data_nascimento, idade, cep, item_id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, fbclid, gclid")
+        .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id, data_nascimento, idade, cep, item_id, conversao, utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, fbclid, gclid")
         .eq("id", editingId)
         .eq("company_id", effectiveCompanyId)
         .single();
@@ -238,6 +240,7 @@ export function LeadFormPage() {
           idade: data.idade != null ? String(data.idade) : "",
           cep: data.cep ?? "",
           item_id: data.item_id ?? "",
+          conversao: data.conversao ?? "",
           utm_source: data.utm_source ?? "",
           utm_medium: data.utm_medium ?? "",
           utm_campaign: data.utm_campaign ?? "",
@@ -300,6 +303,7 @@ export function LeadFormPage() {
         idade: values.idade ? parseInt(String(values.idade), 10) : null,
         cep: values.cep?.trim() || null,
         item_id: values.item_id || null,
+        conversao: values.conversao?.trim() || null,
         utm_source: values.utm_source?.trim() || null,
         utm_medium: values.utm_medium?.trim() || null,
         utm_campaign: values.utm_campaign?.trim() || null,
@@ -587,8 +591,18 @@ export function LeadFormPage() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Produto ou Serviço</Label>
-                    <Select
+                    <Label htmlFor="conversao">Conversão (o que comprou)</Label>
+                    <Input
+                      id="conversao"
+                      placeholder="Ex: Limpeza de pele, Botox..."
+                      {...form.register("conversao")}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Produto ou Serviço</Label>
+                  <Select
                       value={form.watch("item_id") || "none"}
                       onValueChange={(v: string) => form.setValue("item_id", v === "none" ? "" : v)}
                     >
@@ -619,7 +633,6 @@ export function LeadFormPage() {
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-                  </div>
                 </div>
 
                 <Collapsible>
