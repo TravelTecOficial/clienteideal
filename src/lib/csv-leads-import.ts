@@ -50,7 +50,7 @@ export interface ParsedCsvResult {
   previewRows: Record<string, string>[];
 }
 
-/** Detecta se a primeira linha parece ser cabeçalho */
+/** Palavras que indicam que uma célula é cabeçalho (não dado) */
 const HEADER_HINTS = [
   "nome",
   "name",
@@ -61,18 +61,44 @@ const HEADER_HINTS = [
   "telefone",
   "cpf",
   "cep",
+  "id",
+  "código",
+  "codigo",
+  "número",
+  "numero",
+  "data",
+  "endereço",
+  "endereco",
+  "cidade",
+  "estado",
+  "observação",
+  "observacao",
+  "whatsapp",
+  "fone",
+  "tel",
+  "cliente",
+  "lead",
+  "status",
+  "classificação",
+  "classificacao",
 ];
 
-function looksLikeHeader(firstCell: string): boolean {
-  const lower = firstCell.trim().toLowerCase();
+function cellLooksLikeHeader(cell: string): boolean {
+  const lower = String(cell ?? "").trim().toLowerCase();
+  if (!lower) return false;
   return HEADER_HINTS.some((h) => lower.includes(h));
+}
+
+/** Detecta se a primeira linha parece ser cabeçalho (verifica qualquer célula) */
+function firstRowLooksLikeHeader(row: string[]): boolean {
+  return row.some((cell) => cellLooksLikeHeader(String(cell ?? "")));
 }
 
 /** Detecta se uma linha parece ser dados (não cabeçalho) */
 function looksLikeDataRow(row: string[]): boolean {
   const first = row[0]?.trim() ?? "";
   if (!first) return false;
-  if (looksLikeHeader(first)) return false;
+  if (cellLooksLikeHeader(first)) return false;
   if (/^\d+$/.test(first) && first.length > 5) return true;
   if (first.includes("@")) return true;
   if (first.length >= 2 && !first.toLowerCase().includes("nome") && !first.toLowerCase().includes("email"))
@@ -99,11 +125,11 @@ export function parseCsvFile(text: string): ParsedCsvResult {
   const secondRow = rawRows[1];
   const hasHeader =
     firstRow &&
-    (looksLikeHeader(firstRow[0] ?? "") ||
+    (firstRowLooksLikeHeader(firstRow) ||
       (secondRow && looksLikeDataRow(secondRow) && !looksLikeDataRow(firstRow)));
 
   const headers = hasHeader
-    ? firstRow.map((h) => String(h ?? "").trim() || `Coluna ${firstRow.indexOf(h) + 1}`)
+    ? firstRow.map((h, i) => String(h ?? "").trim() || `Coluna ${i + 1}`)
     : firstRow.map((_, i) => `Coluna ${i + 1}`);
   const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
 
@@ -134,7 +160,7 @@ function rawRowsToResult(rawRows: unknown[][]): ParsedCsvResult {
   const secondRow = rows[1] as string[] | undefined;
   const hasHeader =
     firstRow &&
-    (looksLikeHeader(String(firstRow[0] ?? "")) ||
+    (firstRowLooksLikeHeader(firstRow) ||
       (secondRow && looksLikeDataRow(secondRow) && !looksLikeDataRow(firstRow)));
 
   const headers = hasHeader
