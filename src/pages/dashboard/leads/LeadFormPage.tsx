@@ -3,7 +3,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 
 import {
   ChevronDown,
@@ -150,17 +150,24 @@ const defaultFormValues: LeadFormValues = {
 export function LeadFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
   const effectiveCompanyId = useEffectiveCompanyId();
 
-  const isNew = id === "novo";
+  // NOTE: "/dashboard/leads/novo" uses a dedicated route without :id param.
+  // Resolve "new mode" from either param or pathname.
+  const isNew = id === "novo" || location.pathname.endsWith("/novo");
   const editingId = isNew ? null : id ?? null;
   const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
   const [items, setItems] = useState<ItemOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(!isNew);
+  const [isFetching, setIsFetching] = useState(() => !isNew);
+
+  useEffect(() => {
+    setIsFetching(!isNew);
+  }, [isNew]);
 
   useEffect(() => {
     // #region agent log
