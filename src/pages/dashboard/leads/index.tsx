@@ -43,7 +43,7 @@ import { LeadImportModal } from "./LeadImportModal";
 // --- Interfaces ---
 interface Lead {
   id: string;
-  name: string;
+  name: string | null;
   email: string | null;
   phone: string | null;
   external_id: string | null;
@@ -140,17 +140,19 @@ export default function LeadsPage() {
     loadLeads();
   }, [loadLeads]);
 
-  // Filtro por tab (leads vs clientes) e por nome/email
+  // Filtro por tab (leads vs clientes) e por nome/email (a partir de 3 caracteres)
   const leadsByTab = leads.filter((l) =>
     activeTab === "leads" ? !(l.is_cliente ?? false) : (l.is_cliente ?? false)
   );
-  const filteredLeads = searchQuery.trim()
+  const trimmedQuery = searchQuery.trim();
+  const shouldFilter = trimmedQuery.length >= 3;
+  const filteredLeads = shouldFilter
     ? leadsByTab.filter(
         (l) =>
-          l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (l.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
-          (l.cep?.includes(searchQuery.replace(/\D/g, "")) ?? false) ||
-          (l.conversao?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+          (l.name ?? "").toLowerCase().includes(trimmedQuery.toLowerCase()) ||
+          (l.email?.toLowerCase().includes(trimmedQuery.toLowerCase()) ?? false) ||
+          (l.cep?.includes(trimmedQuery.replace(/\D/g, "")) ?? false) ||
+          (l.conversao?.toLowerCase().includes(trimmedQuery.toLowerCase()) ?? false)
       )
     : leadsByTab;
 
@@ -198,7 +200,7 @@ export default function LeadsPage() {
   // Delete
   async function handleDelete(lead: Lead) {
     const confirmed = window.confirm(
-      `Excluir o lead "${lead.name}"? Esta ação não pode ser desfeita.`
+      `Excluir o lead "${lead.name ?? "sem nome"}"? Esta ação não pode ser desfeita.`
     );
     if (!confirmed || !effectiveCompanyId) return;
 
@@ -266,14 +268,19 @@ export default function LeadsPage() {
             </TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2 flex-1 max-w-sm">
-            <div className="relative flex-1">
+            <div className="relative flex-1 space-y-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome ou email..."
+                placeholder="Buscar por nome ou email (mín. 3 letras)..."
                 className="pl-8"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {trimmedQuery.length > 0 && trimmedQuery.length < 3 && (
+                <p className="text-xs text-muted-foreground pl-1">
+                  Digite pelo menos 3 letras para filtrar os leads
+                </p>
+              )}
             </div>
             <Button variant="outline" className="gap-2 shrink-0">
               <Filter className="h-4 w-4" /> Filtros
@@ -308,7 +315,7 @@ export default function LeadsPage() {
             ) : filteredLeads.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
-                  {searchQuery
+                  {shouldFilter
                     ? "Nenhum lead encontrado para a busca."
                     : "Nenhum lead encontrado. Use o botão acima para cadastrar."}
                 </TableCell>
@@ -317,7 +324,7 @@ export default function LeadsPage() {
               filteredLeads.map((lead) => (
                 <TableRow key={lead.id}>
                   <TableCell className="font-medium text-gray-900">
-                    {lead.name}
+                    {lead.name ?? "-"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {lead.email ?? "-"}
