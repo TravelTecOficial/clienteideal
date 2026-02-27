@@ -121,7 +121,7 @@ export default function IdealCustomerPage() {
 
       if (error) throw error;
       // #region agent log
-      const loadSuccessPayload = {sessionId:'8ad401',runId:'cliente-ideal-pre-fix',hypothesisId:'H3',location:'ideal-customer/index.tsx:loadClientes:success',message:'loadClientes success',data:{effectiveCompanyId,count:Array.isArray(data)?data.length:0,missingColumn},timestamp:Date.now()};
+      const loadSuccessPayload = {sessionId:'8ad401',runId:'cliente-ideal-pre-fix',hypothesisId:'H8',location:'ideal-customer/index.tsx:loadClientes:success',message:'loadClientes success',data:{effectiveCompanyId,count:Array.isArray(data)?data.length:0,firstIds:Array.isArray(data)?data.slice(0,3).map((row)=>row?.id):[],missingColumn,supabaseUrl:SUPABASE_URL},timestamp:Date.now()};
       fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify(loadSuccessPayload)}).catch(()=>{});
       console.log('[debug 8ad401]', loadSuccessPayload);
       // #endregion
@@ -161,7 +161,7 @@ export default function IdealCustomerPage() {
       }
       const segment = (data as { segment_type?: string | null } | null)?.segment_type;
       // #region agent log
-      const segmentPayload = {sessionId:'8ad401',runId:'cliente-ideal-pre-fix',hypothesisId:'H5',location:'ideal-customer/index.tsx:companySegment',message:'Company segment loaded',data:{effectiveCompanyId,segment},timestamp:Date.now()};
+      const segmentPayload = {sessionId:'8ad401',runId:'cliente-ideal-pre-fix',hypothesisId:'H9',location:'ideal-customer/index.tsx:companySegment',message:'Company segment loaded',data:{effectiveCompanyId,segment,hasCompanyRow:Boolean(data),supabaseUrl:SUPABASE_URL},timestamp:Date.now()};
       fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify(segmentPayload)}).catch(()=>{});
       console.log('[debug 8ad401]', segmentPayload);
       // #endregion
