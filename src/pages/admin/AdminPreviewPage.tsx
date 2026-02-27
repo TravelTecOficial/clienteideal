@@ -34,6 +34,14 @@ export function AdminPreviewPage() {
       return
     }
     setAdminPreviewCompanyId(companyId)
+    // #region agent log
+    const logPayload = {sessionId:'8ad401',location:'AdminPreviewPage.tsx:setAdminPreviewCompanyId',message:'AdminPreview set sessionStorage',data:{companyId,hostname:typeof window!=='undefined'?window.location.hostname:null},hypothesisId:'H2',timestamp:Date.now()};
+    if (typeof window!=='undefined' && (window.location.hostname==='localhost'||window.location.hostname==='127.0.0.1')) {
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify(logPayload)}).catch(()=>{});
+    } else {
+      console.log('[debug 8ad401]', logPayload);
+    }
+    // #endregion
     supabase
       .from("companies")
       .select("name")
