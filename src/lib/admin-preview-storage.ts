@@ -9,30 +9,52 @@ const URL_PARAM_PREVIEW = "preview"
 
 const ADMIN_PREVIEW_PATH_PREFIX = "/admin/preview/"
 
+function readStorage(key: string): string | null {
+  if (typeof window === "undefined") return null
+  const fromSession = window.sessionStorage?.getItem(key)
+  if (fromSession?.trim()) return fromSession
+  const fromLocal = window.localStorage?.getItem(key)
+  if (fromLocal?.trim()) return fromLocal
+  return null
+}
+
+function persistStorage(key: string, value: string): void {
+  if (typeof window === "undefined") return
+  window.sessionStorage?.setItem(key, value)
+  window.localStorage?.setItem(key, value)
+}
+
 export function getAdminPreviewCompanyId(): string | null {
-  if (typeof sessionStorage !== "undefined") {
-    const fromStorage = sessionStorage.getItem(ADMIN_PREVIEW_COMPANY_KEY)
-    if (fromStorage?.trim()) return fromStorage
-  }
+  const fromStorage = readStorage(ADMIN_PREVIEW_COMPANY_KEY)
+  if (fromStorage) return fromStorage
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search)
     const fromUrl = params.get(URL_PARAM_PREVIEW)?.trim()
-    if (fromUrl) return fromUrl
+    if (fromUrl) {
+      persistStorage(ADMIN_PREVIEW_COMPANY_KEY, fromUrl)
+      return fromUrl
+    }
     const path = window.location.pathname || ""
     if (path.startsWith(ADMIN_PREVIEW_PATH_PREFIX)) {
       const companyId = path.slice(ADMIN_PREVIEW_PATH_PREFIX.length).split("/")[0]?.trim()
-      if (companyId) return decodeURIComponent(companyId)
+      if (companyId) {
+        const decoded = decodeURIComponent(companyId)
+        persistStorage(ADMIN_PREVIEW_COMPANY_KEY, decoded)
+        return decoded
+      }
     }
   }
   return null
 }
 
 export function setAdminPreviewCompanyId(companyId: string): void {
-  sessionStorage?.setItem(ADMIN_PREVIEW_COMPANY_KEY, companyId)
+  persistStorage(ADMIN_PREVIEW_COMPANY_KEY, companyId)
 }
 
 export function clearAdminPreviewCompanyId(): void {
-  sessionStorage?.removeItem(ADMIN_PREVIEW_COMPANY_KEY)
+  if (typeof window === "undefined") return
+  window.sessionStorage?.removeItem(ADMIN_PREVIEW_COMPANY_KEY)
+  window.localStorage?.removeItem(ADMIN_PREVIEW_COMPANY_KEY)
 }
 
 /** Retorna o sufixo ?preview=companyId para usar em links quando em modo preview */
