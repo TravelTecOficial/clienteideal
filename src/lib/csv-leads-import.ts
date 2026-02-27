@@ -354,6 +354,14 @@ export function rowToPayload(
   const classificacaoVal = getVal("classificacao");
   const itemNameVal = getVal("item_name");
 
+  // #region agent log
+  if (itemNameVal) {
+    const lookupKey = itemNameVal.trim().toLowerCase();
+    const foundId = meta.itemsMap.get(lookupKey) ?? null;
+    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5b0ed'},body:JSON.stringify({sessionId:'a5b0ed',location:'csv-leads-import.ts:rowToPayload',message:'item_name lookup',data:{raw:itemNameVal,lookupKey,foundId,mapSize:meta.itemsMap.size},hypothesisId:'B',timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
+
   const { phone: phoneVal } = normalizePhoneToSingle(getVal("phone"));
 
   const payload: LeadImportPayload = {
