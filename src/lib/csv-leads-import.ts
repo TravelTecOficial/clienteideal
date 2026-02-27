@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 
 /** Campo mapeável do sistema para leads */
 export type LeadFieldId =
@@ -119,6 +120,56 @@ export function parseCsvFile(text: string): ParsedCsvResult {
   return { headers, rows, previewRows };
 }
 
+/**
+ * Converte raw rows (array de arrays) em ParsedCsvResult.
+ * Reutiliza a lógica de detecção de cabeçalho do CSV.
+ */
+function rawRowsToResult(rawRows: unknown[][]): ParsedCsvResult {
+  const rows = rawRows.filter((row) => Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== ""));
+  if (rows.length === 0) {
+    return { headers: [], rows: [], previewRows: [] };
+  }
+
+  const firstRow = rows[0] as string[];
+  const secondRow = rows[1] as string[] | undefined;
+  const hasHeader =
+    firstRow &&
+    (looksLikeHeader(String(firstRow[0] ?? "")) ||
+      (secondRow && looksLikeDataRow(secondRow) && !looksLikeDataRow(firstRow)));
+
+  const headers = hasHeader
+    ? firstRow.map((h, i) => String(h ?? "").trim() || `Coluna ${i + 1}`)
+    : firstRow.map((_, i) => `Coluna ${i + 1}`);
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+
+  const resultRows: Record<string, string>[] = dataRows.map((row) => {
+    const obj: Record<string, string> = {};
+    const arr = row as unknown[];
+    headers.forEach((h, i) => {
+      obj[h] = String(arr[i] ?? "").trim();
+    });
+    return obj;
+  });
+
+  const previewRows = resultRows.slice(0, 5);
+
+  return { headers, rows: resultRows, previewRows };
+}
+
+/**
+ * Parseia arquivo XLSX (Excel). Lê a primeira planilha.
+ */
+export function parseXlsxFile(buffer: ArrayBuffer): ParsedCsvResult {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    return { headers: [], rows: [], previewRows: [] };
+  }
+  const sheet = workbook.Sheets[firstSheetName];
+  const rawRows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
+  return rawRowsToResult(rawRows);
+}
+
 const STATUS_VALUES = ["Novo", "Em Contato", "Qualificado", "Perdido"] as const;
 const CLASSIFICACAO_VALUES = ["Frio", "Morno", "Quente"] as const;
 
@@ -165,6 +216,64 @@ function normalizeCep(val: string): string | null {
   const digits = val.replace(/\D/g, "");
   if (digits.length !== 8) return null;
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
+/**
+ * Extrai números de telefone válidos de uma string (DDD 2 dígitos + 8 ou 9 dígitos).
+ */
+export function extractPhoneNumbers(raw: string): string[] {
+  if (!raw || typeof raw !== "string") return [];
+  const digits = raw.replace(/\D/g, "");
+  const matches: string[] = [];
+  const regex = /(\d{2})(\d{8,9})/g;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(digits)) !== null) {
+    matches.push(m[1] + m[2]);
+  }
+  return matches;
+}
+
+/**
+ * Retorna o primeiro número de telefone e indica se havia múltiplos.
+ */
+export function normalizePhoneToSingle(raw: string): { phone: string | null; hadMultiple: boolean } {
+  const numbers = extractPhoneNumbers(raw);
+  if (numbers.length === 0) return { phone: null, hadMultiple: false };
+  return {
+    phone: numbers[0] ?? null,
+    hadMultiple: numbers.length > 1,
+  };
+}
+
+export interface PhoneAnalysisResult {
+  totalWithMultiple: number;
+  sampleRowIndices: number[];
+}
+
+/**
+ * Analisa a coluna mapeada como telefone e conta quantas linhas têm múltiplos números.
+ */
+export function analyzePhoneColumn(
+  rows: Record<string, string>[],
+  mapping: ColumnMapping
+): PhoneAnalysisResult {
+  const phoneHeader = Object.keys(mapping).find((h) => mapping[h] === "phone");
+  if (!phoneHeader) return { totalWithMultiple: 0, sampleRowIndices: [] };
+
+  const sampleRowIndices: number[] = [];
+  let totalWithMultiple = 0;
+
+  rows.forEach((row, idx) => {
+    const raw = (row[phoneHeader] ?? "").trim();
+    if (!raw) return;
+    const { hadMultiple } = normalizePhoneToSingle(raw);
+    if (hadMultiple) {
+      totalWithMultiple++;
+      if (sampleRowIndices.length < 5) sampleRowIndices.push(idx + 1);
+    }
+  });
+
+  return { totalWithMultiple, sampleRowIndices };
 }
 
 export interface LeadImportPayload {
@@ -219,12 +328,14 @@ export function rowToPayload(
   const classificacaoVal = getVal("classificacao");
   const itemNameVal = getVal("item_name");
 
+  const { phone: phoneVal } = normalizePhoneToSingle(getVal("phone"));
+
   const payload: LeadImportPayload = {
     company_id: meta.company_id,
     user_id: meta.user_id,
     name: nameVal,
     email: getVal("email") || null,
-    phone: getVal("phone") || null,
+    phone: phoneVal,
     external_id: getVal("external_id") || null,
     status: normalizeStatus(statusVal) ?? "Novo",
     classificacao: normalizeClassificacao(classificacaoVal),

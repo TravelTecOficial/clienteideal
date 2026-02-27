@@ -20,8 +20,9 @@ import {
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Loader2, Trash2, ArrowLeft } from "lucide-react"
+import { Plus, Loader2, Trash2, ArrowLeft, MessageSquare, Settings } from "lucide-react"
 import { Link } from "react-router-dom"
+import ChatConhecimento from "@/pages/dashboard/chat-conhecimento"
 
 const STAGE_KEYS = [
   { key: "inicial", label: "Inicial" },
@@ -481,6 +482,68 @@ export function TemplateFormPage() {
     )
   )
 
+  // Testar Chat: empresas com support_access_enabled
+  const [companies, setCompanies] = useState<{ id: string; name: string | null }[]>([])
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("")
+  const [promptAtendimento, setPromptAtendimento] = useState<{
+    nome_atendente: string | null
+    papel: string | null
+    tom_voz: string | null
+    principais_instrucoes: string | null
+  } | null>(null)
+
+  const loadCompanies = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("id, name")
+        .eq("support_access_enabled", true)
+        .order("name")
+      if (error) throw error
+      setCompanies((data ?? []) as { id: string; name: string | null }[])
+    } catch {
+      setCompanies([])
+    }
+  }, [supabase])
+
+  const loadPromptAtendimento = useCallback(
+    async (companyId: string) => {
+      if (!companyId) {
+        setPromptAtendimento(null)
+        return
+      }
+      try {
+        const { data, error } = await supabase
+          .from("prompt_atendimento")
+          .select("nome_atendente, papel, tom_voz, principais_instrucoes")
+          .eq("company_id", companyId)
+          .limit(1)
+          .maybeSingle()
+        if (error) throw error
+        setPromptAtendimento(
+          data as {
+            nome_atendente: string | null
+            papel: string | null
+            tom_voz: string | null
+            principais_instrucoes: string | null
+          } | null
+        )
+      } catch {
+        setPromptAtendimento(null)
+      }
+    },
+    [supabase]
+  )
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user || !isSaasAdmin(user.publicMetadata as Record<string, unknown>)) return
+    loadCompanies()
+  }, [isLoaded, isSignedIn, user, loadCompanies])
+
+  useEffect(() => {
+    loadPromptAtendimento(selectedCompanyId)
+  }, [selectedCompanyId, loadPromptAtendimento])
+
   const loadTemplate = useCallback(async () => {
     if (isNew || !id) return
     setIsLoading(true)
@@ -671,7 +734,19 @@ export function TemplateFormPage() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="space-y-6 max-w-4xl">
+          <Tabs defaultValue="configuracao" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="configuracao" className="gap-2">
+                <Settings className="h-4 w-4" />
+                Configuração
+              </TabsTrigger>
+              <TabsTrigger value="chat" className="gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Chat
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="configuracao" className="space-y-6 max-w-4xl mt-0">
             <div className="space-y-2">
               <Label>Modelo de atendimento</Label>
               <Select
@@ -792,7 +867,94 @@ export function TemplateFormPage() {
                 {isNew ? "Salvar" : "Atualizar"}
               </Button>
             </div>
-          </div>
+            </TabsContent>
+
+            <TabsContent value="chat" className="space-y-4 mt-0">
+              <div className="flex items-center gap-3">
+                <Label htmlFor="test-company-select" className="text-sm font-medium shrink-0">
+                  Simular licença:
+                </Label>
+                <Select
+                  value={selectedCompanyId || "__none__"}
+                  onValueChange={(v) => setSelectedCompanyId(v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger id="test-company-select" className="w-[320px]">
+                    <SelectValue placeholder="Selecione uma licença para testar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Selecione uma licença</SelectItem>
+                    {companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name ?? c.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {companies.length === 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    Nenhuma licença com acesso de suporte habilitado
+                  </span>
+                )}
+              </div>
+
+              {selectedCompanyId && (
+                <>
+                  {promptAtendimento && (
+                    <Card className="bg-muted/30">
+                      <CardHeader className="pb-2">
+                        <h4 className="text-sm font-medium">Configuração do usuário (read-only)</h4>
+                      </CardHeader>
+                      <CardContent className="space-y-4 text-sm">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <Label className="text-muted-foreground">Nome do Atendente</Label>
+                            <p className="mt-1 font-medium">
+                              {promptAtendimento.nome_atendente || "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-muted-foreground">Papel</Label>
+                            <p className="mt-1 font-medium">
+                              {promptAtendimento.papel || "—"}
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-muted-foreground">Tom de Voz</Label>
+                          <p className="mt-1 font-medium">
+                            {promptAtendimento.tom_voz || "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-muted-foreground">Principais instruções</Label>
+                          <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                            {promptAtendimento.principais_instrucoes || "—"}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {!promptAtendimento && (
+                    <p className="text-sm text-muted-foreground">
+                      Esta licença não possui configuração de prompt de atendimento.
+                    </p>
+                  )}
+                  <div className="min-h-[400px]">
+                    <ChatConhecimento
+                      companyIdOverride={selectedCompanyId}
+                      compact
+                    />
+                  </div>
+                </>
+              )}
+
+              {!selectedCompanyId && (
+                <p className="text-sm text-muted-foreground py-4">
+                  Selecione uma licença para testar o chat e calibrar os prompts.
+                </p>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </AdminLayout>

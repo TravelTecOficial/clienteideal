@@ -62,13 +62,21 @@ function extractAssistantReply(data: unknown): string {
 
 const fallbackMessage = "Não consegui encontrar informações específicas sobre isso nos documentos.";
 
-export default function ChatConhecimento() {
+interface ChatConhecimentoProps {
+  /** Quando definido (ex: admin simulando licença), usa em vez de useEffectiveCompanyId */
+  companyIdOverride?: string | null;
+  /** Ocultar título e descrição (útil quando embutido em outra página) */
+  compact?: boolean;
+}
+
+export default function ChatConhecimento({ companyIdOverride, compact = false }: ChatConhecimentoProps = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { getToken, userId } = useAuth();
+  const { getToken } = useAuth();
   const supabase = useSupabaseClient();
-  const companyId = useEffectiveCompanyId();
+  const profileCompanyId = useEffectiveCompanyId();
+  const companyId = companyIdOverride ?? profileCompanyId;
   const [qualificadores, setQualificadores] = useState<Qualificador[]>([]);
   const [selectedQualificadorId, setSelectedQualificadorId] = useState<string>(NONE_QUALIFICADOR);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -141,6 +149,21 @@ export default function ChatConhecimento() {
       const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
       const proxyUrl = isLocalhost ? "/api/chat-conhecimento" : `${SUPABASE_URL}/functions/v1/chat-conhecimento-proxy`;
 
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "aeea2e" },
+        body: JSON.stringify({
+          sessionId: "aeea2e",
+          location: "chat-conhecimento/index.tsx:before-fetch",
+          message: "Chat request payload",
+          data: { companyId, hasCompanyIdOverride: !!companyIdOverride, proxyUrl: proxyUrl.slice(0, 50) },
+          timestamp: Date.now(),
+          hypothesisId: "E",
+        }),
+      }).catch(() => {});
+      // #endregion
+
       const response = await fetch(proxyUrl, {
         method: "POST",
         headers: {
@@ -204,16 +227,18 @@ export default function ChatConhecimento() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] max-w-5xl mx-auto p-4">
+    <div className={`flex flex-col ${compact ? "h-[500px]" : "h-[calc(100vh-140px)]"} max-w-5xl mx-auto p-4`}>
       <div className="mb-4 flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Sparkles className="text-blue-600" /> Chat de Conhecimento
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Consultando documentos vetorizados via PGVector e n8n[cite: 157, 160].
-          </p>
-        </div>
+        {!compact && (
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Sparkles className="text-blue-600" /> Chat de Conhecimento
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              Consultando documentos vetorizados via PGVector e n8n[cite: 157, 160].
+            </p>
+          </div>
+        )}
         <div className="flex items-center gap-3">
           <Label htmlFor="qualificador-select" className="text-sm font-medium shrink-0">
             Qualificador para teste:

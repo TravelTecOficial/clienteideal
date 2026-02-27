@@ -15,7 +15,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { verifyToken } from "npm:@clerk/backend@2"
+import { createClerkClient, verifyToken } from "npm:@clerk/backend@2"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -116,20 +116,33 @@ Deno.serve(async (req) => {
 
   const profileRow = profile as ProfileRow | null
   const userCompanyId = profileRow?.company_id ?? null
-  const isSaasAdmin = Boolean(profileRow?.saas_admin)
+  let isSaasAdmin = Boolean(profileRow?.saas_admin)
 
-  // Autorização: usuário pertence à empresa OU admin SaaS com support_access habilitado
   const belongsToCompany = userCompanyId === companyId
   const companyRow = company as CompanyRow | null
   const supportAccessEnabled = Boolean(companyRow?.support_access_enabled)
+
+  if (companyError || !company) {
+    return jsonResponse({ error: "Empresa não encontrada." }, 404)
+  }
+
+  if (!isSaasAdmin && !belongsToCompany && supportAccessEnabled) {
+    try {
+      const clerkClient = createClerkClient({ secretKey: clerkSecret })
+      const clerkUser = await clerkClient.users.getUser(sub)
+      const role = clerkUser.publicMetadata?.role as string | undefined
+      if (role === "admin") {
+        isSaasAdmin = true
+      }
+    } catch {
+      // Fallback falhou; mantém isSaasAdmin false
+    }
+  }
+
   const adminPreviewAllowed = isSaasAdmin && supportAccessEnabled
 
   if (!belongsToCompany && !adminPreviewAllowed) {
     return jsonResponse({ error: "Empresa não autorizada." }, 403)
-  }
-
-  if (companyError || !company) {
-    return jsonResponse({ error: "Empresa não encontrada." }, 404)
   }
 
   const row = company as CompanyRow

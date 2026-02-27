@@ -2,12 +2,14 @@ import { useState, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { useMemo } from "react";
 import {
   Upload,
   Loader2,
   FileSpreadsheet,
   CheckCircle2,
   AlertCircle,
+  Info,
 } from "lucide-react";
 
 import {
@@ -41,8 +43,10 @@ import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
 import {
   parseCsvFile,
+  parseXlsxFile,
   suggestMapping,
   rowToPayload,
+  analyzePhoneColumn,
   LEAD_FIELD_OPTIONS,
   type ParsedCsvResult,
   type ColumnMapping,
@@ -93,20 +97,58 @@ export function LeadImportModal({
   const [isImporting, setIsImporting] = useState(false);
   const [result, setResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
 
+  const phoneAnalysis = useMemo(() => {
+    if (!parsed?.rows.length || !mapping) return null;
+    return analyzePhoneColumn(parsed.rows, mapping);
+  }, [parsed?.rows, mapping]);
+
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+
       const reader = new FileReader();
       reader.onload = () => {
-        const text = String(reader.result ?? "");
-        const parsedResult = parseCsvFile(text);
+        let parsedResult: ParsedCsvResult;
+        try {
+          if (ext === "csv") {
+            const text = String(reader.result ?? "");
+            parsedResult = parseCsvFile(text);
+          } else if (ext === "xlsx" || ext === "xls") {
+            const buffer = reader.result;
+            if (!(buffer instanceof ArrayBuffer)) {
+              toast({
+                variant: "destructive",
+                title: "Erro ao ler arquivo",
+                description: "Não foi possível processar o arquivo Excel.",
+              });
+              return;
+            }
+            parsedResult = parseXlsxFile(buffer);
+          } else {
+            toast({
+              variant: "destructive",
+              title: "Formato não suportado",
+              description: "Use arquivos CSV ou Excel (.xlsx, .xls).",
+            });
+            return;
+          }
+        } catch (err) {
+          toast({
+            variant: "destructive",
+            title: "Erro ao processar arquivo",
+            description: err instanceof Error ? err.message : "Verifique o formato do arquivo.",
+          });
+          return;
+        }
+
         if (parsedResult.headers.length === 0 || parsedResult.rows.length === 0) {
           toast({
             variant: "destructive",
             title: "Arquivo inválido",
-            description: "Nenhum dado encontrado no CSV. Verifique o formato.",
+            description: "Nenhum dado encontrado. Verifique o formato.",
           });
           return;
         }
@@ -115,7 +157,12 @@ export function LeadImportModal({
         setStep(2);
         setResult(null);
       };
-      reader.readAsText(file, "UTF-8");
+
+      if (ext === "csv") {
+        reader.readAsText(file, "UTF-8");
+      } else {
+        reader.readAsArrayBuffer(file);
+      }
       e.target.value = "";
     },
     [toast]
@@ -238,10 +285,10 @@ export function LeadImportModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Importar CSV</DialogTitle>
+          <DialogTitle>Importar CSV ou Excel</DialogTitle>
           <DialogDescription>
-            {step === 1 && "Envie um arquivo CSV (exportado do Google Sheets ou Excel) para importar leads ou clientes."}
-            {step === 2 && "Associe cada coluna do CSV ao campo correspondente do sistema."}
+            {step === 1 && "Envie um arquivo CSV ou Excel (.xlsx) para importar leads ou clientes."}
+            {step === 2 && "Associe cada coluna do arquivo ao campo correspondente do sistema."}
             {step === 3 && "Resultado da importação."}
           </DialogDescription>
         </DialogHeader>
@@ -249,7 +296,7 @@ export function LeadImportModal({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv"
+          accept=".csv,.xlsx,.xls"
           className="hidden"
           onChange={handleFileChange}
         />
@@ -263,9 +310,9 @@ export function LeadImportModal({
             tabIndex={0}
           >
             <FileSpreadsheet className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-sm font-medium text-foreground">Clique ou arraste o arquivo CSV</p>
+            <p className="text-sm font-medium text-foreground">Clique ou arraste o arquivo CSV ou Excel (.xlsx)</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Exporte do Google Sheets: Arquivo → Fazer download → Valores separados por vírgula (.csv)
+              Formatos aceitos: CSV ou Excel. Exporte do Google Sheets: Arquivo → Fazer download → .csv ou .xlsx
             </p>
           </div>
         )}
@@ -274,6 +321,9 @@ export function LeadImportModal({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Tipo de importação</Label>
+              <p className="text-xs text-muted-foreground">
+                Os registros serão adicionados à lista de Leads ou de Clientes conforme a opção abaixo.
+              </p>
               <RadioGroup
                 value={importAs}
                 onValueChange={(v) => setImportAs(v as "lead" | "cliente")}
@@ -298,7 +348,7 @@ export function LeadImportModal({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[200px]">Coluna no CSV</TableHead>
+                    <TableHead className="w-[200px]">Coluna no arquivo</TableHead>
                     <TableHead>Associar ao campo</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -341,6 +391,17 @@ export function LeadImportModal({
                 <AlertTitle>Nome obrigatório</AlertTitle>
                 <AlertDescription>
                   Associe pelo menos uma coluna ao campo &quot;Nome&quot; para que os registros sejam importados.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {phoneAnalysis && phoneAnalysis.totalWithMultiple > 0 && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Múltiplos números de telefone</AlertTitle>
+                <AlertDescription>
+                  {phoneAnalysis.totalWithMultiple} linha(s) possuem mais de um número de telefone. Será importado
+                  apenas o primeiro número de cada linha.
                 </AlertDescription>
               </Alert>
             )}
