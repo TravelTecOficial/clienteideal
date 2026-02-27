@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase";
 import { getErrorMessage } from "@/lib/utils";
 import { useForm } from "react-hook-form";
@@ -48,28 +48,6 @@ import {
   ImageIcon,
 } from "lucide-react";
 
-interface ProfileRow {
-  company_id: string | null;
-}
-
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 const idealCustomerSchema = z.object({
   profile_name: z.string().min(2, "O nome do perfil é obrigatório"),
   identifying_phrase: z.string().optional(),
@@ -98,8 +76,8 @@ export function ClienteIdealFormPage() {
   const { userId, getToken } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const effectiveCompanyId = useEffectiveCompanyId();
   const [isLoading, setIsLoading] = useState(false);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [generatingAvatarId, setGeneratingAvatarId] = useState<string | null>(null);
   const [editingAvatarUrl, setEditingAvatarUrl] = useState<string | null>(null);
   const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
@@ -108,16 +86,6 @@ export function ClienteIdealFormPage() {
 
   const isNew = id === "novo";
   const editingId = isNew ? null : id ?? null;
-  const effectiveCompanyId = companyId;
-
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   const form = useForm<IdealCustomerFormValues>({
     resolver: zodResolver(idealCustomerSchema),
@@ -148,11 +116,19 @@ export function ClienteIdealFormPage() {
         .select("*")
         .eq("id", editingId)
         .eq("company_id", effectiveCompanyId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      if (data) {
-        form.reset({
+      if (!data) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Cliente ideal não encontrado.",
+        });
+        navigate("/dashboard/cliente-ideal");
+        return;
+      }
+      form.reset({
           profile_name: data.profile_name ?? "",
           identifying_phrase: data.identifying_phrase ?? "",
           age_range: data.age_range ?? "",
@@ -169,8 +145,7 @@ export function ClienteIdealFormPage() {
           common_objections: data.common_objections ?? "",
           target_product: data.target_product ?? "",
         });
-        setEditingAvatarUrl(data.avatar_url ?? null);
-      }
+      setEditingAvatarUrl(data.avatar_url ?? null);
     } catch {
       toast({
         variant: "destructive",
@@ -329,7 +304,7 @@ export function ClienteIdealFormPage() {
     setIsAvatarPreviewOpen(true);
   }
 
-  if (!effectiveCompanyId && companyId !== undefined) {
+  if (!effectiveCompanyId) {
     return (
       <SidebarProvider>
         <AppSidebar />
