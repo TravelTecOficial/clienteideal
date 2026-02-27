@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { DashboardLink } from "@/components/DashboardLink"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -32,7 +33,7 @@ export function DashboardPage() {
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
                 <BreadcrumbLink asChild>
-                  <Link to="/dashboard">Dashboard</Link>
+                  <DashboardLink>Dashboard</DashboardLink>
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />

@@ -289,7 +289,7 @@ export function AdminPage() {
                             {u.company_id ? (
                               <Button variant="outline" size="sm" asChild>
                                 <Link
-                                  to={`/admin/preview/${u.company_id}`}
+                                  to={`/dashboard?preview=${encodeURIComponent(u.company_id)}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="gap-1"
