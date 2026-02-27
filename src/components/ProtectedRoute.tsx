@@ -191,7 +191,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (isSaasAdmin(user.publicMetadata as Record<string, unknown>)) {
     const previewCompanyId = getAdminPreviewCompanyId()
     // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify({sessionId:'8ad401',runId:'cliente-ideal-post-fix',hypothesisId:'H7',location:'ProtectedRoute.tsx:saas-admin-check',message:'SaaS admin route decision',data:{path:location.pathname,search:location.search,previewCompanyId},timestamp:Date.now()})}).catch(()=>{});
+    const routeDecisionPayload = {sessionId:'8ad401',runId:'cliente-ideal-post-fix',hypothesisId:'H7',location:'ProtectedRoute.tsx:saas-admin-check',message:'SaaS admin route decision',data:{path:location.pathname,search:location.search,previewCompanyId},timestamp:Date.now()};
+    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify(routeDecisionPayload)}).catch(()=>{});
+    console.log('[debug 8ad401]', routeDecisionPayload);
     // #endregion
     // Se já está em rota admin (ex: /admin/preview/:companyId), permitir acesso.
     if (location.pathname.startsWith("/admin")) {
