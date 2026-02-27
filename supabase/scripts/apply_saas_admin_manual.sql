@@ -5,6 +5,10 @@
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS saas_admin boolean NOT NULL DEFAULT false;
 
+-- 1.1) Controle de acesso de suporte por licença
+ALTER TABLE public.companies
+  ADD COLUMN IF NOT EXISTS support_access_enabled boolean NOT NULL DEFAULT true;
+
 -- 2. Função que verifica se o usuário é admin do SaaS
 CREATE OR REPLACE FUNCTION public.is_saas_admin()
 RETURNS boolean

@@ -173,6 +173,7 @@ Deno.serve(async (req) => {
           slug: `company-${id.replace(/^user_/, "")}`,
           plan_type: "free",
           status: "trialing",
+          support_access_enabled: true,
         })
         .select("id")
         .single()

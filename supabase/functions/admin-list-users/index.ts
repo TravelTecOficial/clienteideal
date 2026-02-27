@@ -24,7 +24,12 @@ interface ProfileRow {
   full_name: string | null
   role: string | null
   company_id: string | null
-  companies: { name: string | null; plan_type: string | null; segment_type: string | null } | null
+  companies: {
+    name: string | null
+    plan_type: string | null
+    segment_type: string | null
+    support_access_enabled: boolean | null
+  } | null
 }
 
 Deno.serve(async (req) => {
@@ -114,7 +119,7 @@ Deno.serve(async (req) => {
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name, role, company_id, companies(name, plan_type, segment_type)")
+      .select("id, email, full_name, role, company_id, companies(name, plan_type, segment_type, support_access_enabled)")
       .order("email", { ascending: true })
 
     if (error) {
@@ -138,6 +143,7 @@ Deno.serve(async (req) => {
       company_name: p.companies?.name ?? "",
       plan_type: p.companies?.plan_type ?? "",
       segment_type: p.companies?.segment_type ?? "produtos",
+      support_access_enabled: p.companies?.support_access_enabled ?? true,
     }))
 
     return new Response(

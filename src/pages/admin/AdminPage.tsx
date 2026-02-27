@@ -44,6 +44,7 @@ interface AdminUser {
   company_name: string
   plan_type: string
   segment_type: string
+  support_access_enabled: boolean
 }
 
 function LoadingState() {
@@ -287,17 +288,24 @@ export function AdminPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             {u.company_id ? (
-                              <Button variant="outline" size="sm" asChild>
-                                <Link
-                                  to={`/dashboard?preview=${encodeURIComponent(u.company_id)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="gap-1"
-                                >
+                              u.support_access_enabled ? (
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link
+                                    to={`/dashboard?preview=${encodeURIComponent(u.company_id)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="gap-1"
+                                  >
+                                    <LayoutDashboard className="h-4 w-4" />
+                                    Ver Dashboard
+                                  </Link>
+                                </Button>
+                              ) : (
+                                <Button variant="outline" size="sm" disabled title="Acesso de suporte desabilitado pelo cliente">
                                   <LayoutDashboard className="h-4 w-4" />
                                   Ver Dashboard
-                                </Link>
-                              </Button>
+                                </Button>
+                              )
                             ) : (
                               "—"
                             )}

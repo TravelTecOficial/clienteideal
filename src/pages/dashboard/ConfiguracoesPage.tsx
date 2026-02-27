@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -82,6 +83,7 @@ interface CompanyRow {
   estancia_whatsapp: string | null;
   whatsapp_group_image_url: string | null;
   evolution_instance_name: string | null;
+  support_access_enabled?: boolean | null;
 }
 
 interface Pagamento {
@@ -196,6 +198,8 @@ export function ConfiguracoesPage() {
   const [isSavingEmpresa, setIsSavingEmpresa] = useState(false);
   const [isFetchingDados, setIsFetchingDados] = useState(true);
   const [isSavingDados, setIsSavingDados] = useState(false);
+  const [supportAccessEnabled, setSupportAccessEnabled] = useState(true);
+  const [isSavingSupportAccess, setIsSavingSupportAccess] = useState(false);
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
   const [isFetchingPagamentos, setIsFetchingPagamentos] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -372,7 +376,7 @@ export function ConfiguracoesPage() {
     try {
       const { data, error } = await supabase
         .from("companies")
-        .select("celular_atendimento, email_atendimento, estancia_whatsapp, whatsapp_group_image_url")
+        .select("celular_atendimento, email_atendimento, estancia_whatsapp, whatsapp_group_image_url, support_access_enabled")
         .eq("id", companyId)
         .maybeSingle();
 
@@ -383,6 +387,7 @@ export function ConfiguracoesPage() {
         email_atendimento: row?.email_atendimento ?? "",
         estancia_whatsapp: row?.estancia_whatsapp ?? "",
       });
+      setSupportAccessEnabled(Boolean(row?.support_access_enabled ?? true));
       setWhatsappImageUrl(row?.whatsapp_group_image_url ?? null);
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
@@ -680,6 +685,45 @@ export function ConfiguracoesPage() {
       });
     } finally {
       setIsSavingDados(false);
+    }
+  }
+
+  async function onSupportAccessChange(enabled: boolean) {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Empresa não identificada.",
+      });
+      return;
+    }
+
+    const previousValue = supportAccessEnabled;
+    setSupportAccessEnabled(enabled);
+    setIsSavingSupportAccess(true);
+    try {
+      const { error } = await supabase
+        .from("companies")
+        .update({ support_access_enabled: enabled })
+        .eq("id", companyId);
+
+      if (error) throw error;
+
+      toast({
+        title: enabled ? "Acesso de suporte habilitado" : "Acesso de suporte desabilitado",
+        description: enabled
+          ? "O suporte da Cliente Ideal pode acessar esta licença."
+          : "O suporte da Cliente Ideal não poderá acessar esta licença.",
+      });
+    } catch (err) {
+      setSupportAccessEnabled(previousValue);
+      toast({
+        variant: "destructive",
+        title: "Erro ao atualizar acesso de suporte",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSavingSupportAccess(false);
     }
   }
 
@@ -1305,6 +1349,24 @@ export function ConfiguracoesPage() {
                       onSubmit={dadosForm.handleSubmit(onDadosSubmit)}
                       className="grid gap-4 sm:grid-cols-2"
                     >
+                      <div className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50/70 p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <Label htmlFor="support_access_enabled" className="text-sm font-semibold text-red-900">
+                              Liberar acesso do suporte Cliente Ideal
+                            </Label>
+                            <p className="text-xs text-red-800">
+                              Quando habilitado, o suporte pode abrir seu dashboard no Admin para implantação e atendimento.
+                            </p>
+                          </div>
+                          <Switch
+                            id="support_access_enabled"
+                            checked={supportAccessEnabled}
+                            disabled={isSavingSupportAccess}
+                            onCheckedChange={onSupportAccessChange}
+                          />
+                        </div>
+                      </div>
                       <div className="space-y-2">
                         <Label htmlFor="estancia_whatsapp">
                           Estância Whatsapp
