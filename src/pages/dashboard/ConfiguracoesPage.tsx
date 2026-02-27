@@ -4,7 +4,6 @@ import { useAuth } from "@clerk/clerk-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2, Trash2, Pencil, Plug2, MapPin, MessageSquare, Sparkles } from "lucide-react";
 
@@ -55,16 +54,13 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useEvolutionProxy } from "@/hooks/use-evolution-proxy";
 import { ChatBriefingModal } from "@/components/chat-briefing/ChatBriefingModal";
 
 // --- Interfaces ---
-interface ProfileRow {
-  company_id: string | null;
-}
-
 interface CompanyRow {
   name: string | null;
   nome_fantasia: string | null;
@@ -109,24 +105,6 @@ interface IdealCustomerOption {
 }
 
 // --- Helpers ---
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
@@ -212,8 +190,7 @@ export function ConfiguracoesPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
-
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  const companyId = useEffectiveCompanyId();
   const [isFetchingEmpresa, setIsFetchingEmpresa] = useState(true);
   const [isSavingEmpresa, setIsSavingEmpresa] = useState(false);
   const [isFetchingDados, setIsFetchingDados] = useState(true);
@@ -329,24 +306,6 @@ export function ConfiguracoesPage() {
       ideal_customer_id: "",
     },
   });
-
-  // Buscar company_id
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      // #region agent log
-      const logPayload = {sessionId:'8ad401',location:'ConfiguracoesPage.tsx:fetchCompanyId',message:'ConfiguracoesPage companyId from profile',data:{userId,cid,hostname:typeof window!=='undefined'?window.location.hostname:null},hypothesisId:'H1',timestamp:Date.now()};
-      if (typeof window!=='undefined' && (window.location.hostname==='localhost'||window.location.hostname==='127.0.0.1')) {
-        fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ad401'},body:JSON.stringify(logPayload)}).catch(()=>{});
-      } else {
-        console.log('[debug 8ad401]', logPayload);
-      }
-      // #endregion
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   // Carregar informações cadastrais da empresa
   const loadEmpresa = useCallback(async () => {

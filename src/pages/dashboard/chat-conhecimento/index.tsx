@@ -13,12 +13,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@clerk/clerk-react";
 import { useSupabaseClient } from "@/lib/supabase-context";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 import { SUPABASE_URL } from "@/lib/supabase";
-
-interface ProfileRow {
-  company_id: string | null;
-}
 
 interface Qualificador {
   id: string;
@@ -66,40 +62,16 @@ function extractAssistantReply(data: unknown): string {
 
 const fallbackMessage = "Não consegui encontrar informações específicas sobre isso nos documentos.";
 
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 export default function ChatConhecimento() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { getToken, userId } = useAuth();
   const supabase = useSupabaseClient();
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  const companyId = useEffectiveCompanyId();
   const [qualificadores, setQualificadores] = useState<Qualificador[]>([]);
   const [selectedQualificadorId, setSelectedQualificadorId] = useState<string>(NONE_QUALIFICADOR);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Buscar company_id do perfil (multitenancy)
-  useEffect(() => {
-    if (!userId || !supabase) return;
-    fetchCompanyId(supabase, userId).then(setCompanyId);
-  }, [userId, supabase]);
 
   // Buscar qualificadores da empresa
   useEffect(() => {

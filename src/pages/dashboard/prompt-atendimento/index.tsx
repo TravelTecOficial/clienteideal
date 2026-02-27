@@ -4,7 +4,6 @@ import { useAuth } from "@clerk/clerk-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { Loader2, Check, MessageSquare, Plus, Pencil, Trash2, UserPlus } from "lucide-react"
 
@@ -54,6 +53,7 @@ import {
 import { useSupabaseClient } from "@/lib/supabase-context"
 import { getErrorMessage } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id"
 
 const CATEGORIA_OBJETIVO_OPTIONS = [
   { value: "atendimento", label: "Apenas Atendimento" },
@@ -62,10 +62,6 @@ const CATEGORIA_OBJETIVO_OPTIONS = [
   { value: "atendimento_completo", label: "Atendimento + Qualificação + Agendamento + Pagamento" },
   { value: "atendimento_agendamento_pagamento", label: "Atendimento + Agendamento + Pagamento" },
 ] as const
-
-interface ProfileRow {
-  company_id: string | null
-}
 
 interface PersonaOption {
   id: string
@@ -91,24 +87,6 @@ interface PromptAtendimentoRow {
   follow_up_active: boolean | null
   follow_up_tempo: number | null
   follow_up_tentativas: number | null
-}
-
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle()
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error)
-    return null
-  }
-  const profile = data as ProfileRow | null
-  return profile?.company_id ?? null
 }
 
 const formSchema = z.object({
@@ -472,7 +450,7 @@ export function PromptAtendimentoPage() {
   const supabase = useSupabaseClient()
   const { toast } = useToast()
 
-  const [companyId, setCompanyId] = useState<string | null>(null)
+  const companyId = useEffectiveCompanyId()
   const [personas, setPersonas] = useState<PersonaOption[]>([])
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplateOption[]>([])
   const [prompts, setPrompts] = useState<PromptAtendimentoRow[]>([])
@@ -547,15 +525,6 @@ export function PromptAtendimentoPage() {
       setIsFetching(false)
     }
   }, [companyId, supabase, toast])
-
-  useEffect(() => {
-    async function init() {
-      if (!userId) return
-      const cid = await fetchCompanyId(supabase, userId)
-      setCompanyId(cid)
-    }
-    init()
-  }, [userId, supabase])
 
   useEffect(() => {
     loadPersonas()

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { Calendar, dateFnsLocalizer } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -31,13 +30,10 @@ import {
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 import { AgendaForm, type AgendaFormValues, type VendedorOption } from "./components/AgendaForm";
 
 // --- Interfaces ---
-interface ProfileRow {
-  company_id: string | null;
-}
-
 interface AgendaItem {
   id: string;
   data_hora: string;
@@ -48,24 +44,6 @@ interface AgendaItem {
 }
 
 // --- Helpers ---
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -109,9 +87,9 @@ export default function AgendaPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const effectiveCompanyId = useEffectiveCompanyId();
 
   const [agenda, setAgenda] = useState<AgendaItem[]>([]);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<AgendaItem | null>(null);
@@ -119,9 +97,6 @@ export default function AgendaPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [view, setView] = useState<"table" | "calendar">("table");
-
-  // Note: UI-level check only. API enforcement required.
-  const effectiveCompanyId = companyId;
 
   const loadVendedores = useCallback(async () => {
     if (!effectiveCompanyId) return;
@@ -167,15 +142,6 @@ export default function AgendaPage() {
       setIsFetching(false);
     }
   }, [effectiveCompanyId, supabase, toast]);
-
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   useEffect(() => {
     loadVendedores();

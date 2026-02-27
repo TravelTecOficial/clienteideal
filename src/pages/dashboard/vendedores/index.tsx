@@ -43,7 +43,6 @@ import { Switch } from "@/components/ui/switch";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { SUPABASE_URL } from "@/lib/supabase";
 import { formatPhone } from "@/lib/phone-mask";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Dia da semana: 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb (Date.getDay()) */
 const DIAS_SEMANA = [
@@ -75,28 +74,6 @@ interface HorarioRow {
   almoco_fim: string | null;
 }
 
-interface ProfileRow {
-  company_id: string | null;
-}
-
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 function timeToInput(value: string | null): string {
   if (!value) return "";
   const [h, m] = value.split(":");
@@ -107,7 +84,7 @@ export default function VendedoresPage() {
   const { user } = useUser();
   const { getToken } = useAuth();
   const supabase = useSupabaseClient();
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  const companyId = useEffectiveCompanyId();
   const [vendedores, setVendedores] = useState<VendedorRow[]>([]);
   const [horarios, setHorarios] = useState<Record<string, HorarioRow[]>>({});
   const [loading, setLoading] = useState(true);
@@ -139,21 +116,18 @@ export default function VendedoresPage() {
   );
 
   const loadCompanyAndData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!companyId) {
+      setLoading(false);
+      setVendedores([]);
+      setHorarios({});
+      return;
+    }
     setLoading(true);
     try {
-      const cid = await fetchCompanyId(supabase, user.id);
-      setCompanyId(cid);
-      if (!cid) {
-        setVendedores([]);
-        setHorarios({});
-        return;
-      }
-
       const { data: vendData, error: vendErr } = await supabase
         .from("vendedores")
         .select("id, email, company_id, nome, celular, status, clerk_id")
-        .eq("company_id", cid)
+        .eq("company_id", companyId)
         .order("nome");
 
       if (vendErr) {
@@ -172,7 +146,7 @@ export default function VendedoresPage() {
       const { data: horData, error: horErr } = await supabase
         .from("horarios_vendedor")
         .select("vendedor_email, dia_semana, entrada, saida")
-        .eq("company_id", cid)
+        .eq("company_id", companyId)
         .in("vendedor_email", emails);
 
       if (horErr) {
@@ -198,7 +172,7 @@ export default function VendedoresPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, supabase]);
+  }, [companyId, supabase]);
 
   useEffect(() => {
     loadCompanyAndData();

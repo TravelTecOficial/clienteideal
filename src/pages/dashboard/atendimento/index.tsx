@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { History, Info, Loader2 } from "lucide-react";
 
@@ -29,12 +28,9 @@ import {
 } from "@/components/ui/tooltip";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 
 // --- Interfaces ---
-interface ProfileRow {
-  company_id: string | null;
-}
-
 interface VendedorOption {
   id: string;
   nome: string;
@@ -71,24 +67,6 @@ interface Atendimento {
 }
 
 // --- Helpers ---
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
   try {
@@ -161,15 +139,13 @@ export default function AtendimentoPageContent() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const effectiveCompanyId = useEffectiveCompanyId();
 
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [vendedores, setVendedores] = useState<VendedorOption[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [selectedAtendimento, setSelectedAtendimento] = useState<Atendimento | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-
-  const effectiveCompanyId = companyId;
 
   const vendedorMap = useCallback(() => {
     const map = new Map<string, string>();
@@ -183,16 +159,6 @@ export default function AtendimentoPageContent() {
     if (!idVendedor) return "—";
     return vendedorMap().get(idVendedor) ?? "—";
   };
-
-  // Buscar company_id
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   // Buscar vendedores para mapear id_vendedor -> nome
   const loadVendedores = useCallback(async () => {

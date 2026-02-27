@@ -4,7 +4,6 @@ import { useAuth } from "@clerk/clerk-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   Breadcrumb,
@@ -46,12 +45,9 @@ import { Label } from "@/components/ui/label";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/utils";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 
 // --- Interfaces ---
-interface ProfileRow {
-  company_id: string | null;
-}
-
 interface CotaImovel {
   id: number;
   meses: number;
@@ -68,24 +64,6 @@ interface CotaVeiculo {
 }
 
 // --- Helpers ---
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
-}
-
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -115,8 +93,7 @@ export default function ConsorcioPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
-
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  const companyId = useEffectiveCompanyId();
   const [cotasImoveis, setCotasImoveis] = useState<CotaImovel[]>([]);
   const [cotasVeiculos, setCotasVeiculos] = useState<CotaVeiculo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,15 +144,6 @@ export default function ConsorcioPage() {
       setLoading(false);
     }
   }, [companyId, supabase, toast]);
-
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   useEffect(() => {
     fetchData();

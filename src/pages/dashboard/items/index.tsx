@@ -3,7 +3,6 @@ import { useAuth } from "@clerk/clerk-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -29,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 
 // --- Interfaces ---
 interface Item {
@@ -39,29 +39,6 @@ interface Item {
   unit: string | null;
   category: string | null;
   type: "product" | "service";
-}
-
-interface ProfileRow {
-  company_id: string | null;
-}
-
-// --- Helpers ---
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
 }
 
 // --- Schema Zod ---
@@ -83,9 +60,9 @@ export default function ItemsPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const effectiveCompanyId = useEffectiveCompanyId();
 
   const [items, setItems] = useState<Item[]>([]);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [activeTab, setActiveTab] = useState<"product" | "service">("product");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -103,8 +80,6 @@ export default function ItemsPage() {
       price: 0,
     },
   });
-
-  const effectiveCompanyId = companyId;
 
   const loadItems = useCallback(async () => {
     if (!effectiveCompanyId) return;
@@ -128,15 +103,6 @@ export default function ItemsPage() {
       setIsFetching(false);
     }
   }, [effectiveCompanyId, supabase, toast]);
-
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   useEffect(() => {
     loadItems();

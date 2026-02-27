@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -61,6 +60,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { useToast } from "@/hooks/use-toast";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 
 // --- Interfaces ---
 interface KbFile {
@@ -70,29 +70,6 @@ interface KbFile {
   created_at: string;
   drive_file_id: string | null;
   description: string | null;
-}
-
-interface ProfileRow {
-  company_id: string | null;
-}
-
-// --- Helpers ---
-async function fetchCompanyId(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar company_id:", error);
-    return null;
-  }
-  const profile = data as ProfileRow | null;
-  return profile?.company_id ?? null;
 }
 
 const TRAINING_TYPE_OPTIONS = [
@@ -111,17 +88,15 @@ export default function BaseConhecimento() {
   const { userId, getToken } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
+  const effectiveCompanyId = useEffectiveCompanyId();
 
   const [files, setFiles] = useState<KbFile[]>([]);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [trainingType, setTrainingType] = useState<string>("");
   const [description, setDescription] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const effectiveCompanyId = companyId;
 
   const loadFiles = useCallback(async () => {
     if (!effectiveCompanyId) {
@@ -151,15 +126,6 @@ export default function BaseConhecimento() {
       setIsFetching(false);
     }
   }, [effectiveCompanyId, supabase, toast]);
-
-  useEffect(() => {
-    async function init() {
-      if (!userId) return;
-      const cid = await fetchCompanyId(supabase, userId);
-      setCompanyId(cid);
-    }
-    init();
-  }, [userId, supabase]);
 
   useEffect(() => {
     loadFiles();
