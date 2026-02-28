@@ -17,10 +17,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 }
 
-async function requireAdmin(req: Request): Promise<{ error?: Response; sub?: string }> {
+async function requireAdmin(req: Request, body?: Record<string, unknown>): Promise<{ error?: Response; sub?: string }> {
   const authHeader = req.headers.get("Authorization")
-  const token = authHeader?.replace(/^Bearer\s+/i, "")
-
+  const tokenFromBody = typeof body?.token === "string" ? body.token.trim() : null
+  const tokenFromHeader = authHeader?.replace(/^Bearer\s+/i, "")?.trim() || null
+  const token = tokenFromBody || tokenFromHeader
   if (!token) {
     return {
       error: new Response(
@@ -44,10 +45,15 @@ async function requireAdmin(req: Request): Promise<{ error?: Response; sub?: str
   try {
     const verified = await verifyToken(token, { secretKey: clerkSecret })
     sub = verified.sub as string
-  } catch {
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    console.error("[admin-webhook-config] verifyToken falhou:", errMsg)
     return {
       error: new Response(
-        JSON.stringify({ error: "Token inválido ou expirado." }),
+        JSON.stringify({
+          error: "Token inválido ou expirado.",
+          hint: errMsg.slice(0, 120),
+        }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       ),
     }
@@ -61,7 +67,14 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders })
   }
 
-  const authResult = await requireAdmin(req)
+  let body: Record<string, unknown> = {}
+  try {
+    if (req.method === "POST" && req.headers.get("content-type")?.includes("application/json")) {
+      body = (await req.json()) as Record<string, unknown>
+    }
+  } catch { /* empty body */ }
+
+  const authResult = await requireAdmin(req, body)
   if (authResult.error) return authResult.error
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")
@@ -103,13 +116,6 @@ Deno.serve(async (req) => {
     )
   }
 
-  let body: Record<string, unknown> = {}
-  try {
-    if (req.method === "POST" && req.headers.get("content-type")?.includes("application/json")) {
-      body = (await req.json()) as Record<string, unknown>
-    }
-  } catch { /* empty body */ }
-
   const isUpdate =
     body.config_type &&
     (body.webhook_producao !== undefined ||
@@ -120,6 +126,7 @@ Deno.serve(async (req) => {
     const { data, error } = await supabase
       .from("admin_webhook_config")
       .select("config_type, webhook_producao, webhook_teste, webhook_enviar_arquivos")
+      .in("config_type", ["consorcio", "produtos"])
       .order("config_type")
 
     if (error) {
@@ -133,8 +140,34 @@ Deno.serve(async (req) => {
       )
     }
 
+    const configs = (data ?? []) as Array<{
+      config_type: string
+      webhook_producao: string | null
+      webhook_teste: string | null
+      webhook_enviar_arquivos: string | null
+    }>
+    const hasConsorcio = configs.some((c) => c.config_type === "consorcio")
+    const hasProdutos = configs.some((c) => c.config_type === "produtos")
+    if (!hasConsorcio || !hasProdutos) {
+      const toInsert: Array<{ config_type: string }> = []
+      if (!hasConsorcio) toInsert.push({ config_type: "consorcio" })
+      if (!hasProdutos) toInsert.push({ config_type: "produtos" })
+      await supabase
+        .from("admin_webhook_config")
+        .upsert(toInsert, { onConflict: "config_type" })
+      const { data: refetched } = await supabase
+        .from("admin_webhook_config")
+        .select("config_type, webhook_producao, webhook_teste, webhook_enviar_arquivos")
+        .in("config_type", ["consorcio", "produtos"])
+        .order("config_type")
+      return new Response(
+        JSON.stringify({ configs: refetched ?? [] }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+
     return new Response(
-      JSON.stringify({ configs: data ?? [] }),
+      JSON.stringify({ configs }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
@@ -164,13 +197,18 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     }
     if (webhook_producao !== undefined) {
-      upsertPayload.webhook_producao = webhook_producao?.trim() || null
+      upsertPayload.webhook_producao =
+        typeof webhook_producao === "string" ? webhook_producao.trim() || null : null
     }
     if (webhook_teste !== undefined) {
-      upsertPayload.webhook_teste = webhook_teste?.trim() || null
+      upsertPayload.webhook_teste =
+        typeof webhook_teste === "string" ? webhook_teste.trim() || null : null
     }
     if (webhook_enviar_arquivos !== undefined) {
-      upsertPayload.webhook_enviar_arquivos = webhook_enviar_arquivos?.trim() || null
+      upsertPayload.webhook_enviar_arquivos =
+        typeof webhook_enviar_arquivos === "string"
+          ? webhook_enviar_arquivos.trim() || null
+          : null
     }
 
     const { data, error } = await supabase

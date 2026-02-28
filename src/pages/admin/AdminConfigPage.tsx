@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useUser, useAuth } from "@clerk/clerk-react"
 import { Navigate } from "react-router-dom"
-import { FunctionsHttpError } from "@supabase/supabase-js"
-import { useSupabaseClient } from "@/lib/supabase-context"
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AdminLayout } from "@/components/admin-layout"
 import { isSaasAdmin } from "@/lib/use-saas-admin"
@@ -27,25 +26,9 @@ const CONFIG_LABELS: Record<ConfigType, string> = {
   produtos: "Produtos & Serviços",
 }
 
-async function extractApiError(error: unknown): Promise<string> {
-  if (error instanceof FunctionsHttpError && error.context) {
-    try {
-      const res = error.context.clone?.() ?? error.context
-      const parsed = (await res.json()) as { error?: string; hint?: string }
-      if (parsed?.error) {
-        return parsed.hint ? `${parsed.error} — ${parsed.hint}` : parsed.error
-      }
-    } catch {
-      /* fallback para message */
-    }
-  }
-  return error instanceof Error ? error.message : "Erro desconhecido"
-}
-
 export function AdminConfigPage() {
   const { isLoaded, isSignedIn, user } = useUser()
   const { getToken } = useAuth()
-  const supabase = useSupabaseClient()
   const { toast } = useToast()
   const [configs, setConfigs] = useState<WebhookConfig[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,7 +43,7 @@ export function AdminConfigPage() {
   const loadedRef = useRef(false)
 
   const fetchConfigs = useCallback(async () => {
-    const token = await getToken({ template: "supabase" }) ?? await getToken()
+    const token = await getToken()
     if (!token) {
       setLoading(false)
       setErrorMsg("Token indisponível para carregar configurações.")
@@ -69,22 +52,36 @@ export function AdminConfigPage() {
     setLoading(true)
     setErrorMsg("")
     try {
-      const { data, error } = await supabase.functions.invoke("admin-webhook-config", {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-webhook-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ token }),
       })
-      if (error) {
-        const msg = await extractApiError(error)
+      const raw = await res.text()
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as { configs?: WebhookConfig[]; error?: string }
+        } catch {
+          return null
+        }
+      })()
+      if (!res.ok) {
+        const msg = data?.hint ? `${data?.error ?? "Erro"} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`)
         throw new Error(msg)
       }
-      const body = data as { configs?: WebhookConfig[] }
-      setConfigs(body?.configs ?? [])
+      if (data?.error) {
+        throw new Error(data.error)
+      }
+      setConfigs(data?.configs ?? [])
     } catch (err) {
       setErrorMsg(getErrorMessage(err))
     } finally {
       setLoading(false)
     }
-  // toast é estável (useToast); exhaustive-deps reclama mas é necessário no catch
-  }, [getToken, supabase.functions])
+  }, [getToken])
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) return
@@ -95,44 +92,55 @@ export function AdminConfigPage() {
   }, [isLoaded, isSignedIn, user, fetchConfigs])
 
   useEffect(() => {
-    if (!selectedType || configs.length === 0) return
+    if (!selectedType) return
     const c = configs.find((x) => x.config_type === selectedType)
-    if (c) {
-      setForm({
-        webhook_producao: c.webhook_producao ?? "",
-        webhook_teste: c.webhook_teste ?? "",
-        webhook_enviar_arquivos: c.webhook_enviar_arquivos ?? "",
-      })
-    }
+    setForm({
+      webhook_producao: c?.webhook_producao ?? "",
+      webhook_teste: c?.webhook_teste ?? "",
+      webhook_enviar_arquivos: c?.webhook_enviar_arquivos ?? "",
+    })
   }, [selectedType, configs])
 
   const handleSave = async () => {
     if (!selectedType) return
-    const token = await getToken({ template: "supabase" }) ?? await getToken()
+    const token = await getToken()
     if (!token) {
       toast({ variant: "destructive", title: "Erro", description: "Token indisponível." })
       return
     }
     setSaving(selectedType)
     try {
-      const payload: Record<string, string | undefined> = {
+      const payload = {
+        token,
         config_type: selectedType,
-        webhook_producao: form.webhook_producao.trim() || undefined,
-        webhook_teste: form.webhook_teste.trim() || undefined,
-        webhook_enviar_arquivos: form.webhook_enviar_arquivos.trim() || undefined,
+        webhook_producao: form.webhook_producao.trim() || null,
+        webhook_teste: form.webhook_teste.trim() || null,
+        webhook_enviar_arquivos: form.webhook_enviar_arquivos.trim() || null,
       }
-      const { data, error } = await supabase.functions.invoke("admin-webhook-config", {
-        body: payload,
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-webhook-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify(payload),
       })
-      if (error) {
-        const msg = await extractApiError(error)
-        throw new Error(msg)
+      const raw = await res.text()
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as { error?: string; hint?: string }
+        } catch {
+          return null
+        }
+      })()
+      if (!res.ok) {
+        throw new Error(data?.error ?? data?.hint ?? `Erro ${res.status}`)
       }
-      const body = data as { error?: string; hint?: string }
-      if (body?.error) throw new Error(body.hint ? `${body.error} ${body.hint}` : body.error)
+      if (data?.error) {
+        throw new Error(data.hint ? `${data.error} — ${data.hint}` : data.error)
+      }
       toast({ title: "Salvo", description: "Configurações atualizadas." })
-      fetchConfigs()
+      await fetchConfigs()
     } catch (err) {
       toast({
         variant: "destructive",

@@ -227,6 +227,8 @@ export function ConfiguracoesPage() {
   const [googleAdsSelectedAccount, setGoogleAdsSelectedAccount] = useState<string | null>(null);
   const [isGoogleAdsConnecting, setIsGoogleAdsConnecting] = useState(false);
   const [isCreatingInstance, setIsCreatingInstance] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [isDeleteEvolutionOpen, setIsDeleteEvolutionOpen] = useState(false);
   const [isDeletingEvolution, setIsDeletingEvolution] = useState(false);
 
@@ -251,14 +253,14 @@ export function ConfiguracoesPage() {
     return value.trim().toLowerCase();
   }, []);
 
-  const checkConnectionState = useCallback(async () => {
+  const checkConnectionState = useCallback(async (): Promise<string | null> => {
     const instanceName = evolutionForm.getValues("evolution_instance_name")?.trim();
-    if (!instanceName) return;
+    if (!instanceName) return null;
     const { data, error } = await executeEvolutionProxy("connectionState", {
       instanceName,
     });
     if (error) {
-      return;
+      return null;
     }
     const res = data as { state?: unknown; instance?: { state?: unknown } } | null;
     const rawState = res?.state ?? res?.instance?.state ?? res;
@@ -270,6 +272,7 @@ export function ConfiguracoesPage() {
       setQrCodeBase64(null);
       stopConnectionPolling();
     }
+    return normalizedState;
   }, [evolutionForm, executeEvolutionProxy, normalizeConnectionState, stopConnectionPolling]);
 
   const empresaForm = useForm<EmpresaFormValues>({
@@ -919,13 +922,29 @@ export function ConfiguracoesPage() {
     action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout" | "setWebhook" | "delete"
   ) {
     const instanceName = evolutionForm.getValues("evolution_instance_name")?.trim();
+
+    // Conectar: se já conectado, informar e não chamar API
+    if (action === "connect" && connectionState === "open") {
+      toast({ title: "Instância já conectada", description: "Sua instância WhatsApp já está conectada." });
+      return;
+    }
+
     if (action === "create") setIsCreatingInstance(true);
+    if (action === "connect") setIsConnecting(true);
+    if (action === "connectionState") setIsCheckingConnection(true);
     if (action === "delete") setIsDeletingEvolution(true);
     try {
       const { data, error } = await executeEvolutionProxy(action, {
         instanceName: instanceName || undefined,
       });
       if (error) {
+        if (action === "create" && /forbidden|403/i.test(error)) {
+          toast({
+            title: "Instância já criada",
+            description: "A instância já existe. Clique em Conectar para gerar o QR Code.",
+          });
+          return;
+        }
         toast({
           variant: "destructive",
           title: "Erro",
@@ -936,11 +955,14 @@ export function ConfiguracoesPage() {
       const res = data as Record<string, unknown> | null;
       if (action === "create") {
         if (res?.instanceAlreadyExists) {
-          toast({ title: "Instância já criada" });
+          toast({
+            title: "Instância já criada",
+            description: "A instância já existe. Clique em Conectar para gerar o QR Code.",
+          });
         } else {
           toast({
             title: "Instância criada com sucesso",
-            description: "Faça sua conexão agora.",
+            description: "Clique em Conectar para gerar o QR Code.",
           });
         }
       }
@@ -974,11 +996,17 @@ export function ConfiguracoesPage() {
         }, 5000);
       } else {
         setQrCodeBase64(null);
-        toast({
-          variant: "destructive",
-          title: "QR Code não retornado",
-          description: "A Evolution API não retornou o QR Code. Verifique se a instância existe.",
-        });
+        // Pode ser que já esteja conectado (Evolution não retorna QR nesse caso)
+        const stateAfterConnect = await checkConnectionState();
+        if (stateAfterConnect === "open") {
+          toast({ title: "Instância já conectada", description: "Sua instância WhatsApp já está conectada." });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "QR Code não retornado",
+            description: "A Evolution API não retornou o QR Code. Verifique se a instância existe.",
+          });
+        }
       }
     }
     if (action === "connectionState") {
@@ -1045,6 +1073,8 @@ export function ConfiguracoesPage() {
     }
     } finally {
       if (action === "create") setIsCreatingInstance(false);
+      if (action === "connect") setIsConnecting(false);
+      if (action === "connectionState") setIsCheckingConnection(false);
       if (action === "delete") setIsDeletingEvolution(false);
     }
   }
@@ -1816,12 +1846,12 @@ export function ConfiguracoesPage() {
                             type="button"
                             variant="outline"
                             onClick={() => handleEvolutionAction("create")}
-                            disabled={isCreatingInstance}
+                            disabled={isCreatingInstance || isConnecting}
                           >
                             {isCreatingInstance ? (
                               <>
                                 <Loader2 className="h-4 w-4 animate-spin" />
-                                Criando…
+                                Criando instância…
                               </>
                             ) : (
                               "Criar instância"
@@ -1831,17 +1861,40 @@ export function ConfiguracoesPage() {
                             type="button"
                             variant="outline"
                             onClick={() => handleEvolutionAction("connect")}
-                            disabled={!evolutionForm.watch("evolution_instance_name")?.trim()}
+                            disabled={
+                              !evolutionForm.watch("evolution_instance_name")?.trim() ||
+                              isCreatingInstance ||
+                              isConnecting
+                            }
                           >
-                            Conectar / Gerar QR Code
+                            {isConnecting ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Conectando…
+                              </>
+                            ) : (
+                              "Conectar / Gerar QR Code"
+                            )}
                           </Button>
                           <Button
                             type="button"
                             variant="outline"
                             onClick={() => handleEvolutionAction("connectionState")}
-                            disabled={!evolutionForm.watch("evolution_instance_name")?.trim()}
+                            disabled={
+                              !evolutionForm.watch("evolution_instance_name")?.trim() ||
+                              isCheckingConnection ||
+                              isCreatingInstance ||
+                              isConnecting
+                            }
                           >
-                            Verificar conexão
+                            {isCheckingConnection ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Verificando…
+                              </>
+                            ) : (
+                              "Verificar conexão"
+                            )}
                           </Button>
                           <Button
                             type="button"

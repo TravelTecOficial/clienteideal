@@ -2,8 +2,9 @@
  * Edge Function: evolution-proxy
  *
  * Proxy para a Evolution API. Lê URL/API Key da config global (admin_evolution_config).
- * Ao criar/conectar: configura webhook na Evolution para enviar a evolution-webhook.
- * O evolution-webhook encaminha ao N8N conforme segmento da empresa (webhook_producao).
+ * Ao criar/conectar: configura webhook na Evolution para enviar diretamente ao N8N
+ * usando admin_webhook_config.webhook_producao do segmento da empresa.
+ * Se webhook_producao não estiver configurado, usa evolution-webhook (Supabase) como fallback.
  *
  * Requer: body.token = Clerk JWT (ou Authorization header)
  * Body: { action, instanceName?, token? }
@@ -162,10 +163,16 @@ Deno.serve(async (req) => {
     apikey: apiKey,
   }
 
-  const evolutionWebhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook`
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H2',location:'evolution-proxy/index.ts:166',message:'Configuração base do webhook pronta',data:{hasBaseUrl:!!baseUrl,baseUrlNormalized:url,hasApiKey:!!apiKey,evolutionWebhookUrl},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+  const segmentType =
+    (companyRow?.segment_type?.trim()?.toLowerCase() === "consorcio" ? "consorcio" : "produtos") as "consorcio" | "produtos"
+  const { data: webhookConfig } = await supabase
+    .from("admin_webhook_config")
+    .select("webhook_producao")
+    .eq("config_type", segmentType)
+    .maybeSingle()
+  const webhookProducao = (webhookConfig as { webhook_producao?: string | null } | null)?.webhook_producao?.trim()
+  const evolutionWebhookUrl =
+    webhookProducao || `${supabaseUrl}/functions/v1/evolution-webhook`
 
   async function setWebhookForInstance(instance: string): Promise<WebhookDebugResult> {
     // Evolution API v2 exige camelCase (webhookByEvents, webhookBase64). v1 usa snake_case.
@@ -312,13 +319,8 @@ Deno.serve(async (req) => {
       })
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
       if (!res.ok) {
-        const msg = (data?.response as { message?: string[] })?.message
-        const msgStr = Array.isArray(msg) ? msg.join(" ") : String(msg ?? "")
-        const isAlreadyExists =
-          res.status === 403 &&
-          (/already in use|already exists|já está em uso/i.test(msgStr) ||
-            /already in use|already exists/i.test(String(data?.error ?? "")))
-        if (isAlreadyExists) {
+        // 403 é o único erro documentado para "nome já em uso" no endpoint /instance/create
+        if (res.status === 403) {
           return jsonResponse({ instanceAlreadyExists: true, message: "Instância já criada" }, 200)
         }
         return jsonResponse(data, res.status)
