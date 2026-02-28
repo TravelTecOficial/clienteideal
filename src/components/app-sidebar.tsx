@@ -7,7 +7,6 @@ import {
   Plus,
   LayoutDashboard,
   User,
-  Target,
   Users,
   Briefcase,
   Calendar,
@@ -16,8 +15,6 @@ import {
   Package,
   Settings,
   HandCoins,
-  MessageSquare,
-  Bot,
 } from "lucide-react"
 
 import { SearchForm } from "@/components/search-form"
@@ -48,14 +45,11 @@ import {
 const navItemsBase = [
   { title: "Home", url: "/dashboard", icon: LayoutDashboard },
   { title: "Cliente Ideal", url: "/dashboard/cliente-ideal", icon: User },
-  { title: "Qualificador", url: "/dashboard/qualificador", icon: Target },
   { title: "Leads", url: "/dashboard/leads", icon: Users },
   { title: "Oportunidades", url: "/dashboard/oportunidades", icon: Briefcase },
   { title: "Agenda", url: "/dashboard/agenda", icon: Calendar },
   { title: "Atendimentos", url: "/dashboard/atendimentos", icon: Headphones },
   { title: "Base de conhecimento", url: "/dashboard/base-conhecimento", icon: BookOpen },
-  { title: "Chat de conhecimento", url: "/dashboard/chat-conhecimento", icon: MessageSquare },
-  { title: "Prompt de Atendimento", url: "/dashboard/prompt-atendimento", icon: Bot },
   { title: "Produtos & Serviços", url: "/dashboard/items", icon: Package, segmentFilter: "produtos" as const },
   { title: "Consórcios", url: "/dashboard/consorcio", icon: HandCoins, segmentFilter: "consorcio" as const },
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },

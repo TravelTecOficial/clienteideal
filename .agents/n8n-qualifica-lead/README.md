@@ -111,7 +111,12 @@ No workflow **[SDR] - Sistema de Atendimento - Fluxo Principal**, editar o nó `
 
 As perguntas vêm das tabelas **qualificadores**, **qualificacao_perguntas** e **qualificacao_respostas** — o mesmo módulo usado na página de Qualificação do frontend. A view `v_qualificacao_sdr` consolida essas tabelas no formato esperado pelo SDR.
 
-Não é necessário popular `config_qualificacao` — use o frontend de Qualificação para cadastrar qualificadores, perguntas e respostas (fria, morna, quente).
+**Estrutura de relacionamento (v1.0.5+):**
+- **Qualificador** → `prompt_atendimento_id` → Prompt de Atendimento
+- **Prompt** → `persona_id` → Persona (Cliente Ideal)
+- A view `v_qualificacao_sdr` inclui `prompt_atendimento_id` e `persona_id` (via JOIN) para filtro por persona no n8n, quando o lead tiver persona identificado.
+
+Não é necessário popular `config_qualificacao` — use o frontend de Qualificação para cadastrar qualificadores vinculados a um prompt, com perguntas e respostas (fria, morna, quente).
 
 ---
 

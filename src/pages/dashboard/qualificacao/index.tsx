@@ -49,7 +49,8 @@ const PONTOS_TIPO = { fria: 1, morna: 5, quente: 10 } as const;
 interface Qualificador {
   id: string;
   nome: string;
-  ideal_customer_id: string | null;
+  prompt_atendimento_id: string | null;
+  prompt_atendimento?: { name: string | null; ideal_customers: { profile_name: string | null } | null } | null;
   ideal_customers?: { profile_name: string | null } | null;
   perguntas_count?: number;
   pontuacao_maxima?: number | null;
@@ -254,21 +255,27 @@ function SortablePerguntaCard({
   );
 }
 
-export default function QualificacaoPage() {
+interface QualificacaoPageProps {
+  /** Quando definido, filtra qualificadores pelo prompt do Cliente Ideal e pré-seleciona ao criar. */
+  clienteIdealId?: string;
+}
+
+export default function QualificacaoPage({ clienteIdealId }: QualificacaoPageProps = {}) {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
   const effectiveCompanyId = useEffectiveCompanyId();
 
+  const [promptAtendimentoIdFromPersona, setPromptAtendimentoIdFromPersona] = useState<string | null>(null);
   const [qualificadores, setQualificadores] = useState<Qualificador[]>([]);
-  const [personas, setPersonas] = useState<{ id: string; profile_name: string }[]>([]);
+  const [prompts, setPrompts] = useState<{ id: string; label: string }[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Modal state: nome + persona + loop de perguntas
+  // Modal state: nome + prompt + loop de perguntas
   const [nome, setNome] = useState("");
-  const [idealCustomerId, setIdealCustomerId] = useState("");
+  const [promptAtendimentoId, setPromptAtendimentoId] = useState("");
   const [perguntas, setPerguntas] = useState<PerguntaLocal[]>([
     { id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" },
   ]);
@@ -279,30 +286,54 @@ export default function QualificacaoPage() {
   const [copyingTemplateId, setCopyingTemplateId] = useState<string | null>(null);
   const [companySegmentType, setCompanySegmentType] = useState<string>("produtos");
 
-  // Buscar Personas (ideal_customers)
-  const loadPersonas = useCallback(async () => {
+  // Buscar Prompts de atendimento da empresa
+  const loadPrompts = useCallback(async () => {
     if (!effectiveCompanyId) return;
     try {
       const { data, error } = await supabase
-        .from("ideal_customers")
-        .select("id, profile_name")
-        .eq("company_id", effectiveCompanyId);
+        .from("prompt_atendimento")
+        .select("id, name, ideal_customers!persona_id(profile_name)")
+        .eq("company_id", effectiveCompanyId)
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setPersonas(
-        (data ?? []).map((r: { id: string; profile_name: string | null }) => ({
-          id: String(r.id),
-          profile_name: r.profile_name ?? "",
-        }))
+      setPrompts(
+        (data ?? []).map((r: { id: string; name: string | null; ideal_customers: { profile_name: string | null } | null }) => {
+          const label = r.name?.trim() || (r.ideal_customers as { profile_name: string | null } | null)?.profile_name || "Prompt padrão";
+          return { id: String(r.id), label };
+        })
       );
     } catch (err) {
-      console.error("Erro ao carregar personas:", err);
+      console.error("Erro ao carregar prompts:", err);
     }
   }, [effectiveCompanyId, supabase]);
 
   useEffect(() => {
-    loadPersonas();
-  }, [loadPersonas]);
+    loadPrompts();
+  }, [loadPrompts]);
+
+  useEffect(() => {
+    if (!clienteIdealId || !effectiveCompanyId || !supabase) {
+      setPromptAtendimentoIdFromPersona(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("ideal_customers")
+        .select("prompt_atendimento_id")
+        .eq("id", clienteIdealId)
+        .eq("company_id", effectiveCompanyId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        setPromptAtendimentoIdFromPersona(null);
+        return;
+      }
+      setPromptAtendimentoIdFromPersona((data as { prompt_atendimento_id: string | null }).prompt_atendimento_id);
+    })();
+    return () => { cancelled = true; };
+  }, [clienteIdealId, effectiveCompanyId, supabase]);
 
   useEffect(() => {
     async function loadSegment() {
@@ -388,18 +419,35 @@ export default function QualificacaoPage() {
     }
     setCopyingTemplateId(t.id);
     try {
-      const { data: qual, error: errQual } = await supabase
+      const res1 = await supabase
         .from("qualificadores")
         .insert({
           company_id: effectiveCompanyId,
           user_id: userId,
           nome: (t.nome ?? "Qualificador").trim(),
-          ideal_customer_id: null,
+          prompt_atendimento_id: null,
         })
         .select("id")
         .single();
 
-      if (errQual || !qual) throw errQual ?? new Error("Falha ao criar qualificador");
+      let qual: { id: string } | null = res1.data;
+      if (res1.error && isColumnError(res1.error, "prompt_atendimento_id")) {
+        const res2 = await supabase
+          .from("qualificadores")
+          .insert({
+            company_id: effectiveCompanyId,
+            user_id: userId,
+            nome: (t.nome ?? "Qualificador").trim(),
+          })
+          .select("id")
+          .single();
+        if (res2.error) throw res2.error;
+        qual = res2.data;
+      } else if (res1.error) {
+        throw res1.error;
+      }
+
+      if (!qual) throw new Error("Falha ao criar qualificador");
       const qualificadorId = qual.id;
 
       const perguntasList = t.perguntas ?? [];
@@ -461,6 +509,17 @@ export default function QualificacaoPage() {
     }
   }
 
+  function isColumnError(err: unknown, col: string): boolean {
+    const code = (err as { code?: string })?.code;
+    const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
+    const colLower = col.toLowerCase();
+    return (
+      code === "42703" ||
+      code === "PGRST200" ||
+      (msg.includes(colLower) && (msg.includes("does not exist") || msg.includes("não existe")))
+    );
+  }
+
   // Buscar qualificadores
   const loadQualificadores = useCallback(async () => {
     if (!effectiveCompanyId) {
@@ -470,15 +529,63 @@ export default function QualificacaoPage() {
     }
     setIsFetching(true);
     try {
-      const { data: qualData, error: qualError } = await supabase
+      let qualList: Qualificador[] = [];
+
+      // 1) Tentar schema novo (prompt_atendimento_id)
+      let query = supabase
         .from("qualificadores")
-        .select("id, nome, ideal_customer_id, pontuacao_maxima, limite_frio_max, limite_morno_max, ideal_customers(profile_name)")
+        .select("id, nome, prompt_atendimento_id, pontuacao_maxima, limite_frio_max, limite_morno_max, prompt_atendimento(name, ideal_customers!persona_id(profile_name))")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
+      if (promptAtendimentoIdFromPersona) {
+        query = query.eq("prompt_atendimento_id", promptAtendimentoIdFromPersona);
+      }
+      const { data: qualDataNew, error: qualErrorNew } = await query;
 
-      if (qualError) throw qualError;
+      if (!qualErrorNew && qualDataNew && qualDataNew.length >= 0) {
+        qualList = qualDataNew as Qualificador[];
+      } else if (qualErrorNew && isColumnError(qualErrorNew, "prompt_atendimento_id")) {
+        // 2) Fallback: schema legado (ideal_customer_id)
+        const { data: legacyQualData, error: legacyQualError } = await supabase
+          .from("qualificadores")
+          .select("id, nome, ideal_customer_id, pontuacao_maxima, limite_frio_max, limite_morno_max, ideal_customers(profile_name)")
+          .eq("company_id", effectiveCompanyId)
+          .order("created_at", { ascending: false });
 
-      const qualList = (qualData ?? []) as Qualificador[];
+        if (legacyQualError && isColumnError(legacyQualError, "ideal_customer_id")) {
+          // 3) Fallback: schema mínimo (apenas colunas base)
+          const { data: minData, error: minErr } = await supabase
+            .from("qualificadores")
+            .select("id, nome, pontuacao_maxima, limite_frio_max, limite_morno_max")
+            .eq("company_id", effectiveCompanyId)
+            .order("created_at", { ascending: false });
+          if (minErr) throw minErr;
+          qualList = (minData ?? []).map((q) => ({
+            ...q,
+            prompt_atendimento_id: null,
+            prompt_atendimento: null,
+          })) as Qualificador[];
+        } else if (legacyQualError) {
+          throw legacyQualError;
+        } else {
+          qualList = ((legacyQualData ?? []) as Array<Qualificador & { ideal_customer_id?: string | null }>).map((q) => ({
+            ...q,
+            prompt_atendimento_id: null,
+            prompt_atendimento: q.ideal_customers
+              ? { name: null, ideal_customers: q.ideal_customers }
+              : null,
+          }));
+        }
+      } else if (qualErrorNew) {
+        throw qualErrorNew;
+      }
+
+      if (clienteIdealId && qualList.some((q) => (q as Qualificador & { ideal_customer_id?: string | null }).ideal_customer_id)) {
+        qualList = qualList.filter(
+          (q) => (q as Qualificador & { ideal_customer_id?: string | null }).ideal_customer_id === clienteIdealId
+        );
+      }
+
       if (qualList.length === 0) {
         setQualificadores([]);
         return;
@@ -513,11 +620,116 @@ export default function QualificacaoPage() {
     } finally {
       setIsFetching(false);
     }
-  }, [effectiveCompanyId, supabase, toast]);
+  }, [effectiveCompanyId, supabase, toast, promptAtendimentoIdFromPersona, clienteIdealId]);
 
   useEffect(() => {
     loadQualificadores();
   }, [loadQualificadores]);
+
+  const isContextual = !!clienteIdealId;
+
+  // No modo contextual: ao carregar qualificadores, abrir direto o formulário (criar ou editar)
+  useEffect(() => {
+    if (!isContextual || isFetching) return;
+    if (qualificadores.length === 1) {
+      loadQualifierIntoForm(qualificadores[0]);
+    } else if (qualificadores.length === 0) {
+      setQualificadorIdToEdit(null);
+      setNome("");
+      setPromptAtendimentoId(promptAtendimentoIdFromPersona ?? "");
+      setPerguntas([
+        { id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" },
+      ]);
+    }
+  }, [isContextual, isFetching, qualificadores, promptAtendimentoIdFromPersona]);
+
+  function isColumnMissingError(err: unknown): boolean {
+    return isColumnError(err, "prompt_atendimento_id");
+  }
+
+  async function loadQualifierIntoForm(q: Qualificador) {
+    if (!q.id) return;
+    setLoading(true);
+    try {
+      let qualData: { id: string; nome: string; prompt_atendimento_id?: string | null; ideal_customer_id?: string | null };
+      const { data: qualDataNew, error: qualErr } = await supabase
+        .from("qualificadores")
+        .select("id, nome, prompt_atendimento_id")
+        .eq("id", q.id)
+        .single();
+
+      if (qualErr && isColumnMissingError(qualErr)) {
+        const { data: legacyData, error: legacyErr } = await supabase
+          .from("qualificadores")
+          .select("id, nome, ideal_customer_id")
+          .eq("id", q.id)
+          .single();
+        if (legacyErr && isColumnError(legacyErr, "ideal_customer_id")) {
+          const { data: minData, error: minErr } = await supabase
+            .from("qualificadores")
+            .select("id, nome")
+            .eq("id", q.id)
+            .single();
+          if (minErr || !minData) throw minErr ?? new Error("Qualificador não encontrado");
+          qualData = { ...minData, prompt_atendimento_id: null };
+        } else if (legacyErr || !legacyData) {
+          throw legacyErr ?? new Error("Qualificador não encontrado");
+        } else {
+          qualData = { ...legacyData, prompt_atendimento_id: null };
+        }
+      } else if (qualErr || !qualDataNew) {
+        throw qualErr ?? new Error("Qualificador não encontrado");
+      } else {
+        qualData = qualDataNew;
+      }
+
+      const { data: pergData } = await supabase
+        .from("qualificacao_perguntas")
+        .select("id, pergunta, peso, ordem")
+        .eq("qualificador_id", q.id)
+        .order("ordem", { ascending: true });
+
+      const perguntasComRespostas: PerguntaLocal[] = [];
+
+      for (const perg of pergData ?? []) {
+        const { data: respData } = await supabase
+          .from("qualificacao_respostas")
+          .select("tipo, resposta_texto")
+          .eq("pergunta_id", perg.id);
+
+        const respMap: Record<string, string> = {};
+        (respData ?? []).forEach((r: { tipo: string; resposta_texto: string }) => {
+          respMap[r.tipo] = r.resposta_texto;
+        });
+
+        perguntasComRespostas.push({
+          id: generateId(),
+          pergunta: perg.pergunta ?? "",
+          peso: perg.peso ?? 1,
+          resposta_fria: respMap.fria ?? "",
+          resposta_morna: respMap.morna ?? "",
+          resposta_quente: respMap.quente ?? "",
+        });
+      }
+
+      setQualificadorIdToEdit(qualData.id);
+      setNome(qualData.nome ?? "");
+      setPromptAtendimentoId(qualData.prompt_atendimento_id ?? "");
+      setPerguntas(
+        perguntasComRespostas.length > 0
+          ? perguntasComRespostas
+          : [{ id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" }]
+      );
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: getErrorMessage(err, "Falha ao carregar qualificador."),
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleDelete(q: Qualificador) {
     if (!userId) return;
@@ -630,6 +842,14 @@ export default function QualificacaoPage() {
 
     setLoading(true);
     try {
+      const profileRes = await supabase
+        .from("profiles")
+        .select("company_id, saas_admin")
+        .eq("id", userId)
+        .maybeSingle();
+      const profileCompanyId = (profileRes.data as { company_id: string | null; saas_admin?: boolean | null } | null)?.company_id ?? null;
+      const isSaasAdmin = Boolean((profileRes.data as { company_id: string | null; saas_admin?: boolean | null } | null)?.saas_admin);
+      const writeCompanyId = isSaasAdmin ? effectiveCompanyId : (profileCompanyId ?? effectiveCompanyId);
       let qualificadorId: string;
 
       if (qualificadorIdToEdit) {
@@ -637,12 +857,19 @@ export default function QualificacaoPage() {
           .from("qualificadores")
           .update({
             nome: nome.trim(),
-            ideal_customer_id: idealCustomerId || null,
+            prompt_atendimento_id: promptAtendimentoId || null,
           })
           .eq("id", qualificadorIdToEdit)
-          .eq("company_id", effectiveCompanyId);
+          .eq("company_id", writeCompanyId ?? "");
 
-        if (errUpdate) throw errUpdate;
+        if (errUpdate) {
+          const { error: errUpdate2 } = await supabase
+            .from("qualificadores")
+            .update({ nome: nome.trim() })
+            .eq("id", qualificadorIdToEdit)
+            .eq("company_id", writeCompanyId ?? "");
+          if (errUpdate2) throw errUpdate2;
+        }
         qualificadorId = qualificadorIdToEdit;
 
         const { error: errDel } = await supabase
@@ -652,21 +879,32 @@ export default function QualificacaoPage() {
 
         if (errDel) throw errDel;
       } else {
-        const { data: qualificador, error: errQual } = await supabase
+        const res1 = await supabase
           .from("qualificadores")
           .insert({
-            company_id: effectiveCompanyId,
+            company_id: writeCompanyId ?? "",
             user_id: userId,
             nome: nome.trim(),
-            ideal_customer_id: idealCustomerId || null,
+            prompt_atendimento_id: promptAtendimentoId || null,
           })
           .select("id")
           .single();
 
-        if (errQual || !qualificador) {
-          throw errQual ?? new Error("Falha ao criar qualificador");
+        if (res1.error || !res1.data) {
+          const res2 = await supabase
+            .from("qualificadores")
+            .insert({
+              company_id: writeCompanyId ?? "",
+              user_id: userId,
+              nome: nome.trim(),
+            })
+            .select("id")
+            .single();
+          if (res2.error || !res2.data) throw res1.error ?? res2.error ?? new Error("Falha ao criar qualificador");
+          qualificadorId = res2.data.id;
+        } else {
+          qualificadorId = res1.data.id;
         }
-        qualificadorId = qualificador.id;
       }
 
       const perguntasValidas = perguntas.filter(
@@ -716,7 +954,7 @@ export default function QualificacaoPage() {
           limite_morno_max: limiteMornoMax,
         })
         .eq("id", qualificadorId)
-        .eq("company_id", effectiveCompanyId);
+        .eq("company_id", writeCompanyId ?? "");
 
       if (errLimites) throw errLimites;
 
@@ -729,11 +967,11 @@ export default function QualificacaoPage() {
 
       setQualificadorIdToEdit(null);
       setNome("");
-      setIdealCustomerId("");
+      setPromptAtendimentoId("");
       setPerguntas([
         { id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" },
       ]);
-      setIsModalOpen(false);
+      if (!isContextual) setIsModalOpen(false);
       loadQualificadores();
     } catch (err) {
       toast({
@@ -749,7 +987,7 @@ export default function QualificacaoPage() {
   const handleOpenModal = () => {
     setQualificadorIdToEdit(null);
     setNome("");
-    setIdealCustomerId("");
+    setPromptAtendimentoId(promptAtendimentoIdFromPersona ?? "");
     setPerguntas([
       { id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" },
     ]);
@@ -758,65 +996,177 @@ export default function QualificacaoPage() {
 
   async function handleOpenEdit(q: Qualificador) {
     if (!q.id) return;
-    setLoading(true);
-    try {
-      const { data: qualData, error: qualErr } = await supabase
-        .from("qualificadores")
-        .select("id, nome, ideal_customer_id")
-        .eq("id", q.id)
-        .single();
+    await loadQualifierIntoForm(q);
+    setIsModalOpen(true);
+  }
 
-      if (qualErr || !qualData) {
-        throw qualErr ?? new Error("Qualificador não encontrado");
-      }
+  const qualificadorFormContent = (
+    <div className="space-y-6 pt-4">
+      <div className="flex gap-6">
+        <div className="flex-1 space-y-2">
+          <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+            Nome do qualificador
+          </Label>
+          <Input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Ex: Qualificador de vendas B2B"
+            className="border-input"
+          />
+        </div>
+        <div className="flex-1 space-y-2">
+          <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+            Prompt (opcional)
+          </Label>
+          <StyledSelect
+            value={promptAtendimentoId}
+            onChange={setPromptAtendimentoId}
+            options={
+              promptAtendimentoIdFromPersona
+                ? prompts
+                    .filter((p) => p.id === promptAtendimentoIdFromPersona)
+                    .map((p) => ({ value: p.id, label: p.label }))
+                : [{ value: "", label: "Nenhum" }, ...prompts.map((p) => ({ value: p.id, label: p.label }))]
+            }
+            placeholder="Selecione..."
+          />
+        </div>
+      </div>
 
-      const { data: pergData } = await supabase
-        .from("qualificacao_perguntas")
-        .select("id, pergunta, peso, ordem")
-        .eq("qualificador_id", q.id)
-        .order("ordem", { ascending: true });
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+            Perguntas e respostas
+          </Label>
+          <div className="flex gap-2">
+            {isContextual && !qualificadorIdToEdit && (
+              <Button type="button" variant="outline" size="sm" onClick={handleOpenCopyModal}>
+                <Copy className="mr-2 h-4 w-4" /> Copiar de modelo
+              </Button>
+            )}
+            <Button type="button" variant="outline" size="sm" onClick={addPergunta}>
+              <Plus className="mr-2 h-4 w-4" /> Adicionar outra pergunta
+            </Button>
+          </div>
+        </div>
 
-      const perguntasComRespostas: PerguntaLocal[] = [];
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={perguntas.map((p) => p.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-4">
+              {perguntas.map((p, idx) => (
+                <SortablePerguntaCard
+                  key={p.id}
+                  pergunta={p}
+                  idx={idx}
+                  onRemove={() => removePergunta(p.id)}
+                  onUpdate={updatePergunta}
+                  respostasConfig={respostasConfig}
+                  canRemove={perguntas.length > 1}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </div>
 
-      for (const perg of pergData ?? []) {
-        const { data: respData } = await supabase
-          .from("qualificacao_respostas")
-          .select("tipo, resposta_texto")
-          .eq("pergunta_id", perg.id);
+      <div className="pt-6 border-t border-border flex justify-end items-center gap-4">
+        {!isContextual && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setIsModalOpen(false)}
+            className="text-muted-foreground font-semibold hover:text-foreground"
+          >
+            Cancelar
+          </Button>
+        )}
+        <Button
+          type="button"
+          onClick={handleSubmit}
+          disabled={loading}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 h-11 rounded-xl font-bold"
+        >
+          {loading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : null}
+          {qualificadorIdToEdit ? "Salvar alterações" : "Salvar qualificador"}
+        </Button>
+      </div>
+    </div>
+  );
 
-        const respMap: Record<string, string> = {};
-        (respData ?? []).forEach((r: { tipo: string; resposta_texto: string }) => {
-          respMap[r.tipo] = r.resposta_texto;
-        });
-
-        perguntasComRespostas.push({
-          id: generateId(),
-          pergunta: perg.pergunta ?? "",
-          peso: perg.peso ?? 1,
-          resposta_fria: respMap.fria ?? "",
-          resposta_morna: respMap.morna ?? "",
-          resposta_quente: respMap.quente ?? "",
-        });
-      }
-
-      setQualificadorIdToEdit(qualData.id);
-      setNome(qualData.nome ?? "");
-      setIdealCustomerId(qualData.ideal_customer_id ?? "");
-      setPerguntas(
-        perguntasComRespostas.length > 0
-          ? perguntasComRespostas
-          : [{ id: generateId(), pergunta: "", peso: 1, resposta_fria: "", resposta_morna: "", resposta_quente: "" }]
-      );
-      setIsModalOpen(true);
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: getErrorMessage(err, "Falha ao carregar qualificador."),
-      });
-    } finally {
-      setLoading(false);
-    }
+  if (isContextual) {
+    return (
+      <div className="p-6 space-y-6">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Configurar Qualificador
+        </h1>
+        {isFetching ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          qualificadorFormContent
+        )}
+        <Dialog open={isCopyModalOpen} onOpenChange={setIsCopyModalOpen}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Copiar de modelo</DialogTitle>
+              <DialogDescription className="text-muted-foreground">
+                Escolha um modelo de qualificação para copiar para sua empresa. Apenas modelos compatíveis com seu segmento são exibidos.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="pt-4">
+              {isLoadingTemplatesCopy ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : templatesCopy.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Nenhum modelo disponível para seu segmento.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {templatesCopy.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors"
+                    >
+                      <div>
+                        <p className="font-medium text-foreground">{t.nome ?? "Sem nome"}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Segmento: {t.segment_type ?? "geral"} · {t.perguntas?.length ?? 0} pergunta(s)
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleCopyTemplate(t)}
+                        disabled={copyingTemplateId !== null}
+                      >
+                        {copyingTemplateId === t.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Copy className="mr-2 h-4 w-4" /> Copiar
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
   }
 
   return (
@@ -841,7 +1191,7 @@ export default function QualificacaoPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="text-foreground">Nome</TableHead>
-              <TableHead className="text-foreground">Persona</TableHead>
+              <TableHead className="text-foreground">Prompt</TableHead>
               <TableHead className="text-foreground">Perguntas</TableHead>
               <TableHead className="text-foreground">Pontuação máx</TableHead>
               <TableHead className="text-foreground">Frio &lt; X</TableHead>
@@ -871,7 +1221,9 @@ export default function QualificacaoPage() {
                 <TableRow key={q.id}>
                   <TableCell className="font-medium text-foreground">{q.nome}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {q.ideal_customers?.profile_name ?? "—"}
+                    {q.prompt_atendimento
+                      ? (q.prompt_atendimento.name?.trim() || (q.prompt_atendimento.ideal_customers as { profile_name: string | null } | null)?.profile_name || "—")
+                      : "—"}
                   </TableCell>
                   <TableCell className="text-foreground">{q.perguntas_count ?? 0}</TableCell>
                   <TableCell className="text-foreground">{q.pontuacao_maxima ?? "—"}</TableCell>
@@ -927,93 +1279,7 @@ export default function QualificacaoPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 pt-4">
-            {/* Nome e Persona */}
-            <div className="flex gap-6">
-              <div className="flex-1 space-y-2">
-                <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-                  Nome do qualificador
-                </Label>
-                <Input
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  placeholder="Ex: Qualificador de vendas B2B"
-                  className="border-input"
-                />
-              </div>
-              <div className="flex-1 space-y-2">
-                <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-                  Persona (opcional)
-                </Label>
-                <StyledSelect
-                  value={idealCustomerId}
-                  onChange={setIdealCustomerId}
-                  options={personas.map((p) => ({ value: p.id, label: p.profile_name }))}
-                  placeholder="Selecione..."
-                />
-              </div>
-            </div>
-
-            {/* Loop de perguntas */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-                  Perguntas e respostas
-                </Label>
-                <Button type="button" variant="outline" size="sm" onClick={addPergunta}>
-                  <Plus className="mr-2 h-4 w-4" /> Adicionar outra pergunta
-                </Button>
-              </div>
-
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={perguntas.map((p) => p.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-4">
-                    {perguntas.map((p, idx) => (
-                      <SortablePerguntaCard
-                        key={p.id}
-                        pergunta={p}
-                        idx={idx}
-                        onRemove={() => removePergunta(p.id)}
-                        onUpdate={updatePergunta}
-                        respostasConfig={respostasConfig}
-                        canRemove={perguntas.length > 1}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            </div>
-
-            {/* Botões */}
-            <div className="pt-6 border-t border-border flex justify-end items-center gap-4">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setIsModalOpen(false)}
-                className="text-muted-foreground font-semibold hover:text-foreground"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={loading}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 h-11 rounded-xl font-bold"
-              >
-                {loading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                {qualificadorIdToEdit ? "Salvar alterações" : "Salvar qualificador"}
-              </Button>
-            </div>
-          </div>
+          {qualificadorFormContent}
         </DialogContent>
       </Dialog>
 

@@ -1,4 +1,4 @@
-# Documentação Completa — Cliente Ideal Online v1.1.6
+# Documentação Completa — Cliente Ideal Online v1.1.7
 
 ## Índice
 1. [Visão Geral](#1-visão-geral)
@@ -132,8 +132,15 @@ O sistema é **multitenant**: cada empresa (company) tem seus próprios dados is
 | Rota | Módulo |
 |------|--------|
 | `/dashboard` | Visão geral (Indicadores) |
-| `/dashboard/cliente-ideal` | Perfis de cliente ideal |
-| `/dashboard/qualificador` | Qualificadores |
+| `/dashboard/cliente-ideal` | Perfis de cliente ideal (listagem) |
+| `/dashboard/cliente-ideal/:id` | Layout contextual do perfil (redireciona para perfil) |
+| `/dashboard/cliente-ideal/:id/perfil` | Edição do perfil de cliente ideal |
+| `/dashboard/cliente-ideal/:id/prompt` | Prompt de atendimento do persona |
+| `/dashboard/cliente-ideal/:id/qualificador` | Qualificador vinculado ao persona |
+| `/dashboard/cliente-ideal/:id/chat` | Chat de Conhecimento contextual |
+| `/dashboard/cliente-ideal/:id/campanhas` | Simulador de campanhas Google Ads |
+| `/dashboard/cliente-ideal/:id/dashboard` | Dashboard contextual do persona |
+| `/dashboard/qualificador` | Qualificadores (listagem geral) |
 | `/dashboard/leads` | Leads (listagem) |
 | `/dashboard/leads/novo` | Novo lead (formulário) |
 | `/dashboard/leads/:id` | Editar lead (formulário) |
@@ -173,13 +180,22 @@ Se o webhook falhar, o frontend chama a Edge Function `sync-profile-client` para
 
 ### 6.1 Cliente Ideal
 
-**Rota:** `/dashboard/cliente-ideal`
+**Rotas:** `/dashboard/cliente-ideal` (listagem) e `/dashboard/cliente-ideal/:id/*` (contexto)
 
 Define perfis de cliente ideal (ICP) com campos como:
 - `profile_name`, `age_range`, `gender`, `location`, `income_level`
 - `job_title`, `goals_dreams`, `pain_points`, `values_list`
 - `hobbies_interests`, `buying_journey`, `decision_criteria`
-- `common_objections`, `target_product`
+- `common_objections`, `target_product`, `identifying_phrase`
+- `prompt_atendimento_id` — vincula o persona a um prompt de atendimento
+
+**Layout Contextual (v1.1.7):** Ao clicar em um perfil, abre layout com abas:
+- **Perfil** — Edição do perfil
+- **Prompt** — Prompt de atendimento associado
+- **Qualificador** — Qualificador vinculado ao prompt
+- **Chat** — Chat de Conhecimento contextual
+- **Campanhas** — Simulador de campanhas Google Ads
+- **Dashboard** — Indicadores do persona
 
 Usado em **Qualificador**, **Leads** e **Oportunidades** para vincular perguntas, leads e negócios ao perfil correto.
 
@@ -187,17 +203,19 @@ Usado em **Qualificador**, **Leads** e **Oportunidades** para vincular perguntas
 
 ### 6.2 Qualificador
 
-**Rota:** `/dashboard/qualificador`
+**Rotas:** `/dashboard/qualificador` (listagem) e `/dashboard/cliente-ideal/:id/qualificador` (contextual)
 
 Cria **qualificadores** (entidades com nome) que agrupam múltiplas perguntas. Cada pergunta pode ter até 3 respostas (fria, morna, quente).
 
+**Relacionamento (v1.1.7):** Qualificadores vinculam-se ao **Prompt de Atendimento** (`prompt_atendimento_id`), que por sua vez está vinculado ao Persona. O Persona também tem `prompt_atendimento_id` em `ideal_customers`.
+
 **Fluxo de criação:**
-1. Informar **nome** do qualificador e **Persona** (opcional)
+1. Informar **nome** do qualificador e **Prompt de Atendimento** (opcional)
 2. Entrar em loop: adicionar pergunta + até 3 respostas (fria, morna, quente)
 3. Botão "Adicionar outra pergunta" para incluir mais perguntas
 4. "Salvar qualificador" persiste tudo em uma única transação
 
-Cada qualificador pertence a uma empresa e pode ser vinculado a um perfil de cliente ideal.
+Cada qualificador pertence a uma empresa e pode ser vinculado a um prompt de atendimento (e indiretamente ao persona).
 
 ---
 
@@ -264,7 +282,7 @@ Gestão de arquivos para treinamento:
 
 Assistente de IA que consulta documentos vetorizados:
 - Usa **Edge Function** `chat-conhecimento-proxy` (não chama n8n diretamente)
-- Proxy monta payload no formato Evolution API e encaminha ao webhook n8n configurado em `admin_webhook_config` (config_type=chat)
+- O proxy encaminha ao webhook conforme `companies.segment_type` em `admin_webhook_config.webhook_producao`
 - Seleção de **qualificador** para contexto de teste
 - Multitenant: RLS valida `company_id` do usuário
 - Webhook n8n deve estar configurado para "Respond: When Last Node Finishes"
@@ -327,7 +345,7 @@ Configurações da empresa (acessível apenas por usuários autorizados). Inclui
 **Rotas:** `/admin`, `/admin/configuracoes`, `/admin/evolution`, `/admin/preview/:companyId`, `/admin/gtm`, `/admin/briefing`
 
 - **Admin:** Lista de usuários do sistema (profiles + companies)
-- **Admin Configurações:** Webhooks n8n (Consórcio, Produtos, Chat de Conhecimento)
+- **Admin Configurações:** Webhooks n8n por segmento (Consórcio, Produtos). Cada segmento tem webhook Produção, Teste e Enviar arquivos. O Chat de Conhecimento usa o webhook Produção do segmento da empresa.
 - **Admin Evolution:** URL e API Key da Evolution API (WhatsApp)
 - **Admin Preview:** Visualizar dashboard como empresa específica (respeita `companies.support_access_enabled`)
 - **Admin GTM:** Configuração Google Tag Manager
@@ -343,9 +361,9 @@ Configurações da empresa (acessível apenas por usuários autorizados). Inclui
 | Tabela | Descrição |
 |-------|-----------|
 | `profiles` | Usuários (id = Clerk user ID, company_id, role) |
-| `companies` | Empresas (id, name, slug, plan_type, status, support_access_enabled) |
+| `companies` | Empresas (id, name, slug, plan_type, status, support_access_enabled, segment_type) |
 | `ideal_customers` | Perfis de cliente ideal |
-| `qualificadores` | Qualificadores (nome, persona) |
+| `qualificadores` | Qualificadores (nome, prompt_atendimento_id) |
 | `qualificacao_perguntas` | Perguntas de cada qualificador |
 | `qualificacao_respostas` | Respostas (fria/morna/quente) por pergunta |
 | `leads` | Leads |
@@ -357,7 +375,7 @@ Configurações da empresa (acessível apenas por usuários autorizados). Inclui
 | `vendedores` | Vendedores da empresa |
 | `horarios` | Horários de trabalho dos vendedores |
 | `admin_evolution_config` | URL e API Key da Evolution API (global) |
-| `admin_webhook_config` | Webhooks n8n (consórcio, produtos, chat) |
+| `admin_webhook_config` | Webhooks n8n por segmento (consórcio, produtos). Colunas: webhook_producao, webhook_teste, webhook_enviar_arquivos |
 | `briefing_questions` | Perguntas do Briefing Estratégico (admin gerencia) |
 | `company_briefing_responses` | Respostas das empresas ao questionário de briefing |
 
@@ -367,11 +385,11 @@ Configurações da empresa (acessível apenas por usuários autorizados). Inclui
 profiles (id TEXT PK, company_id, email, full_name, role)
   └── company_id → companies(id)
 
-companies (id TEXT PK, name, slug, plan_type, status, support_access_enabled)
+companies (id TEXT PK, name, slug, plan_type, status, support_access_enabled, segment_type)
 
-ideal_customers (id, company_id, profile_name, ...)
+ideal_customers (id, company_id, profile_name, prompt_atendimento_id, ...)
 
-qualificadores (id, company_id, nome, ideal_customer_id, ...)
+qualificadores (id, company_id, nome, prompt_atendimento_id, ...)
   └── qualificacao_perguntas (id, qualificador_id, pergunta, peso, ordem)
         └── qualificacao_respostas (id, pergunta_id, resposta_texto, tipo: fria|morna|quente)
 
@@ -425,6 +443,8 @@ O JWT do Clerk é enviado em cada requisição Supabase; o template `supabase` g
 | **admin-gtm-config** | Chamada do frontend | Configuração Google Tag Manager |
 | **get-gtm-config** | Chamada do frontend | Retorna configuração GTM para o frontend |
 | **admin-briefing-questions** | Chamada do frontend | CRUD de perguntas do Briefing Estratégico (admin SaaS) |
+| **persona-generate-avatar** | Chamada do frontend | Gera avatar para persona |
+| **persona-template-generate-avatar** | Chamada do frontend | Gera avatar para template de persona |
 
 ### Integração Evolution API (WhatsApp)
 
@@ -565,4 +585,4 @@ Rota `/styleguide` — galeria de componentes e blocos para referência e desenv
 
 ---
 
-*Documentação atualizada em fevereiro de 2026 — Versão 1.1.6.*
+*Documentação atualizada em fevereiro de 2026 — Versão 1.1.7.*

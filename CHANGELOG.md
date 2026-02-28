@@ -7,6 +7,36 @@ e o projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [1.1.7] - 2026-02-28
+
+### Adicionado
+
+- **Cliente Ideal — Layout Contextual** — Ao clicar em um perfil de cliente ideal, abre layout com abas: Perfil, Prompt, Qualificador, Chat, Campanhas e Dashboard. Rotas: `/dashboard/cliente-ideal/:id/perfil`, `/prompt`, `/qualificador`, `/chat`, `/campanhas`, `/dashboard`.
+- **Simulador de Campanhas Google Ads** — Aba "Campanhas" no contexto do Cliente Ideal para simular campanhas de anúncios.
+- **Relacionamento Qualificador → Prompt** — Qualificadores e Personas passam a vincular-se diretamente ao `prompt_atendimento` (em vez de Persona no qualificador). Colunas `prompt_atendimento_id` em `ideal_customers` e `qualificadores`.
+- **Webhooks por Segmento** — `admin_webhook_config` passa a ter apenas segmentos `consorcio` e `produtos`, cada um com 3 webhooks: `webhook_producao`, `webhook_teste`, `webhook_enviar_arquivos`. Config `chat` removida (Chat de Conhecimento usa webhook do segmento).
+- **Segmento da Empresa** — Nova coluna `companies.segment_type` (produtos/consórcio) para escolher webhook N8N correto.
+
+### Banco de Dados
+
+- **`ideal_customers`** — Nova coluna `prompt_atendimento_id`; coluna `ideal_customer_id` removida de `qualificadores`.
+- **`qualificadores`** — Nova coluna `prompt_atendimento_id`; coluna `ideal_customer_id` removida.
+- **`admin_webhook_config`** — Colunas `webhook_producao`, `webhook_teste`; removidas `webhook_testar_atendente`, `webhook_chat`; constraint restrita a `consorcio` e `produtos`.
+- **`companies`** — Nova coluna `segment_type`.
+- **`v_qualificacao_sdr`** — View recriada com `prompt_atendimento_id` e `persona_id` para filtro n8n.
+
+### Alterado
+
+- **RLS prompt_atendimento** — INSERT/UPDATE/DELETE passam a permitir `is_saas_admin()` para preview de empresas.
+- **RLS qualificação** — Correções em `qualificadores`, `qualificacao_perguntas`, `qualificacao_respostas` para consistência.
+
+### Edge Functions
+
+- **persona-generate-avatar** — Geração de avatar para personas.
+- **persona-template-generate-avatar** — Geração de avatar para templates de persona.
+
+---
+
 ## [1.1.6] - 2026-02-27
 
 ### Adicionado

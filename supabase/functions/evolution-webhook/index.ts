@@ -2,13 +2,9 @@
  * Edge Function: evolution-webhook
  *
  * Recebe webhooks da Evolution API (evento MESSAGES_UPSERT) e encaminha ao N8N
- * no formato esperado pelo N8N:
- *   body.instance = nome da instância cadastrada na licença
- *   body.data.key.remoteJidAlt = telefone
- *   body.data.message.conversation = mensagem do chat de conhecimento
+ * no formato esperado pelo N8N. O webhook N8N é escolhido pelo segmento da empresa:
+ * companies.evolution_instance_name -> companies.segment_type -> admin_webhook_config.webhook_producao
  *
- * Todas as empresas usam a mesma URL de webhook (webhook_chat em admin_webhook_config).
- * A Evolution API deve ser configurada para enviar webhooks para esta URL.
  * verify_jwt: false — a Evolution envia sem JWT.
  */
 
@@ -100,19 +96,30 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-  // Todas as empresas usam a mesma URL de webhook (webhook_chat global)
-  const { data: webhookConfig } = await supabase
-    .from("admin_webhook_config")
-    .select("webhook_chat")
-    .eq("config_type", "chat")
+  // Buscar empresa pela instância para obter segment_type
+  const { data: company } = await supabase
+    .from("companies")
+    .select("segment_type")
+    .eq("evolution_instance_name", instance.trim())
     .maybeSingle()
 
-  const webhookUrl = (webhookConfig as { webhook_chat: string | null } | null)
-    ?.webhook_chat?.trim()
+  const segmentType =
+    (company as { segment_type?: string | null } | null)?.segment_type?.trim()?.toLowerCase() === "consorcio"
+      ? "consorcio"
+      : "produtos"
+
+  const { data: webhookConfig } = await supabase
+    .from("admin_webhook_config")
+    .select("webhook_producao")
+    .eq("config_type", segmentType)
+    .maybeSingle()
+
+  const webhookUrl = (webhookConfig as { webhook_producao: string | null } | null)
+    ?.webhook_producao?.trim()
 
   if (!webhookUrl) {
     console.warn(
-      "[evolution-webhook] Webhook do Chat não configurado. Configure em Admin > Configurações (webhook_chat)."
+      `[evolution-webhook] Webhook produção não configurado para segmento ${segmentType}. Configure em Admin > Configurações.`
     )
     return jsonResponse({ received: true, forwarded: false }, 200)
   }

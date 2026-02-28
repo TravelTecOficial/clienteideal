@@ -2,15 +2,13 @@
  * Edge Function: chat-conhecimento-proxy
  *
  * Recebe mensagem do Chat de Conhecimento, monta payload no formato Evolution API
- * e encaminha ao webhook N8N global. Todas as empresas usam a mesma URL.
+ * e encaminha ao webhook N8N do segmento da empresa (Consórcio ou Produtos).
  *
- * Payload enviado ao N8N:
- *   body.instance = evolution_instance_name (nome da instância na licença)
- *   body.data.key.remoteJidAlt = celular_atendimento (telefone da empresa)
- *   body.data.message.conversation = mensagem do usuário
+ * Webhook escolhido: admin_webhook_config[segment_type].webhook_producao ou webhook_teste
+ * conforme webhook_mode (produção|teste).
  *
  * Requer: Authorization: Bearer <clerk_jwt>
- * Body: { message: string, company_id: string, qualificador_id?: string, qualificador_nome?: string }
+ * Body: { message, company_id, qualificador_id?, qualificador_nome?, prompt_atendimento_id?, webhook_mode?: "produção"|"teste" }
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -28,6 +26,8 @@ interface RequestBody {
   company_id: string
   qualificador_id?: string
   qualificador_nome?: string
+  prompt_atendimento_id?: string
+  webhook_mode?: "produção" | "teste"
 }
 
 interface CompanyRow {
@@ -35,6 +35,7 @@ interface CompanyRow {
   celular_atendimento: string | null
   evolution_api_url: string | null
   support_access_enabled?: boolean | null
+  segment_type: string | null
 }
 
 interface ProfileRow {
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
       .maybeSingle(),
     supabase
       .from("companies")
-      .select("evolution_instance_name, celular_atendimento, evolution_api_url, support_access_enabled")
+      .select("evolution_instance_name, celular_atendimento, evolution_api_url, support_access_enabled, segment_type")
       .eq("id", companyId)
       .maybeSingle(),
   ])
@@ -150,32 +151,31 @@ Deno.serve(async (req) => {
   const remoteJidAlt = row.celular_atendimento?.trim() || ""
   const serverUrl = row.evolution_api_url?.trim() || ""
 
-  // Buscar webhook do Chat (config_type=chat usa webhook_chat)
-  const { data: chatConfig, error: chatConfigError } = await supabase
+  // Segmento da empresa: consorcio ou produtos (fallback produtos)
+  const segmentType =
+    (row.segment_type?.trim()?.toLowerCase() === "consorcio" ? "consorcio" : "produtos") as "consorcio" | "produtos"
+
+  const webhookMode = body.webhook_mode === "teste" ? "teste" : "produção"
+
+  const { data: webhookConfig } = await supabase
     .from("admin_webhook_config")
-    .select("webhook_chat")
-    .eq("config_type", "chat")
+    .select("webhook_producao, webhook_teste")
+    .eq("config_type", segmentType)
     .maybeSingle()
 
-  // #region agent log
-  console.log("[chat-conhecimento-proxy] admin_webhook_config chat:", {
-    hasConfig: !!chatConfig,
-    hasWebhookValue: !!(chatConfig as { webhook_chat?: string } | null)?.webhook_chat?.trim(),
-    queryError: chatConfigError?.message ?? null,
-  })
-  // #endregion
-
+  const cfg = webhookConfig as { webhook_producao?: string | null; webhook_teste?: string | null } | null
   let webhookUrl =
-    (chatConfig as { webhook_chat: string | null } | null)?.webhook_chat?.trim() || ""
+    (webhookMode === "teste" ? cfg?.webhook_teste : cfg?.webhook_producao)?.trim() || ""
 
-  // Fallback: secret N8N_CHAT_WEBHOOK_URL (útil se admin_webhook_config não estiver populado em PROD)
-  if (!webhookUrl) {
+  if (!webhookUrl && webhookMode === "produção") {
     webhookUrl = Deno.env.get("N8N_CHAT_WEBHOOK_URL")?.trim() || ""
   }
 
   if (!webhookUrl) {
     return jsonResponse(
-      { error: "Webhook do Chat de Conhecimento não configurado. Configure no Admin." },
+      {
+        error: `Webhook do Chat (${webhookMode}) não configurado para o segmento ${segmentType}. Configure em Admin > Configurações.`,
+      },
       503
     )
   }
@@ -206,6 +206,8 @@ Deno.serve(async (req) => {
         company_id: companyId,
         qualificador_id: body.qualificador_id ?? null,
         qualificador_nome: body.qualificador_nome ?? null,
+        prompt_atendimento_id: body.prompt_atendimento_id ?? null,
+        webhook_mode: webhookMode,
       },
     },
     destination: webhookUrl,
@@ -215,7 +217,7 @@ Deno.serve(async (req) => {
     // Segurança: manter o campo para compatibilidade estrutural sem vazar segredo.
     apikey: "",
     webhookUrl,
-    executionMode: "production",
+    executionMode: webhookMode === "teste" ? "test" : "production",
   }
 
   try {

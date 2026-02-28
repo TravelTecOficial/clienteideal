@@ -67,6 +67,8 @@ npx supabase functions deploy upload-kb-to-webhook --project-ref $PROJECT_REF
 npx supabase functions deploy admin-gtm-config --project-ref $PROJECT_REF
 npx supabase functions deploy get-gtm-config --project-ref $PROJECT_REF
 npx supabase functions deploy admin-briefing-questions --project-ref $PROJECT_REF
+npx supabase functions deploy persona-generate-avatar --project-ref $PROJECT_REF
+npx supabase functions deploy persona-template-generate-avatar --project-ref $PROJECT_REF
 ```
 
 ---
@@ -93,20 +95,13 @@ npx supabase functions deploy admin-briefing-questions --project-ref $PROJECT_RE
 ## 6. Chat e Webhook n8n
 
 - O **Chat de Conhecimento** usa a Edge Function `chat-conhecimento-proxy` (não chama n8n diretamente)
-- O proxy envia o payload ao webhook configurado em **Admin → Configurações → Chat de Conhecimento**
+- O proxy escolhe o webhook conforme `companies.segment_type` (produtos ou consórcio) em **Admin → Configurações**
+- Cada segmento (consórcio, produtos) tem 3 webhooks: **Produção**, **Teste** e **Enviar arquivos**
 - O **Chat de Briefing Estratégico** (Configurações) chama diretamente `https://jobs.traveltec.com.br/webhook/briefing`
 - n8n deve permitir requisições do domínio do Supabase (Edge Functions) e do frontend (Briefing)
 - Webhook configurado para "Respond: When Last Node Finishes"
 
-**Se o webhook não aparecer após configurar no Admin**, verifique:
-
-1. **Migração aplicada em PROD**: a tabela `admin_webhook_config` deve ter `config_type='chat'` e coluna `webhook_chat`. Execute `scripts/verificar_webhook_chat_prod.sql` no SQL Editor do Supabase.
-
-2. **Fallback via secret** (se o Admin não salvar corretamente):
-   ```bash
-   npx supabase secrets set N8N_CHAT_WEBHOOK_URL=https://seu-n8n.com/webhook/sua-url --project-ref bctjodobbsxieywgulvl
-   ```
-   O proxy usa esse valor quando `admin_webhook_config.webhook_chat` está vazio.
+**Importante (v1.1.7):** A config `chat` foi removida. O Chat de Conhecimento usa `webhook_producao` do segmento da empresa. Garanta que `companies.segment_type` esteja definido e que `admin_webhook_config` tenha os webhooks por segmento.
 
 ---
 
@@ -134,9 +129,9 @@ npx supabase functions deploy admin-briefing-questions --project-ref $PROJECT_RE
 
 ---
 
-## 8. Migrações Pendentes (Deploy 2026-02-27)
+## 8. Migrações Pendentes (Deploy 2026-02-28)
 
-Se este é o primeiro deploy após as alterações de v1.1.6, as seguintes migrações serão aplicadas automaticamente pelo `db push` (ordem por timestamp):
+Se este é o primeiro deploy após as alterações de v1.1.7, as seguintes migrações serão aplicadas automaticamente pelo `db push` (ordem por timestamp):
 
 | Migração | Descrição |
 |----------|-----------|
@@ -148,8 +143,12 @@ Se este é o primeiro deploy após as alterações de v1.1.6, as seguintes migra
 | `20260226170000_leads_utm_demografia.sql` | UTM, demografia, item_id em leads |
 | `20260226190000_briefing_questions_responses.sql` | Tabelas briefing_questions e company_briefing_responses |
 | `20260227103000_companies_support_access.sql` | Coluna support_access_enabled em companies |
+| `20260228120000_qualificador_prompt_persona_relacionamento.sql` | Qualificador/Prompt/Persona — prompt_atendimento_id |
+| `20260228140000_admin_webhook_segment_3campos.sql` | Webhooks por segmento (produção, teste, enviar arquivos) |
+| `20260228140100_companies_segment_type.sql` | Coluna segment_type em companies |
+| `20260228150000_prompt_atendimento_rls_saas_admin.sql` | RLS prompt_atendimento para admin preview |
 
-**Script opcional** (se precisar aplicar campanhas manualmente): `supabase/scripts/apply_campanhas_anuncios.sql`
+**Scripts opcionais** (se precisar corrigir RLS manualmente): `supabase/scripts/fix_*.sql`
 
 ---
 

@@ -72,6 +72,30 @@ interface VendedorOption {
   nome: string;
 }
 
+// #region agent log
+function debugLeadLog(
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+  hypothesisId: string,
+  runId = "lead-before-fix"
+) {
+  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e93666" },
+    body: JSON.stringify({
+      sessionId: "e93666",
+      runId,
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 export default function LeadsPage() {
   const { userId } = useAuth();
   const supabase = useSupabaseClient();
@@ -105,21 +129,104 @@ export default function LeadsPage() {
   // Buscar leads
   const loadLeads = useCallback(async () => {
     if (!effectiveCompanyId) {
+      // #region agent log
+      debugLeadLog(
+        "src/pages/dashboard/leads/index.tsx:loadLeads:noCompany",
+        "loadLeads sem effectiveCompanyId",
+        { effectiveCompanyId: effectiveCompanyId ?? null },
+        "L1"
+      );
+      // #endregion
       setIsFetching(false);
       setLeads([]);
       return;
     }
     setIsFetching(true);
     try {
-      const { data, error } = await supabase
+      // #region agent log
+      debugLeadLog(
+        "src/pages/dashboard/leads/index.tsx:loadLeads:start",
+        "Iniciando query de leads",
+        { effectiveCompanyId },
+        "L2"
+      );
+      // #endregion
+      let { data, error } = await supabase
         .from("leads")
         .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id, data_nascimento, idade, cep, item_id, conversao, utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, fbclid, gclid, items(name)")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
+      if ((error?.message ?? "").toLowerCase().includes("conversao")) {
+        // #region agent log
+        debugLeadLog(
+          "src/pages/dashboard/leads/index.tsx:loadLeads:fallback",
+          "Fallback sem coluna conversao",
+          {
+            errorCode: error.code ?? null,
+            errorMessage: error.message ?? null,
+          },
+          "L6",
+          "lead-post-fix"
+        );
+        // #endregion
+
+        const fallbackResult = await supabase
+          .from("leads")
+          .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id, data_nascimento, idade, cep, item_id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, fbclid, gclid, items(name)")
+          .eq("company_id", effectiveCompanyId)
+          .order("created_at", { ascending: false });
+
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+
+        // #region agent log
+        debugLeadLog(
+          "src/pages/dashboard/leads/index.tsx:loadLeads:fallbackResult",
+          "Resultado fallback sem conversao",
+          {
+            hasError: !!error,
+            errorCode: error?.code ?? null,
+            errorMessage: error?.message ?? null,
+            rows: (data ?? []).length,
+          },
+          "L6",
+          "lead-post-fix"
+        );
+        // #endregion
+      }
+
+      // #region agent log
+      debugLeadLog(
+        "src/pages/dashboard/leads/index.tsx:loadLeads:result",
+        "Resultado query de leads",
+        {
+          hasError: !!error,
+          errorCode: error?.code ?? null,
+          errorMessage: error?.message ?? null,
+          rows: (data ?? []).length,
+        },
+        "L3"
+      );
+      // #endregion
       if (error) throw error;
       setLeads((data as Lead[]) ?? []);
     } catch (err) {
+      // #region agent log
+      debugLeadLog(
+        "src/pages/dashboard/leads/index.tsx:loadLeads:catch",
+        "Excecao ao carregar leads",
+        {
+          error:
+            err instanceof Error
+              ? err.message
+              : err && typeof err === "object" && "message" in err
+                ? String((err as { message: unknown }).message)
+                : "unknown",
+        },
+        "L4"
+      );
+      // #endregion
       console.error("Erro ao carregar leads:", err);
       toast({
         variant: "destructive",

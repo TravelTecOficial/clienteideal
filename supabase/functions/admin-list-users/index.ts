@@ -5,7 +5,7 @@
  * Apenas o admin do SaaS (Clerk publicMetadata.role === "admin") pode acessar.
  *
  * Requer: Authorization: Bearer <clerk_jwt>
- * Retorna: { users: Array<{ id, email, full_name, role, company_name, plan_type }> }
+ * Retorna: { users: Array<{ id, email, full_name, role, company_name, plan_type, support_access_enabled }> }
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
       company_name: p.companies?.name ?? "",
       plan_type: p.companies?.plan_type ?? "",
       segment_type: p.companies?.segment_type ?? "produtos",
-      support_access_enabled: p.companies?.support_access_enabled ?? true,
+      support_access_enabled: p.companies?.support_access_enabled !== false,
     }))
 
     return new Response(

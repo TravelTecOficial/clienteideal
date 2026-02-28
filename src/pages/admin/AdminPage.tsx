@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Loader2, AlertCircle, LayoutDashboard } from "lucide-react"
+import { Loader2, AlertCircle, LayoutDashboard, RefreshCw } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
@@ -189,10 +189,26 @@ export function AdminPage() {
     <AdminLayout breadcrumb={{ label: "Usuários", page: "Usuários do sistema" }}>
       <Card className="border-border bg-card">
           <CardHeader>
-            <CardTitle className="text-foreground">Usuários do sistema</CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Lista de todos os usuários cadastrados na plataforma
-            </CardDescription>
+            <div className="flex flex-row items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-foreground">Usuários do sistema</CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  Lista de todos os usuários cadastrados na plataforma
+                </CardDescription>
+              </div>
+              {status === "success" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchUsers()}
+                  className="shrink-0"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Recarregar
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {status === "loading" && <LoadingState />}
@@ -288,7 +304,7 @@ export function AdminPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             {u.company_id ? (
-                              u.support_access_enabled ? (
+                              Boolean(u.support_access_enabled) ? (
                                 <Button variant="outline" size="sm" asChild>
                                   <Link
                                     to={`/dashboard?preview=${encodeURIComponent(u.company_id)}`}

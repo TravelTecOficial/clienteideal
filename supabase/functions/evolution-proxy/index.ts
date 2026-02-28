@@ -2,10 +2,8 @@
  * Edge Function: evolution-proxy
  *
  * Proxy para a Evolution API. Lê URL/API Key da config global (admin_evolution_config).
- * O usuário não vê URL nem API Key — apenas conecta a instância no Dashboard.
- *
- * Ao criar/conectar: configura webhook na Evolution para enviar a evolution-webhook
- * (todas as empresas usam a mesma URL). MESSAGES_UPSERT e webhook_base64 habilitados.
+ * Ao criar/conectar: configura webhook na Evolution para enviar a evolution-webhook.
+ * O evolution-webhook encaminha ao N8N conforme segmento da empresa (webhook_producao).
  *
  * Requer: body.token = Clerk JWT (ou Authorization header)
  * Body: { action, instanceName?, token? }
@@ -30,10 +28,6 @@ interface CompanyRow {
   evolution_instance_name: string | null
   segment_type: string | null
 }
-interface WebhookChatConfig {
-  webhook_chat: string | null
-}
-
 interface RequestBody {
   action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout" | "setWebhook"
   instanceName?: string
@@ -125,7 +119,7 @@ Deno.serve(async (req) => {
     return errorResponse("Empresa não encontrada.", 404)
   }
 
-  const [{ data: globalConfig }, { data: company }, { data: webhookChatRow }] = await Promise.all([
+  const [{ data: globalConfig }, { data: company }] = await Promise.all([
     supabase
       .from("admin_evolution_config")
       .select("evolution_api_url, evolution_api_key")
@@ -135,11 +129,6 @@ Deno.serve(async (req) => {
       .from("companies")
       .select("evolution_instance_name, segment_type")
       .eq("id", companyId)
-      .maybeSingle(),
-    supabase
-      .from("admin_webhook_config")
-      .select("webhook_chat")
-      .eq("config_type", "chat")
       .maybeSingle(),
   ])
 
@@ -173,8 +162,7 @@ Deno.serve(async (req) => {
     apikey: apiKey,
   }
 
-  const webhookChat = (webhookChatRow as WebhookChatConfig | null)?.webhook_chat?.trim() || ""
-  const evolutionWebhookUrl = webhookChat || `${supabaseUrl}/functions/v1/evolution-webhook`
+  const evolutionWebhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook`
   // #region agent log
   fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H2',location:'evolution-proxy/index.ts:166',message:'Configuração base do webhook pronta',data:{hasBaseUrl:!!baseUrl,baseUrlNormalized:url,hasApiKey:!!apiKey,evolutionWebhookUrl},timestamp:Date.now()})}).catch(()=>{});
   // #endregion

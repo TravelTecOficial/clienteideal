@@ -23,6 +23,8 @@ interface RequestBody {
   persona_id: string
   /** Token JWT do Clerk - enviado no body para o gateway aceitar anon key */
   token?: string
+  /** company_id efetivo (ex: preview do admin). Se fornecido, verificado contra permissões. */
+  company_id?: string
 }
 
 interface IdealCustomerRow {
@@ -148,15 +150,33 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-  // Verificar se o usuário pertence à empresa
+  // Verificar perfil (company_id, saas_admin)
   const { data: profile } = await supabase
     .from("profiles")
-    .select("company_id")
+    .select("company_id, saas_admin")
     .eq("id", sub)
     .maybeSingle()
 
-  const userCompanyId = (profile as { company_id: string | null } | null)?.company_id
-  if (!userCompanyId) {
+  const profileRow = profile as { company_id: string | null; saas_admin?: boolean | null } | null
+  const profileCompanyId = profileRow?.company_id ?? null
+  const isSaasAdmin = Boolean(profileRow?.saas_admin)
+
+  // Resolver company_id efetivo: body (preview) ou perfil
+  const bodyCompanyId = typeof body.company_id === "string" ? body.company_id.trim() || null : null
+  let targetCompanyId: string | null
+  if (bodyCompanyId) {
+    if (isSaasAdmin) {
+      targetCompanyId = bodyCompanyId
+    } else if (profileCompanyId === bodyCompanyId) {
+      targetCompanyId = bodyCompanyId
+    } else {
+      return errorResponse("Sem permissão para acessar esta empresa.", 403)
+    }
+  } else {
+    targetCompanyId = profileCompanyId
+  }
+
+  if (!targetCompanyId) {
     return errorResponse("Empresa não encontrada.", 404)
   }
 
@@ -165,7 +185,7 @@ Deno.serve(async (req) => {
     .from("ideal_customers")
     .select("id, company_id, profile_name, age_range, gender, location, job_title, income_level, hobbies_interests")
     .eq("id", personaId)
-    .eq("company_id", userCompanyId)
+    .eq("company_id", targetCompanyId)
     .maybeSingle()
 
   if (personaError || !persona) {
@@ -223,7 +243,7 @@ Deno.serve(async (req) => {
   }
 
   // Upload para Storage
-  const storagePath = `${userCompanyId}/personas/${personaId}.png`
+  const storagePath = `${targetCompanyId}/personas/${personaId}.png`
 
   const { error: uploadError } = await supabase.storage
     .from("company-assets")
@@ -248,7 +268,7 @@ Deno.serve(async (req) => {
     .from("ideal_customers")
     .update({ avatar_url: avatarUrl })
     .eq("id", personaId)
-    .eq("company_id", userCompanyId)
+    .eq("company_id", targetCompanyId)
 
   if (updateError) {
     console.error("[persona-generate-avatar] Erro ao atualizar avatar_url:", updateError)

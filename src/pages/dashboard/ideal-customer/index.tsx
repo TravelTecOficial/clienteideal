@@ -252,7 +252,7 @@ export default function IdealCustomerPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ persona_id: c.id, token }),
+        body: JSON.stringify({ persona_id: c.id, token, company_id: effectiveCompanyId }),
       });
 
       const data = (await res.json().catch(() => ({}))) as { error?: string; avatar_url?: string };
@@ -327,7 +327,7 @@ export default function IdealCustomerPage() {
             <Copy className="mr-2 h-4 w-4" /> Copiar de modelo
           </Button>
           <Button
-            onClick={() => navigate("/dashboard/cliente-ideal/novo")}
+            onClick={() => navigate("/dashboard/cliente-ideal/novo/perfil")}
             disabled={!effectiveCompanyId}
           >
             <Plus className="mr-2 h-4 w-4" /> Novo Cliente Ideal
@@ -417,7 +417,7 @@ export default function IdealCustomerPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate(`/dashboard/cliente-ideal/${c.id}`)}
+                        onClick={() => navigate(`/dashboard/cliente-ideal/${c.id}/perfil`)}
                         aria-label={`Editar ${c.profile_name ?? "cliente"}`}
                       >
                         <Edit2 className="h-4 w-4" />

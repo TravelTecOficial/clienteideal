@@ -48,27 +48,27 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   User,
   Brain,
-  ShoppingCart,
   Save,
   Loader2,
   ArrowLeft,
   ImageIcon,
-  Search,
-  Plus,
-  Filter,
-  Download,
-  ChevronDown,
-  LayoutGrid,
-  FileBarChart,
-  MoreVertical,
-  Folder,
+  MessageSquare,
+  ShoppingCart,
 } from "lucide-react";
 
 const idealCustomerSchema = z.object({
   profile_name: z.string().min(2, "O nome do perfil é obrigatório"),
   identifying_phrase: z.string().optional(),
+  prompt_atendimento_id: z.string().optional(),
   age_range: z.string().optional(),
   gender: z.string().optional(),
   location: z.string().optional(),
@@ -86,187 +86,12 @@ const idealCustomerSchema = z.object({
 
 type IdealCustomerFormValues = z.infer<typeof idealCustomerSchema>;
 
-/** Simulado de campanhas Google Ads para o Cliente Ideal */
-function GoogleAdsCampaignsSimulator() {
-  const [selectedMetric, setSelectedMetric] = useState<"impr" | "custo" | "conversoes" | "cliques">("impr");
-
-  const metricCards = [
-    { id: "impr" as const, label: "Impr.", value: "—" },
-    { id: "custo" as const, label: "Custo", value: "—" },
-    { id: "conversoes" as const, label: "Conversões", value: "—" },
-    { id: "cliques" as const, label: "Cliques", value: "—" },
-  ];
-
-  const mockCampaigns = [
-    { id: "1", name: "Campanha Search - Cliente Ideal", budget: "R$ 50,00/dia", status: "Pausada", type: "Pesquisa", impr: 0, interacoes: "—", taxa: "—", custoMedio: "—", custo: "R$ 0,00", estrategia: "Maximizar cliques" },
-    { id: "2", name: "Display - Persona João", budget: "R$ 30,00/dia", status: "Pausada", type: "Display", impr: 0, interacoes: "—", taxa: "—", custoMedio: "—", custo: "R$ 0,00", estrategia: "Maximizar conversões" },
-    { id: "3", name: "Remarketing - Carro", budget: "R$ 20,00/dia", status: "Pausada", type: "Display", impr: 0, interacoes: "—", taxa: "—", custoMedio: "—", custo: "R$ 0,00", estrategia: "Alvo de CPA" },
-  ];
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded bg-[#4285F4] text-white text-sm font-bold">
-            G
-          </span>
-          Campanhas Google Ads (Simulado)
-        </CardTitle>
-        <CardDescription>
-          Visualização simulada das campanhas vinculadas a este cliente ideal. Conecte o Google Ads em Configurações para dados reais.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Métricas */}
-        <div className="flex flex-wrap gap-2">
-          {metricCards.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setSelectedMetric(m.id)}
-              className={`rounded-lg border-2 px-4 py-2 text-sm font-medium transition-colors ${
-                selectedMetric === m.id
-                  ? "border-[#4285F4] bg-[#4285F4]/10 text-[#4285F4]"
-                  : "border-border hover:border-muted-foreground/30"
-              }`}
-            >
-              <span className="text-muted-foreground">{m.label}:</span>{" "}
-              <span className="font-semibold">{m.value}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Gráfico simulado */}
-        <div className="h-32 rounded-lg border border-border bg-muted/20 flex items-end justify-center p-4">
-          <div className="flex items-end gap-1 h-full">
-            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-              <div
-                key={i}
-                className="w-6 rounded-t bg-[#4285F4]/30"
-                style={{ height: `${Math.max(8, (i * 12) % 40)}%` }}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Barra de ferramentas */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" className="h-8 w-8 p-0">
-            <Plus className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="outline">
-            <Filter className="h-4 w-4 mr-1" /> Adicionar filtro
-          </Button>
-          <div className="relative flex-1 min-w-[180px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Pesquisar" className="pl-8 h-8" />
-          </div>
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-            <FileBarChart className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-            <Download className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Tabela de campanhas */}
-        <div className="rounded-lg border border-border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-10"></TableHead>
-                <TableHead className="font-medium">Campanha</TableHead>
-                <TableHead>Orçamento</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>
-                  <span className="border-b border-dashed border-muted-foreground cursor-help">
-                    Pontuação de otimização
-                  </span>
-                </TableHead>
-                <TableHead>Tipo de campanha</TableHead>
-                <TableHead>Impr.</TableHead>
-                <TableHead>Interações</TableHead>
-                <TableHead>Taxa de interação</TableHead>
-                <TableHead>Custo médio</TableHead>
-                <TableHead>Custo</TableHead>
-                <TableHead>
-                  <span className="border-b border-dashed border-muted-foreground cursor-help">
-                    Tipo de estratégia de lances
-                  </span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow className="bg-primary/5">
-                <TableCell className="py-2">
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </TableCell>
-                <TableCell className="py-2">
-                  <Folder className="h-4 w-4 text-muted-foreground" />
-                </TableCell>
-                <TableCell colSpan={10} className="py-2 font-medium">
-                  Rascunhos em andamento: 5
-                </TableCell>
-              </TableRow>
-              {mockCampaigns.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={12} className="py-12 text-center text-muted-foreground">
-                    Você não tem campanhas ativas
-                  </TableCell>
-                </TableRow>
-              ) : (
-                mockCampaigns.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell>
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    </TableCell>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell>{c.budget}</TableCell>
-                    <TableCell>{c.status}</TableCell>
-                    <TableCell>—</TableCell>
-                    <TableCell>{c.type}</TableCell>
-                    <TableCell>{c.impr}</TableCell>
-                    <TableCell>{c.interacoes}</TableCell>
-                    <TableCell>{c.taxa}</TableCell>
-                    <TableCell>{c.custoMedio}</TableCell>
-                    <TableCell>{c.custo}</TableCell>
-                    <TableCell>{c.estrategia}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-            <TableFooter>
-              <TableRow>
-                <TableCell>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </TableCell>
-                <TableCell className="font-medium">
-                  Total: conta <span className="text-muted-foreground">?</span>
-                </TableCell>
-                <TableCell>R$ 0,00/dia</TableCell>
-                <TableCell colSpan={3}></TableCell>
-                <TableCell>0</TableCell>
-                <TableCell>—</TableCell>
-                <TableCell>—</TableCell>
-                <TableCell>—</TableCell>
-                <TableCell>R$ 0,00</TableCell>
-                <TableCell></TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
-  );
+interface ClienteIdealFormPageProps {
+  /** Quando true, renderiza apenas o conteúdo (sem layout próprio). Usado dentro do layout contextual. */
+  embedInLayout?: boolean;
 }
 
-export function ClienteIdealFormPage() {
+export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealFormPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -285,11 +110,14 @@ export function ClienteIdealFormPage() {
   const isNew = id === "novo";
   const editingId = isNew ? null : id ?? null;
 
+  const [prompts, setPrompts] = useState<{ id: string; label: string }[]>([]);
+
   const form = useForm<IdealCustomerFormValues>({
     resolver: zodResolver(idealCustomerSchema),
     defaultValues: {
       profile_name: "",
       identifying_phrase: "",
+      prompt_atendimento_id: "",
       age_range: "",
       gender: "",
       location: "",
@@ -305,6 +133,27 @@ export function ClienteIdealFormPage() {
       target_product: "",
     },
   });
+
+  const loadPrompts = useCallback(async () => {
+    if (!effectiveCompanyId) return;
+    try {
+      const { data, error } = await supabase
+        .from("prompt_atendimento")
+        .select("id, name, ideal_customers!persona_id(profile_name)")
+        .eq("company_id", effectiveCompanyId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setPrompts(
+        (data ?? []).map((r: { id: string; name: string | null; ideal_customers: { profile_name: string | null } | null }) => {
+          const label = r.name?.trim() || (r.ideal_customers as { profile_name: string | null } | null)?.profile_name || "Prompt padrão";
+          return { id: String(r.id), label };
+        })
+      );
+    } catch (err) {
+      console.error("Erro ao carregar prompts:", err);
+    }
+  }, [effectiveCompanyId, supabase]);
 
   const loadData = useCallback(async () => {
     if (!editingId || !effectiveCompanyId) return;
@@ -323,12 +172,13 @@ export function ClienteIdealFormPage() {
           title: "Erro",
           description: "Cliente ideal não encontrado.",
         });
-        navigate("/dashboard/cliente-ideal");
+        navigate(embedInLayout && id ? `/dashboard/cliente-ideal/${id}/perfil` : "/dashboard/cliente-ideal");
         return;
       }
       form.reset({
           profile_name: data.profile_name ?? "",
           identifying_phrase: data.identifying_phrase ?? "",
+          prompt_atendimento_id: data.prompt_atendimento_id ?? "",
           age_range: data.age_range ?? "",
           gender: data.gender ?? "",
           location: data.location ?? "",
@@ -350,15 +200,19 @@ export function ClienteIdealFormPage() {
         title: "Erro",
         description: "Falha ao carregar dados do cliente ideal.",
       });
-      navigate("/dashboard/cliente-ideal");
+      navigate(embedInLayout && id ? `/dashboard/cliente-ideal/${id}/perfil` : "/dashboard/cliente-ideal");
     }
-  }, [editingId, effectiveCompanyId, supabase, toast, navigate, form]);
+  }, [editingId, effectiveCompanyId, supabase, toast, navigate, form, embedInLayout, id]);
 
   useEffect(() => {
     if (!isNew && editingId && effectiveCompanyId) {
       loadData();
     }
   }, [isNew, editingId, effectiveCompanyId, loadData]);
+
+  useEffect(() => {
+    if (effectiveCompanyId) loadPrompts();
+  }, [effectiveCompanyId, loadPrompts]);
 
   async function onSubmit(values: IdealCustomerFormValues) {
     if (!userId) {
@@ -380,9 +234,11 @@ export function ClienteIdealFormPage() {
 
     setIsLoading(true);
     try {
+      const promptId = values.prompt_atendimento_id?.trim() || null;
       const payload = {
         profile_name: values.profile_name.trim(),
         identifying_phrase: values.identifying_phrase?.trim() || null,
+        prompt_atendimento_id: promptId,
         age_range: values.age_range?.trim() || null,
         gender: values.gender?.trim() || null,
         location: values.location?.trim() || null,
@@ -401,6 +257,17 @@ export function ClienteIdealFormPage() {
       };
 
       if (editingId) {
+        const { data: current, error: selectError } = await supabase
+          .from("ideal_customers")
+          .select("prompt_atendimento_id")
+          .eq("id", editingId)
+          .eq("company_id", effectiveCompanyId)
+          .maybeSingle();
+
+        if (selectError) throw selectError;
+
+        const previousPromptId = (current as { prompt_atendimento_id: string | null } | null)?.prompt_atendimento_id;
+
         const { error } = await supabase
           .from("ideal_customers")
           .update(payload)
@@ -408,6 +275,22 @@ export function ClienteIdealFormPage() {
           .eq("company_id", effectiveCompanyId);
 
         if (error) throw error;
+
+        if (previousPromptId && previousPromptId !== promptId) {
+          await supabase
+            .from("prompt_atendimento")
+            .update({ persona_id: null })
+            .eq("id", previousPromptId)
+            .eq("company_id", effectiveCompanyId);
+        }
+        if (promptId) {
+          await supabase
+            .from("prompt_atendimento")
+            .update({ persona_id: editingId })
+            .eq("id", promptId)
+            .eq("company_id", effectiveCompanyId);
+        }
+
         toast({
           title: "Atualizado!",
           description: "Cliente ideal atualizado com sucesso.",
@@ -420,6 +303,16 @@ export function ClienteIdealFormPage() {
           .single();
 
         if (error) throw error;
+
+        const newPersonaId = data?.id;
+        if (newPersonaId && promptId) {
+          await supabase
+            .from("prompt_atendimento")
+            .update({ persona_id: newPersonaId })
+            .eq("id", promptId)
+            .eq("company_id", effectiveCompanyId);
+        }
+
         toast({
           title: "Cadastrado!",
           description: "Cliente ideal cadastrado com sucesso.",
@@ -428,13 +321,13 @@ export function ClienteIdealFormPage() {
           navigate(returnTo);
           return;
         }
-        if (data?.id) {
-          navigate(`/dashboard/cliente-ideal/${data.id}`);
+        if (newPersonaId) {
+          navigate(embedInLayout ? `/dashboard/cliente-ideal/${newPersonaId}/perfil` : `/dashboard/cliente-ideal/${newPersonaId}`);
           return;
         }
       }
 
-      navigate(returnTo ?? "/dashboard/cliente-ideal");
+      navigate(returnTo ?? (embedInLayout ? `/dashboard/cliente-ideal/${editingId ?? ""}/perfil` : "/dashboard/cliente-ideal"));
     } catch (err: unknown) {
       console.error("[Cliente Ideal] Erro ao gravar:", err);
       toast({
@@ -460,13 +353,14 @@ export function ClienteIdealFormPage() {
         });
         return;
       }
+      const bodyPayload = { persona_id: editingId, token, company_id: effectiveCompanyId };
       const res = await fetch(`${SUPABASE_URL}/functions/v1/persona-generate-avatar`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ persona_id: editingId, token }),
+        body: JSON.stringify(bodyPayload),
       });
 
       const data = (await res.json().catch(() => ({}))) as { error?: string; avatar_url?: string };
@@ -479,7 +373,11 @@ export function ClienteIdealFormPage() {
         title: "Rosto gerado!",
         description: "O avatar do persona foi criado com sucesso.",
       });
-      if (data?.avatar_url) setEditingAvatarUrl(data.avatar_url);
+      if (data?.avatar_url) {
+        // Cache-bust: mesma URL sobrescreve o arquivo; o navegador usa cache. Forçar reload.
+        const separator = data.avatar_url.includes("?") ? "&" : "?";
+        setEditingAvatarUrl(`${data.avatar_url}${separator}t=${Date.now()}`);
+      }
     } catch (err) {
       console.error("[Cliente Ideal] Erro ao gerar rosto:", err);
       toast({
@@ -502,7 +400,7 @@ export function ClienteIdealFormPage() {
     setIsAvatarPreviewOpen(true);
   }
 
-  if (!effectiveCompanyId) {
+  if (!effectiveCompanyId && !embedInLayout) {
     return (
       <SidebarProvider>
         <AppSidebar />
@@ -546,47 +444,30 @@ export function ClienteIdealFormPage() {
     );
   }
 
-  return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink asChild>
-                  <Link to="/dashboard">Dashboard</Link>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator className="hidden md:block" />
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  <Link to="/dashboard/cliente-ideal">Cliente Ideal</Link>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator className="hidden md:block" />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{isNew ? "Novo" : "Editar"}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-          <ProfileDropdown className="ml-auto" />
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/dashboard/cliente-ideal">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-              </Link>
-            </Button>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              {isNew ? "Novo Cliente Ideal" : "Editar Cliente Ideal"}
-            </h1>
-          </div>
+  if (!effectiveCompanyId && embedInLayout) {
+    return (
+      <p className="text-muted-foreground">
+        Empresa não vinculada. Configure sua empresa em Configurações.
+      </p>
+    );
+  }
 
-          {editingId && (
+  const backLink = embedInLayout && id ? `/dashboard/cliente-ideal` : "/dashboard/cliente-ideal";
+
+  const formContent = (
+    <>
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="sm" asChild>
+          <Link to={backLink}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
+          </Link>
+        </Button>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          {isNew ? "Novo Cliente Ideal" : "Editar Cliente Ideal"}
+        </h1>
+      </div>
+
+      {editingId && (
             <div className="flex items-center gap-4 py-2 border-b border-border">
               <div className="flex-shrink-0">
                 {editingAvatarUrl ? (
@@ -635,7 +516,7 @@ export function ClienteIdealFormPage() {
 
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <Tabs defaultValue="demographics" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-4">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
                 <TabsTrigger value="demographics">
                   <User className="w-4 h-4 mr-2" /> Demográficos
                 </TabsTrigger>
@@ -644,9 +525,6 @@ export function ClienteIdealFormPage() {
                 </TabsTrigger>
                 <TabsTrigger value="behavior">
                   <ShoppingCart className="w-4 h-4 mr-2" /> Comportamento
-                </TabsTrigger>
-                <TabsTrigger value="google-ads">
-                  <Search className="w-4 h-4 mr-2" /> Google Ads
                 </TabsTrigger>
               </TabsList>
 
@@ -663,6 +541,39 @@ export function ClienteIdealFormPage() {
                         {...form.register("identifying_phrase")}
                         placeholder="Ex: Quero sair do aluguel, quero comprar meu carro novo"
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        Prompt de Atendimento
+                      </Label>
+                      <Select
+                        value={form.watch("prompt_atendimento_id") || "__none__"}
+                        onValueChange={(v) =>
+                          form.setValue("prompt_atendimento_id", v === "__none__" ? "" : v)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o prompt associado a este persona" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Nenhum</SelectItem>
+                          {prompts.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        O prompt de atendimento que a IA usará quando o lead for identificado como este persona.{" "}
+                        <Link
+                          to={editingId ? `/dashboard/prompt-atendimento?personaId=${editingId}` : "/dashboard/prompt-atendimento"}
+                          className="underline hover:no-underline font-medium"
+                        >
+                          Criar novo prompt
+                        </Link>
+                      </p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -756,15 +667,11 @@ export function ClienteIdealFormPage() {
                   </CardContent>
                 </Card>
               </TabsContent>
-
-              <TabsContent value="google-ads">
-                <GoogleAdsCampaignsSimulator />
-              </TabsContent>
             </Tabs>
 
             <div className="flex justify-end gap-3 pt-6 border-t border-border mt-4">
               <Button type="button" variant="outline" asChild>
-                <Link to="/dashboard/cliente-ideal">Cancelar</Link>
+                <Link to={backLink}>Cancelar</Link>
               </Button>
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? (
@@ -776,10 +683,14 @@ export function ClienteIdealFormPage() {
               </Button>
             </div>
           </form>
-        </div>
-      </SidebarInset>
+    </>
+  );
 
-      <Dialog
+  if (embedInLayout) {
+    return (
+      <>
+        <div className="flex flex-1 flex-col gap-4 overflow-auto">{formContent}</div>
+        <Dialog
         open={isAvatarPreviewOpen}
         onOpenChange={(open) => {
           setIsAvatarPreviewOpen(open);
@@ -806,6 +717,69 @@ export function ClienteIdealFormPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </>
+    );
+  }
+
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem className="hidden md:block">
+                <BreadcrumbLink asChild>
+                  <Link to="/dashboard">Dashboard</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden md:block" />
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Link to="/dashboard/cliente-ideal">Cliente Ideal</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden md:block" />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{isNew ? "Novo" : "Editar"}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <ProfileDropdown className="ml-auto" />
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+          {formContent}
+        </div>
+        <Dialog
+        open={isAvatarPreviewOpen}
+        onOpenChange={(open) => {
+          setIsAvatarPreviewOpen(open);
+          if (!open) setPreviewAvatarUrl(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle className="text-foreground">
+              Foto de {previewAvatarName}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Visualização ampliada do rosto da persona.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center bg-muted/20 p-6">
+            {previewAvatarUrl ? (
+              <img
+                src={previewAvatarUrl}
+                alt={`Foto ampliada de ${previewAvatarName}`}
+                className="max-h-[75vh] w-auto max-w-full rounded-md object-contain border border-border"
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

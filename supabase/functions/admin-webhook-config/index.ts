@@ -4,7 +4,7 @@
  * POST sem body ou com action: "get" -> Retorna as configurações (apenas admin)
  * POST com config_type e webhooks -> Atualiza uma configuração (apenas admin)
  *
- * Body update: { config_type: "consorcio" | "produtos", webhook_testar_atendente?: string, webhook_enviar_arquivos?: string }
+ * Body update: { config_type: "consorcio" | "produtos", webhook_producao?: string, webhook_teste?: string, webhook_enviar_arquivos?: string }
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -112,14 +112,14 @@ Deno.serve(async (req) => {
 
   const isUpdate =
     body.config_type &&
-    (body.webhook_testar_atendente !== undefined ||
-      body.webhook_enviar_arquivos !== undefined ||
-      body.webhook_chat !== undefined)
+    (body.webhook_producao !== undefined ||
+      body.webhook_teste !== undefined ||
+      body.webhook_enviar_arquivos !== undefined)
 
   if (req.method === "GET" || !isUpdate) {
     const { data, error } = await supabase
       .from("admin_webhook_config")
-      .select("config_type, webhook_testar_atendente, webhook_enviar_arquivos, webhook_chat")
+      .select("config_type, webhook_producao, webhook_teste, webhook_enviar_arquivos")
       .order("config_type")
 
     if (error) {
@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           error: error.message,
-          hint: "Verifique se as migrations foram aplicadas (admin_webhook_config, webhook_chat).",
+          hint: "Verifique se as migrations foram aplicadas (admin_webhook_config).",
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
@@ -140,20 +140,20 @@ Deno.serve(async (req) => {
   }
 
   if (isUpdate) {
-    const { config_type, webhook_testar_atendente, webhook_enviar_arquivos, webhook_chat } =
+    const { config_type, webhook_producao, webhook_teste, webhook_enviar_arquivos } =
       body as {
         config_type: string
-        webhook_testar_atendente?: string
+        webhook_producao?: string
+        webhook_teste?: string
         webhook_enviar_arquivos?: string
-        webhook_chat?: string
       }
     if (
       !config_type ||
-      (config_type !== "consorcio" && config_type !== "produtos" && config_type !== "chat")
+      (config_type !== "consorcio" && config_type !== "produtos")
     ) {
       return new Response(
         JSON.stringify({
-          error: "config_type deve ser 'consorcio', 'produtos' ou 'chat'.",
+          error: "config_type deve ser 'consorcio' ou 'produtos'.",
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
@@ -163,14 +163,14 @@ Deno.serve(async (req) => {
       config_type,
       updated_at: new Date().toISOString(),
     }
-    if (webhook_testar_atendente !== undefined) {
-      upsertPayload.webhook_testar_atendente = webhook_testar_atendente?.trim() || null
+    if (webhook_producao !== undefined) {
+      upsertPayload.webhook_producao = webhook_producao?.trim() || null
+    }
+    if (webhook_teste !== undefined) {
+      upsertPayload.webhook_teste = webhook_teste?.trim() || null
     }
     if (webhook_enviar_arquivos !== undefined) {
       upsertPayload.webhook_enviar_arquivos = webhook_enviar_arquivos?.trim() || null
-    }
-    if (webhook_chat !== undefined) {
-      upsertPayload.webhook_chat = webhook_chat?.trim() || null
     }
 
     const { data, error } = await supabase
@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           error: error.message,
-          hint: "Verifique se as migrations foram aplicadas (admin_webhook_config com config_type chat).",
+          hint: "Verifique se as migrations foram aplicadas (admin_webhook_config).",
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )

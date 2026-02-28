@@ -21,17 +21,20 @@ import { Planos } from "@/pages/Planos"
 import VendedoresPage from "@/pages/dashboard/vendedores"
 import { ClienteIdealPage } from "@/pages/dashboard/ClienteIdealPage"
 import { ClienteIdealFormPage } from "@/pages/dashboard/ideal-customer/ClienteIdealFormPage"
-import { QualificadorPage } from "@/pages/dashboard/QualificadorPage"
+import { ClienteIdealContextLayout } from "@/pages/dashboard/cliente-ideal-context/ClienteIdealContextLayout"
+import { PromptContextualTab } from "@/pages/dashboard/cliente-ideal-context/PromptContextualTab"
+import { QualificadorContextualTab } from "@/pages/dashboard/cliente-ideal-context/QualificadorContextualTab"
+import { ChatContextualTab } from "@/pages/dashboard/cliente-ideal-context/ChatContextualTab"
+import { CampanhasContextualTab } from "@/pages/dashboard/cliente-ideal-context/CampanhasContextualTab"
+import { DashboardContextualTab } from "@/pages/dashboard/cliente-ideal-context/DashboardContextualTab"
 import { LeadsPage } from "@/pages/dashboard/LeadsPage"
 import { LeadFormPage } from "@/pages/dashboard/leads/LeadFormPage"
 import { OportunidadesPage } from "@/pages/dashboard/OportunidadesPage"
 import { AgendaPage } from "@/pages/dashboard/AgendaPage"
 import { AtendimentosPage } from "@/pages/dashboard/AtendimentosPage"
 import { BaseConhecimentoPage } from "@/pages/dashboard/BaseConhecimentoPage"
-import { ChatConhecimentoPage } from "@/pages/dashboard/ChatConhecimentoPage"
 import { ProdutosServicosPage } from "@/pages/dashboard/ProdutosServicosPage"
 import { ConfiguracoesPage } from "@/pages/dashboard/ConfiguracoesPage"
-import { PromptAtendimentoPage } from "@/pages/dashboard/prompt-atendimento"
 import ConsorcioPage from "@/pages/dashboard/consorcio"
 import { IndicadoresPage } from "@/pages/dashboard/IndicadoresPage"
 import { SupabaseProvider } from "@/lib/supabase-context"
@@ -139,24 +142,20 @@ function App() {
             <SupabaseProvider>
               <ProtectedRoute>
                 <DashboardRouteWrapper>
-                  <ClienteIdealFormPage />
+                  <ClienteIdealContextLayout />
                 </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
           }
-        />
-        <Route
-          path="/dashboard/qualificador"
-          element={
-            <SupabaseProvider>
-              <ProtectedRoute>
-                <DashboardRouteWrapper>
-                  <QualificadorPage />
-                </DashboardRouteWrapper>
-              </ProtectedRoute>
-            </SupabaseProvider>
-          }
-        />
+        >
+          <Route index element={<Navigate to="perfil" replace />} />
+          <Route path="perfil" element={<ClienteIdealFormPage embedInLayout />} />
+          <Route path="prompt" element={<PromptContextualTab />} />
+          <Route path="qualificador" element={<QualificadorContextualTab />} />
+          <Route path="chat" element={<ChatContextualTab />} />
+          <Route path="campanhas" element={<CampanhasContextualTab />} />
+          <Route path="dashboard" element={<DashboardContextualTab />} />
+        </Route>
         <Route
           path="/dashboard/leads/novo"
           element={
@@ -242,36 +241,12 @@ function App() {
           }
         />
         <Route
-          path="/dashboard/chat-conhecimento"
-          element={
-            <SupabaseProvider>
-              <ProtectedRoute>
-                <DashboardRouteWrapper>
-                  <ChatConhecimentoPage />
-                </DashboardRouteWrapper>
-              </ProtectedRoute>
-            </SupabaseProvider>
-          }
-        />
-        <Route
           path="/dashboard/items"
           element={
             <SupabaseProvider>
               <ProtectedRoute>
                 <DashboardRouteWrapper>
                   <ProdutosServicosPage />
-                </DashboardRouteWrapper>
-              </ProtectedRoute>
-            </SupabaseProvider>
-          }
-        />
-        <Route
-          path="/dashboard/prompt-atendimento"
-          element={
-            <SupabaseProvider>
-              <ProtectedRoute>
-                <DashboardRouteWrapper>
-                  <PromptAtendimentoPage />
                 </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>
@@ -316,6 +291,18 @@ function App() {
         <Route
           path="/dashboard/produtos-servicos"
           element={<Navigate to="/dashboard/items" replace />}
+        />
+        <Route
+          path="/dashboard/qualificador"
+          element={<Navigate to="/dashboard/cliente-ideal" replace />}
+        />
+        <Route
+          path="/dashboard/chat-conhecimento"
+          element={<Navigate to="/dashboard/cliente-ideal" replace />}
+        />
+        <Route
+          path="/dashboard/prompt-atendimento"
+          element={<Navigate to="/dashboard/cliente-ideal" replace />}
         />
 
         <Route

@@ -54,6 +54,32 @@ import { useSupabaseClient } from "@/lib/supabase-context"
 import { getErrorMessage } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id"
+import { useCompanyPreview } from "@/lib/company-preview-context"
+import { getAdminPreviewCompanyId } from "@/lib/admin-preview-storage"
+
+// #region agent log
+function debugLog(
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+  hypothesisId: string,
+  runId = "pre-fix"
+) {
+  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "27da24" },
+    body: JSON.stringify({
+      sessionId: "27da24",
+      runId,
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+}
+// #endregion
 
 const CATEGORIA_OBJETIVO_OPTIONS = [
   { value: "atendimento", label: "Apenas Atendimento" },
@@ -109,7 +135,7 @@ const formSchema = z.object({
   persona_id: z.string().optional(),
 })
 
-type FormValues = z.infer<typeof formSchema>
+export type FormValues = z.infer<typeof formSchema>
 
 const DEFAULT_EMPTY_VALUES: FormValues = {
   name: "",
@@ -141,19 +167,22 @@ interface PromptFormProps {
   personas: PersonaOption[]
   promptTemplates: PromptTemplateOption[]
   fluxoObjetivo: string
+  /** Se false, "Nenhuma (padrão)" não pode ser selecionado (já existe prompt padrão). */
+  allowDefaultPersona: boolean
   onLoadTemplates: (fluxo: string) => void
   onSave: (id: string | null, values: FormValues) => Promise<void>
   onCancel: () => void
   onDelete?: (id: string) => void
 }
 
-function PromptForm({
+export function PromptForm({
   editingId,
   initialValues,
   companyId,
   personas,
   promptTemplates,
   fluxoObjetivo,
+  allowDefaultPersona,
   onLoadTemplates,
   onSave,
   onCancel,
@@ -202,6 +231,14 @@ function PromptForm({
   }, [currentFluxo, form])
 
   async function handleSubmit(values: FormValues) {
+    if (!allowDefaultPersona && !values.persona_id?.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Persona obrigatória",
+        description: "Já existe um prompt padrão. Selecione um Cliente Ideal (persona) para este prompt.",
+      })
+      return
+    }
     setIsSaving(true)
     try {
       await onSave(editingId, values)
@@ -256,7 +293,13 @@ function PromptForm({
               <SelectValue placeholder="Selecione uma persona" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none__">Nenhuma (padrão)</SelectItem>
+              {allowDefaultPersona ? (
+                <SelectItem value="__none__">Nenhuma (padrão)</SelectItem>
+              ) : (
+                <SelectItem value="__none__" disabled>
+                  Nenhuma (padrão) — já existe um prompt padrão
+                </SelectItem>
+              )}
               {personas.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.profile_name ?? "Sem nome"}
@@ -449,6 +492,8 @@ export function PromptAtendimentoPage() {
   const { userId } = useAuth()
   const supabase = useSupabaseClient()
   const { toast } = useToast()
+  const { companyId: previewCompanyId } = useCompanyPreview()
+  const storagePreviewId = getAdminPreviewCompanyId()
 
   const companyId = useEffectiveCompanyId()
   const [personas, setPersonas] = useState<PersonaOption[]>([])
@@ -540,6 +585,44 @@ export function PromptAtendimentoPage() {
       return
     }
 
+    let profileCompanyId: string | null = null
+    let profileSaasAdmin = false
+    let dbSaasAdminByFn: boolean | null = null
+    if (userId) {
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("company_id, saas_admin")
+        .eq("id", userId)
+        .maybeSingle()
+      const profile = profileData as { company_id: string | null; saas_admin?: boolean } | null
+      profileCompanyId = profile?.company_id ?? null
+      profileSaasAdmin = profile?.saas_admin ?? false
+
+      const { data: fnData, error: fnError } = await supabase.rpc("is_saas_admin")
+      dbSaasAdminByFn = typeof fnData === "boolean" ? fnData : null
+
+      // #region agent log
+      debugLog(
+        "prompt-atendimento/index.tsx:handleSave:context",
+        "Admin preview context before save",
+        {
+          userId,
+          effectiveCompanyId: companyId,
+          previewCompanyId: previewCompanyId ?? null,
+          storagePreviewId: storagePreviewId ?? null,
+          profileCompanyId,
+          profileSaasAdmin,
+          dbSaasAdminByFn,
+          profileErrorCode: profileError?.code ?? null,
+          fnErrorCode: fnError?.code ?? null,
+          isInsert: !id,
+        },
+        "H1"
+      )
+      // #endregion
+    }
+
+    const newPersonaId = values.persona_id?.trim() || null
     const payload = {
       company_id: companyId,
       name: values.name?.trim() || null,
@@ -547,7 +630,7 @@ export function PromptAtendimentoPage() {
       principais_instrucoes: values.principais_instrucoes?.trim() || null,
       papel: values.papel?.trim() || null,
       tom_voz: values.tom_voz?.trim() || null,
-      persona_id: values.persona_id?.trim() || null,
+      persona_id: newPersonaId,
       prompt_template_id: values.prompt_template_id?.trim() || null,
       fluxo_objetivo: values.fluxo_objetivo?.trim() || null,
       follow_up_active: values.follow_up_active ?? false,
@@ -556,17 +639,78 @@ export function PromptAtendimentoPage() {
     }
 
     if (id) {
+      const previousPersonaId = prompts.find((p) => p.id === id)?.persona_id ?? null
+
+      if (previousPersonaId && previousPersonaId !== newPersonaId) {
+        await supabase
+          .from("ideal_customers")
+          .update({ prompt_atendimento_id: null })
+          .eq("id", previousPersonaId)
+          .eq("company_id", companyId)
+      }
+
       const { error } = await supabase
         .from("prompt_atendimento")
         .update(payload)
         .eq("id", id)
 
       if (error) throw error
+
+      if (newPersonaId) {
+        await supabase
+          .from("ideal_customers")
+          .update({ prompt_atendimento_id: id })
+          .eq("id", newPersonaId)
+          .eq("company_id", companyId)
+      }
+
       toast({ title: "Atualizado", description: "Prompt atualizado com sucesso." })
     } else {
-      const { error } = await supabase.from("prompt_atendimento").insert(payload)
+      // #region agent log
+      debugLog(
+        "prompt-atendimento/index.tsx:handleSave:beforeInsert",
+        "Attempting INSERT into prompt_atendimento",
+        {
+          payloadCompanyId: payload.company_id,
+          payloadPersonaId: payload.persona_id,
+          payloadName: payload.name,
+          companyMatchesProfile: profileCompanyId ? payload.company_id === profileCompanyId : null,
+        },
+        "H2"
+      )
+      // #endregion
+      const { data: inserted, error } = await supabase
+        .from("prompt_atendimento")
+        .insert(payload)
+        .select("id")
+        .single()
 
-      if (error) throw error
+      if (error) {
+        // #region agent log
+        debugLog(
+          "prompt-atendimento/index.tsx:handleSave:insertError",
+          "INSERT rejected by database",
+          {
+            code: error.code ?? null,
+            message: error.message ?? null,
+            details: error.details ?? null,
+            hint: error.hint ?? null,
+          },
+          "H3"
+        )
+        // #endregion
+        throw error
+      }
+
+      const newPromptId = inserted?.id
+      if (newPromptId && newPersonaId) {
+        await supabase
+          .from("ideal_customers")
+          .update({ prompt_atendimento_id: newPromptId })
+          .eq("id", newPersonaId)
+          .eq("company_id", companyId)
+      }
+
       toast({ title: "Salvo", description: "Novo prompt criado com sucesso." })
     }
 
@@ -605,11 +749,18 @@ export function PromptAtendimentoPage() {
   const editingRow = editingId ? prompts.find((p) => p.id === editingId) : null
   const editingValues = editingRow ? rowToFormValues(editingRow) : null
 
+  const hasDefaultPrompt = prompts.some((p) => !p.persona_id)
+  const isEditingDefaultPrompt = editingRow?.persona_id === null
+  // Quando há personas, exigimos vincular prompt a uma persona para manter 1:1.
+  const allowDefaultPersona = personas.length === 0 && (!hasDefaultPrompt || !!isEditingDefaultPrompt)
+
   // Consistência: cada prompt deve ter um Persona. Só permite novo prompt se existir persona sem prompt.
   const personaIdsWithPrompt = new Set(
     prompts.filter((p) => p.persona_id).map((p) => p.persona_id as string)
   )
-  const canCreateNewPrompt = personas.some((p) => !personaIdsWithPrompt.has(p.id))
+  const canCreateNewPrompt = personas.length > 0
+    ? personas.some((p) => !personaIdsWithPrompt.has(p.id))
+    : !hasDefaultPrompt
 
   function handleNovoPromptClick() {
     if (!canCreateNewPrompt) {
@@ -754,6 +905,7 @@ export function PromptAtendimentoPage() {
                             personas={personas}
                             promptTemplates={promptTemplates}
                             fluxoObjetivo={editingValues?.fluxo_objetivo ?? ""}
+                            allowDefaultPersona={allowDefaultPersona}
                             onLoadTemplates={loadPromptTemplates}
                             onSave={handleSave}
                             onCancel={() => {

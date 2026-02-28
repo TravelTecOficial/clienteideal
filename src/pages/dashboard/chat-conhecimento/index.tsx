@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { Bot, Send, User, Loader2, Sparkles, MessageSquare } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,13 @@ import { SUPABASE_URL } from "@/lib/supabase";
 interface Qualificador {
   id: string;
   nome: string;
+  prompt_atendimento_id?: string | null;
+}
+
+interface PromptAtendimento {
+  id: string;
+  name: string | null;
+  nome_atendente: string | null;
 }
 
 interface Message {
@@ -27,6 +35,7 @@ interface Message {
 }
 
 const NONE_QUALIFICADOR = "__none__";
+const NONE_PROMPT = "__none__";
 
 /** Extrai o texto da resposta do assistente a partir dos formatos possíveis do n8n AI Agent / Webhook */
 function extractAssistantReply(data: unknown): string {
@@ -67,9 +76,12 @@ interface ChatConhecimentoProps {
   companyIdOverride?: string | null;
   /** Ocultar título e descrição (útil quando embutido em outra página) */
   compact?: boolean;
+  /** Quando definido (ex: dentro do módulo Cliente Ideal), infere prompt e qualificador automaticamente e oculta seletores. */
+  clienteIdealIdOverride?: string | null;
 }
 
-export default function ChatConhecimento({ companyIdOverride, compact = false }: ChatConhecimentoProps = {}) {
+export default function ChatConhecimento({ companyIdOverride, compact = false, clienteIdealIdOverride }: ChatConhecimentoProps = {}) {
+  const { id } = useParams<{ id: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -79,14 +91,59 @@ export default function ChatConhecimento({ companyIdOverride, compact = false }:
   const companyId = companyIdOverride ?? profileCompanyId;
   const [qualificadores, setQualificadores] = useState<Qualificador[]>([]);
   const [selectedQualificadorId, setSelectedQualificadorId] = useState<string>(NONE_QUALIFICADOR);
+  const [prompts, setPrompts] = useState<PromptAtendimento[]>([]);
+  const [selectedPromptId, setSelectedPromptId] = useState<string>(NONE_PROMPT);
+  const [webhookMode, setWebhookMode] = useState<"produção" | "teste">("produção");
+  const [inferredPromptId, setInferredPromptId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Buscar qualificadores da empresa
+  const isContextual = !!clienteIdealIdOverride;
+
+  // Quando contextual: buscar prompt do Cliente Ideal e qualificadores vinculados
   useEffect(() => {
-    if (!companyId || !supabase) {
-      setQualificadores([]);
-      return;
-    }
+    if (!isContextual || !clienteIdealIdOverride || !companyId || !supabase) return;
+    let cancelled = false;
+    (async () => {
+      const { data: personaData, error: personaError } = await supabase
+        .from("ideal_customers")
+        .select("prompt_atendimento_id")
+        .eq("id", clienteIdealIdOverride)
+        .eq("company_id", companyId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (personaError || !personaData) {
+        setInferredPromptId(null);
+        setQualificadores([]);
+        return;
+      }
+      const promptId = (personaData as { prompt_atendimento_id: string | null }).prompt_atendimento_id;
+      setInferredPromptId(promptId);
+
+      if (!promptId) {
+        setQualificadores([]);
+        return;
+      }
+      const { data: qualData, error: qualError } = await supabase
+        .from("qualificadores")
+        .select("id, nome, prompt_atendimento_id")
+        .eq("company_id", companyId)
+        .eq("prompt_atendimento_id", promptId)
+        .order("nome");
+      if (cancelled) return;
+      if (qualError) {
+        setQualificadores([]);
+        return;
+      }
+      const qualList = (qualData ?? []) as Qualificador[];
+      setQualificadores(qualList);
+      setSelectedQualificadorId(qualList.length >= 1 ? qualList[0].id : NONE_QUALIFICADOR);
+    })();
+    return () => { cancelled = true; };
+  }, [isContextual, clienteIdealIdOverride, companyId, supabase]);
+
+  // Buscar qualificadores e prompts da empresa (modo não contextual)
+  useEffect(() => {
+    if (isContextual || !companyId || !supabase) return;
     supabase
       .from("qualificadores")
       .select("id, nome")
@@ -100,7 +157,19 @@ export default function ChatConhecimento({ companyIdOverride, compact = false }:
         }
         setQualificadores((data ?? []) as Qualificador[]);
       });
-  }, [companyId, supabase]);
+    supabase
+      .from("prompt_atendimento")
+      .select("id, name, nome_atendente")
+      .eq("company_id", companyId)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Erro ao buscar prompts:", error);
+          setPrompts([]);
+          return;
+        }
+        setPrompts((data ?? []) as PromptAtendimento[]);
+      });
+  }, [companyId, supabase, isContextual]);
 
   // Mensagem de boas-vindas inicial
   useEffect(() => {
@@ -175,6 +244,8 @@ export default function ChatConhecimento({ companyIdOverride, compact = false }:
           company_id: companyId,
           qualificador_id: selectedQualificadorId !== NONE_QUALIFICADOR ? selectedQualificadorId : undefined,
           qualificador_nome: selectedQualificadorId !== NONE_QUALIFICADOR ? qualificadores.find((q) => q.id === selectedQualificadorId)?.nome ?? undefined : undefined,
+          prompt_atendimento_id: isContextual ? (inferredPromptId ?? undefined) : (selectedPromptId !== NONE_PROMPT ? selectedPromptId : undefined),
+          webhook_mode: webhookMode,
         }),
       });
 
@@ -239,32 +310,83 @@ export default function ChatConhecimento({ companyIdOverride, compact = false }:
             </p>
           </div>
         )}
-        <div className="flex items-center gap-3">
-          <Label htmlFor="qualificador-select" className="text-sm font-medium shrink-0">
-            Qualificador para teste:
-          </Label>
-          <Select
-            value={selectedQualificadorId}
-            onValueChange={setSelectedQualificadorId}
-            disabled={!companyId || qualificadores.length === 0}
-          >
-            <SelectTrigger id="qualificador-select" className="w-[280px]">
-              <SelectValue placeholder="Selecione um qualificador" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE_QUALIFICADOR}>Selecione um qualificador</SelectItem>
-              {qualificadores.map((q) => (
-                <SelectItem key={q.id} value={q.id}>
-                  {q.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-center gap-3">
+          {!isContextual && (
+            <>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="qualificador-select" className="text-sm font-medium shrink-0">
+                  Qualificador:
+                </Label>
+                <Select
+                  value={selectedQualificadorId}
+                  onValueChange={setSelectedQualificadorId}
+                  disabled={!companyId || qualificadores.length === 0}
+                >
+                  <SelectTrigger id="qualificador-select" className="w-[200px]">
+                    <SelectValue placeholder="Selecione um qualificador" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE_QUALIFICADOR}>Selecione um qualificador</SelectItem>
+                    {qualificadores.map((q) => (
+                      <SelectItem key={q.id} value={q.id}>
+                        {q.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="prompt-select" className="text-sm font-medium shrink-0">
+                  Prompt:
+                </Label>
+                <Select
+                  value={selectedPromptId}
+                  onValueChange={setSelectedPromptId}
+                  disabled={!companyId || prompts.length === 0}
+                >
+                  <SelectTrigger id="prompt-select" className="w-[200px]">
+                    <SelectValue placeholder="Selecione um prompt" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE_PROMPT}>Selecione um prompt</SelectItem>
+                    {prompts.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name?.trim() || p.nome_atendente?.trim() || "Prompt"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+          {isContextual && !inferredPromptId && (
+            <span className="text-sm text-amber-600 dark:text-amber-500">
+              <Link to={id ? `/dashboard/cliente-ideal/${id}/perfil` : "/dashboard/cliente-ideal"} className="underline hover:no-underline font-medium">
+                Vincule um prompt na aba Perfil
+              </Link>
+              {" "}para usar o chat.
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <Label htmlFor="webhook-mode-select" className="text-sm font-medium shrink-0">
+              Modo:
+            </Label>
+            <Select
+              value={webhookMode}
+              onValueChange={(v) => setWebhookMode(v as "produção" | "teste")}
+              disabled={!companyId}
+            >
+              <SelectTrigger id="webhook-mode-select" className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="produção">Produção</SelectItem>
+                <SelectItem value="teste">Teste</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {!companyId && (
             <span className="text-xs text-muted-foreground">Carregando empresa...</span>
-          )}
-          {companyId && qualificadores.length === 0 && (
-            <span className="text-xs text-muted-foreground">Nenhum qualificador cadastrado</span>
           )}
         </div>
       </div>
@@ -313,15 +435,21 @@ export default function ChatConhecimento({ companyIdOverride, compact = false }:
         <div className="p-4 bg-white border-t border-slate-200">
           <form onSubmit={handleSendMessage} className="flex gap-2 max-w-4xl mx-auto">
             <Input 
-              placeholder={companyId ? "Digite sua dúvida aqui..." : "Carregando empresa..."}
+              placeholder={
+                isContextual && !inferredPromptId
+                  ? "Vincule um prompt na aba Perfil para usar o chat."
+                  : companyId
+                    ? "Digite sua dúvida aqui..."
+                    : "Carregando empresa..."
+              }
               value={input}
               onChange={(e) => setInput(e.target.value)}
               className="flex-1 py-6 shadow-sm border-slate-300 focus-visible:ring-blue-600"
-              disabled={isLoading || !companyId}
+              disabled={isLoading || !companyId || (isContextual && !inferredPromptId)}
             />
             <Button 
               type="submit" 
-              disabled={isLoading || !input.trim() || !companyId}
+              disabled={isLoading || !input.trim() || !companyId || (isContextual && !inferredPromptId)}
               className="h-auto px-6 bg-blue-600 hover:bg-blue-700 transition-all shadow-md"
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send size={20} />}

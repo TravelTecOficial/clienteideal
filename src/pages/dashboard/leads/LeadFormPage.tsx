@@ -63,6 +63,30 @@ interface ItemOption {
   type: "product" | "service";
 }
 
+// #region agent log
+function debugLeadFormLog(
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+  hypothesisId: string,
+  runId = "lead-before-fix"
+) {
+  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e93666" },
+    body: JSON.stringify({
+      sessionId: "e93666",
+      runId,
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 // --- Helpers ---
 const cepRegex = /^\d{5}-?\d{3}$/;
 
@@ -216,12 +240,71 @@ export function LeadFormPage() {
     if (!editingId || !effectiveCompanyId) return;
     setIsFetching(true);
     try {
-      const { data, error } = await supabase
+      // #region agent log
+      debugLeadFormLog(
+        "src/pages/dashboard/leads/LeadFormPage.tsx:loadLead:start",
+        "Iniciando query de lead por id",
+        { editingId, effectiveCompanyId, isNew },
+        "L5"
+      );
+      // #endregion
+      let { data, error } = await supabase
         .from("leads")
         .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id, data_nascimento, idade, cep, item_id, conversao, utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, fbclid, gclid")
         .eq("id", editingId)
         .eq("company_id", effectiveCompanyId)
         .single();
+
+      if ((error?.message ?? "").toLowerCase().includes("conversao")) {
+        // #region agent log
+        debugLeadFormLog(
+          "src/pages/dashboard/leads/LeadFormPage.tsx:loadLead:fallback",
+          "Fallback sem coluna conversao no loadLead",
+          { errorCode: error.code ?? null, errorMessage: error.message ?? null },
+          "L6",
+          "lead-post-fix"
+        );
+        // #endregion
+
+        const fallbackResult = await supabase
+          .from("leads")
+          .select("id, name, email, phone, external_id, status, classificacao, is_cliente, seller_id, data_nascimento, idade, cep, item_id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, fbclid, gclid")
+          .eq("id", editingId)
+          .eq("company_id", effectiveCompanyId)
+          .single();
+
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+
+        // #region agent log
+        debugLeadFormLog(
+          "src/pages/dashboard/leads/LeadFormPage.tsx:loadLead:fallbackResult",
+          "Resultado fallback sem conversao no loadLead",
+          {
+            hasError: !!error,
+            errorCode: error?.code ?? null,
+            errorMessage: error?.message ?? null,
+            hasData: !!data,
+          },
+          "L6",
+          "lead-post-fix"
+        );
+        // #endregion
+      }
+
+      // #region agent log
+      debugLeadFormLog(
+        "src/pages/dashboard/leads/LeadFormPage.tsx:loadLead:result",
+        "Resultado query de lead por id",
+        {
+          hasError: !!error,
+          errorCode: error?.code ?? null,
+          errorMessage: error?.message ?? null,
+          hasData: !!data,
+        },
+        "L5"
+      );
+      // #endregion
 
       if (error) throw error;
       if (data) {
@@ -252,6 +335,14 @@ export function LeadFormPage() {
         });
       }
     } catch {
+      // #region agent log
+      debugLeadFormLog(
+        "src/pages/dashboard/leads/LeadFormPage.tsx:loadLead:catch",
+        "Excecao ao carregar lead para edicao",
+        { editingId, effectiveCompanyId },
+        "L5"
+      );
+      // #endregion
       toast({
         variant: "destructive",
         title: "Erro",
@@ -288,6 +379,16 @@ export function LeadFormPage() {
 
     setIsLoading(true);
     try {
+      // #region agent log
+      debugLeadFormLog(
+        "src/pages/dashboard/leads/LeadFormPage.tsx:onSubmit:start",
+        "Iniciando submit de lead",
+        { editingId: editingId ?? null, isNew: !editingId, effectiveCompanyId },
+        "L8",
+        "lead-post-fix"
+      );
+      // #endregion
+
       const payload = {
         company_id: effectiveCompanyId,
         user_id: userId,
@@ -315,25 +416,105 @@ export function LeadFormPage() {
       };
 
       if (editingId) {
-        const { error } = await supabase
+        let { error } = await supabase
           .from("leads")
           .update(payload)
           .eq("id", editingId)
           .eq("company_id", effectiveCompanyId);
 
+        if ((error?.message ?? "").toLowerCase().includes("conversao")) {
+          const { conversao: _conversao, ...payloadWithoutConversao } = payload;
+          // #region agent log
+          debugLeadFormLog(
+            "src/pages/dashboard/leads/LeadFormPage.tsx:onSubmit:updateFallback",
+            "Fallback update sem coluna conversao",
+            { editingId, errorCode: error.code ?? null, errorMessage: error.message ?? null },
+            "L7",
+            "lead-post-fix"
+          );
+          // #endregion
+          const retryResult = await supabase
+            .from("leads")
+            .update(payloadWithoutConversao)
+            .eq("id", editingId)
+            .eq("company_id", effectiveCompanyId);
+          error = retryResult.error;
+          // #region agent log
+          debugLeadFormLog(
+            "src/pages/dashboard/leads/LeadFormPage.tsx:onSubmit:updateFallbackResult",
+            "Resultado fallback update sem conversao",
+            { hasError: !!error, errorCode: error?.code ?? null, errorMessage: error?.message ?? null },
+            "L7",
+            "lead-post-fix"
+          );
+          // #endregion
+        }
+
         if (error) throw error;
+        // #region agent log
+        debugLeadFormLog(
+          "src/pages/dashboard/leads/LeadFormPage.tsx:onSubmit:updateResult",
+          "Update de lead concluido",
+          { hasError: false, editingId, effectiveCompanyId },
+          "L8",
+          "lead-post-fix"
+        );
+        // #endregion
         toast({
           title: "Lead atualizado",
           description: "As alterações foram salvas.",
         });
       } else {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from("leads")
           .insert(payload)
           .select("id")
           .single();
 
+        if ((error?.message ?? "").toLowerCase().includes("conversao")) {
+          const { conversao: _conversao, ...payloadWithoutConversao } = payload;
+          // #region agent log
+          debugLeadFormLog(
+            "src/pages/dashboard/leads/LeadFormPage.tsx:onSubmit:insertFallback",
+            "Fallback insert sem coluna conversao",
+            { errorCode: error.code ?? null, errorMessage: error.message ?? null },
+            "L7",
+            "lead-post-fix"
+          );
+          // #endregion
+          const retryResult = await supabase
+            .from("leads")
+            .insert(payloadWithoutConversao)
+            .select("id")
+            .single();
+          data = retryResult.data;
+          error = retryResult.error;
+          // #region agent log
+          debugLeadFormLog(
+            "src/pages/dashboard/leads/LeadFormPage.tsx:onSubmit:insertFallbackResult",
+            "Resultado fallback insert sem conversao",
+            {
+              hasError: !!error,
+              errorCode: error?.code ?? null,
+              errorMessage: error?.message ?? null,
+              insertedId: data?.id ?? null,
+            },
+            "L7",
+            "lead-post-fix"
+          );
+          // #endregion
+        }
+
         if (error) throw error;
+        // #region agent log
+        debugLeadFormLog(
+          "src/pages/dashboard/leads/LeadFormPage.tsx:onSubmit:insertResult",
+          "Insert de lead concluido",
+          { hasError: false, insertedId: data?.id ?? null, effectiveCompanyId },
+          "L8",
+          "lead-post-fix"
+        );
+        // #endregion
         toast({
           title: "Lead criado",
           description: `${values.name} foi cadastrado com sucesso.`,
@@ -346,6 +527,23 @@ export function LeadFormPage() {
 
       navigate("/dashboard/leads");
     } catch (err) {
+      // #region agent log
+      debugLeadFormLog(
+        "src/pages/dashboard/leads/LeadFormPage.tsx:onSubmit:catch",
+        "Erro no submit de lead",
+        {
+          error:
+            err instanceof Error
+              ? err.message
+              : err && typeof err === "object" && "message" in err
+                ? String((err as { message: unknown }).message)
+                : "unknown",
+          editingId: editingId ?? null,
+        },
+        "L8",
+        "lead-post-fix"
+      );
+      // #endregion
       const msg =
         err instanceof Error
           ? err.message
