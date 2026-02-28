@@ -29,7 +29,7 @@ interface CompanyRow {
   segment_type: string | null
 }
 interface RequestBody {
-  action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout" | "setWebhook"
+  action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout" | "setWebhook" | "delete"
   instanceName?: string
   /** Token JWT do Clerk - enviado no body para evitar validação do gateway Supabase */
   token?: string
@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
   // #endregion
 
   if (!action) {
-    return errorResponse("Ação obrigatória (create, connect, connectionState, fetchInstances, logout, setWebhook).", 400)
+    return errorResponse("Ação obrigatória (create, connect, connectionState, fetchInstances, logout, setWebhook, delete).", 400)
   }
 
   const url = normalizeEvolutionBaseUrl(baseUrl)
@@ -310,8 +310,17 @@ Deno.serve(async (req) => {
           qrcode: true,
         }),
       })
-      const data = await res.json().catch(() => ({}))
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
       if (!res.ok) {
+        const msg = (data?.response as { message?: string[] })?.message
+        const msgStr = Array.isArray(msg) ? msg.join(" ") : String(msg ?? "")
+        const isAlreadyExists =
+          res.status === 403 &&
+          (/already in use|already exists|já está em uso/i.test(msgStr) ||
+            /already in use|already exists/i.test(String(data?.error ?? "")))
+        if (isAlreadyExists) {
+          return jsonResponse({ instanceAlreadyExists: true, message: "Instância já criada" }, 200)
+        }
         return jsonResponse(data, res.status)
       }
       const webhookDebug = await setWebhookForInstance(instance)
@@ -387,6 +396,21 @@ Deno.serve(async (req) => {
       }
       const webhookDebug = await setWebhookForInstance(instanceName)
       return jsonResponse({ success: webhookDebug.configured, _webhook: webhookDebug })
+    }
+
+    if (action === "delete") {
+      if (!instanceName) {
+        return errorResponse("Nome da instância obrigatório para excluir.", 400)
+      }
+      const res = await fetch(
+        `${url}/instance/delete/${encodeURIComponent(instanceName)}`,
+        { method: "DELETE", headers }
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        return jsonResponse(data, res.status)
+      }
+      return jsonResponse(data)
     }
 
     return errorResponse("Ação inválida.", 400)

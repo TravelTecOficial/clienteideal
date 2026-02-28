@@ -226,6 +226,9 @@ export function ConfiguracoesPage() {
   const [googleAdsOAuthEmail, setGoogleAdsOAuthEmail] = useState("");
   const [googleAdsSelectedAccount, setGoogleAdsSelectedAccount] = useState<string | null>(null);
   const [isGoogleAdsConnecting, setIsGoogleAdsConnecting] = useState(false);
+  const [isCreatingInstance, setIsCreatingInstance] = useState(false);
+  const [isDeleteEvolutionOpen, setIsDeleteEvolutionOpen] = useState(false);
+  const [isDeletingEvolution, setIsDeletingEvolution] = useState(false);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
   const evolutionForm = useForm<EvolutionFormValues>({
@@ -913,21 +916,34 @@ export function ConfiguracoesPage() {
 
   // Ações Evolution API via Edge Function
   async function handleEvolutionAction(
-    action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout" | "setWebhook"
+    action: "create" | "connect" | "connectionState" | "fetchInstances" | "logout" | "setWebhook" | "delete"
   ) {
     const instanceName = evolutionForm.getValues("evolution_instance_name")?.trim();
-    const { data, error } = await executeEvolutionProxy(action, {
-      instanceName: instanceName || undefined,
-    });
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: error,
+    if (action === "create") setIsCreatingInstance(true);
+    if (action === "delete") setIsDeletingEvolution(true);
+    try {
+      const { data, error } = await executeEvolutionProxy(action, {
+        instanceName: instanceName || undefined,
       });
-      return;
-    }
-    const res = data as Record<string, unknown> | null;
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: error,
+        });
+        return;
+      }
+      const res = data as Record<string, unknown> | null;
+      if (action === "create") {
+        if (res?.instanceAlreadyExists) {
+          toast({ title: "Instância já criada" });
+        } else {
+          toast({
+            title: "Instância criada com sucesso",
+            description: "Faça sua conexão agora.",
+          });
+        }
+      }
     const webhookDebug = (res?._webhook ?? null) as
       | {
           configured?: boolean;
@@ -1009,6 +1025,27 @@ export function ConfiguracoesPage() {
           }`,
         });
       }
+    }
+    if (action === "delete") {
+      stopConnectionPolling();
+      setQrCodeBase64(null);
+      setConnectionState(null);
+      evolutionForm.setValue("evolution_instance_name", "");
+      if (companyId) {
+        await supabase
+          .from("companies")
+          .update({ evolution_instance_name: null })
+          .eq("id", companyId);
+      }
+      toast({
+        title: "Conexão excluída",
+        description: "A instância foi removida com sucesso.",
+      });
+      setIsDeleteEvolutionOpen(false);
+    }
+    } finally {
+      if (action === "create") setIsCreatingInstance(false);
+      if (action === "delete") setIsDeletingEvolution(false);
     }
   }
 
@@ -1779,8 +1816,16 @@ export function ConfiguracoesPage() {
                             type="button"
                             variant="outline"
                             onClick={() => handleEvolutionAction("create")}
+                            disabled={isCreatingInstance}
                           >
-                            Criar instância
+                            {isCreatingInstance ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Criando…
+                              </>
+                            ) : (
+                              "Criar instância"
+                            )}
                           </Button>
                           <Button
                             type="button"
@@ -1801,15 +1846,6 @@ export function ConfiguracoesPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => handleEvolutionAction("setWebhook")}
-                            disabled={!evolutionForm.watch("evolution_instance_name")?.trim()}
-                            title="Reconfigurar webhook na Evolution (MESSAGES_UPSERT, base64)"
-                          >
-                            Configurar webhook
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
                             onClick={() => handleEvolutionAction("logout")}
                             disabled={
                               !evolutionForm.watch("evolution_instance_name")?.trim() ||
@@ -1818,6 +1854,19 @@ export function ConfiguracoesPage() {
                           >
                             Desconectar
                           </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setIsDeleteEvolutionOpen(true)}
+                            disabled={
+                              !evolutionForm.watch("evolution_instance_name")?.trim() ||
+                              connectionState !== "open"
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Excluir conexão
+                          </Button>
                         </div>
                       </div>
 
@@ -1825,6 +1874,9 @@ export function ConfiguracoesPage() {
                         <div className="space-y-2">
                           <p className="text-sm font-medium">
                             Escaneie com WhatsApp no celular
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Use o WhatsApp atualizado. Se aparecer &quot;dispositivo não pode conectar&quot;, atualize o WhatsApp e tente novamente.
                           </p>
                           <div className="flex justify-center rounded-lg border bg-muted/50 p-4">
                             <img
@@ -1840,7 +1892,11 @@ export function ConfiguracoesPage() {
                         <div className="space-y-2">
                           <p className="text-sm font-medium">Estado da conexão</p>
                           <p className="rounded-md bg-muted p-3 text-sm">
-                            {connectionState}
+                            {connectionState === "open"
+                              ? "Conectado"
+                              : connectionState === "close" || connectionState === "disconnected"
+                                ? "Desconectado. Clique em Conectar para gerar novo QR Code."
+                                : connectionState}
                           </p>
                         </div>
                       )}
@@ -1848,6 +1904,43 @@ export function ConfiguracoesPage() {
                   )}
                 </CardContent>
               </Card>
+
+              <Dialog open={isDeleteEvolutionOpen} onOpenChange={setIsDeleteEvolutionOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Excluir conexão</DialogTitle>
+                    <DialogDescription>
+                      Isso removerá a instância da Evolution API. Você precisará criar uma nova instância e conectar novamente. Deseja continuar?
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDeleteEvolutionOpen(false)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={isDeletingEvolution}
+                      onClick={async () => {
+                        await handleEvolutionAction("delete");
+                      }}
+                    >
+                      {isDeletingEvolution ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Excluindo…
+                        </>
+                      ) : (
+                        "Excluir"
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             <TabsContent value="anuncios" className="space-y-4 pt-4">
