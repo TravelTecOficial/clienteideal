@@ -267,6 +267,7 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
   const effectiveCompanyId = useEffectiveCompanyId();
 
   const [promptAtendimentoIdFromPersona, setPromptAtendimentoIdFromPersona] = useState<string | null>(null);
+  const [isPromptPersonaResolved, setIsPromptPersonaResolved] = useState(!clienteIdealId);
   const [qualificadores, setQualificadores] = useState<Qualificador[]>([]);
   const [prompts, setPrompts] = useState<{ id: string; label: string }[]>([]);
   const [isFetching, setIsFetching] = useState(true);
@@ -315,8 +316,10 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
   useEffect(() => {
     if (!clienteIdealId || !effectiveCompanyId || !supabase) {
       setPromptAtendimentoIdFromPersona(null);
+      setIsPromptPersonaResolved(true);
       return;
     }
+    setIsPromptPersonaResolved(false);
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase
@@ -328,9 +331,10 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
       if (cancelled) return;
       if (error || !data) {
         setPromptAtendimentoIdFromPersona(null);
-        return;
+      } else {
+        setPromptAtendimentoIdFromPersona((data as { prompt_atendimento_id: string | null }).prompt_atendimento_id);
       }
-      setPromptAtendimentoIdFromPersona((data as { prompt_atendimento_id: string | null }).prompt_atendimento_id);
+      setIsPromptPersonaResolved(true);
     })();
     return () => { cancelled = true; };
   }, [clienteIdealId, effectiveCompanyId, supabase]);
@@ -623,8 +627,9 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
   }, [effectiveCompanyId, supabase, toast, promptAtendimentoIdFromPersona, clienteIdealId]);
 
   useEffect(() => {
+    if (clienteIdealId && !isPromptPersonaResolved) return;
     loadQualificadores();
-  }, [loadQualificadores]);
+  }, [loadQualificadores, clienteIdealId, isPromptPersonaResolved]);
 
   const isContextual = !!clienteIdealId;
 
@@ -1108,7 +1113,7 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
         <h1 className="text-3xl font-bold tracking-tight text-foreground">
           Configurar Qualificador
         </h1>
-        {isFetching ? (
+        {(isContextual && !isPromptPersonaResolved) || isFetching ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>

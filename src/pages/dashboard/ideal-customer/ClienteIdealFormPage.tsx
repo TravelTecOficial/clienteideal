@@ -65,6 +65,15 @@ import {
   ShoppingCart,
 } from "lucide-react";
 
+const AGE_RANGE_OPTIONS = [
+  { value: "18 a 24", label: "18 a 24" },
+  { value: "25 a 34", label: "25 a 34" },
+  { value: "35 a 44", label: "35 a 44" },
+  { value: "45 a 54", label: "45 a 54" },
+  { value: "55 a 64", label: "55 a 64" },
+  { value: "65 ou mais", label: "65 ou mais" },
+] as const;
+
 const idealCustomerSchema = z.object({
   profile_name: z.string().min(2, "O nome do perfil é obrigatório"),
   identifying_phrase: z.string().optional(),
@@ -158,6 +167,9 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
   const loadData = useCallback(async () => {
     if (!editingId || !effectiveCompanyId) return;
     try {
+      // Carregar prompts antes do reset para evitar race condition no Select
+      await loadPrompts();
+
       const { data, error } = await supabase
         .from("ideal_customers")
         .select("*")
@@ -202,7 +214,7 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
       });
       navigate(embedInLayout && id ? `/dashboard/cliente-ideal/${id}/perfil` : "/dashboard/cliente-ideal");
     }
-  }, [editingId, effectiveCompanyId, supabase, toast, navigate, form, embedInLayout, id]);
+  }, [editingId, effectiveCompanyId, supabase, toast, navigate, form, embedInLayout, id, loadPrompts]);
 
   useEffect(() => {
     if (!isNew && editingId && effectiveCompanyId) {
@@ -597,10 +609,30 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
                       </div>
                       <div className="space-y-2">
                         <Label>Faixa Etária</Label>
-                        <Input
-                          {...form.register("age_range")}
-                          placeholder="Ex: 30-45 anos"
-                        />
+                        <Select
+                          value={form.watch("age_range")?.trim() || "__none__"}
+                          onValueChange={(v) =>
+                            form.setValue("age_range", v === "__none__" ? "" : v)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione uma faixa etária" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Selecione...</SelectItem>
+                            {AGE_RANGE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                            {form.watch("age_range")?.trim() &&
+                              !AGE_RANGE_OPTIONS.some((o) => o.value === form.watch("age_range")?.trim()) && (
+                                <SelectItem value={form.watch("age_range")!.trim()}>
+                                  {form.watch("age_range")} (valor anterior)
+                                </SelectItem>
+                              )}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
                         <Label>Localização</Label>

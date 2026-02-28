@@ -579,6 +579,16 @@ export function PromptAtendimentoPage() {
     loadPrompts()
   }, [loadPrompts])
 
+  // Pré-carregar templates ao abrir edição para que Template Master exiba o valor correto
+  useEffect(() => {
+    if (editingId) {
+      const row = prompts.find((x) => x.id === editingId)
+      if (row?.fluxo_objetivo) {
+        loadPromptTemplates(row.fluxo_objetivo)
+      }
+    }
+  }, [editingId, prompts, loadPromptTemplates])
+
   async function handleSave(id: string | null, values: FormValues) {
     if (!companyId) {
       toast({ variant: "destructive", title: "Erro", description: "Empresa não identificada." })
@@ -954,6 +964,7 @@ export function PromptAtendimentoPage() {
                                     onClick={() => {
                                       setEditingId(p.id)
                                       setIsNewOpen(false)
+                                      loadPromptTemplates(p.fluxo_objetivo ?? "")
                                     }}
                                     aria-label={`Editar ${getDisplayLabel(p, personas)}`}
                                   >
