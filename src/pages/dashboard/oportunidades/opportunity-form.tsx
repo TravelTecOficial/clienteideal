@@ -125,10 +125,24 @@ export function OpportunityForm({
     },
   });
 
+  const handleFormSubmit = form.handleSubmit(
+    (values) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'opportunity-form.tsx:handleSubmit',message:'Form submit valid - calling onSubmit',data:{values,isEditing},hypothesisId:'H2',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      onSubmit(values);
+    },
+    (errors) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'opportunity-form.tsx:handleSubmit',message:'Form validation FAILED',data:{errors},hypothesisId:'H2',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    }
+  );
+
   return (
     <form
       className="grid gap-4 py-4"
-      onSubmit={form.handleSubmit(onSubmit)}
+      onSubmit={handleFormSubmit}
     >
       <div className="space-y-2">
         <Label htmlFor="title">Título da Oportunidade</Label>

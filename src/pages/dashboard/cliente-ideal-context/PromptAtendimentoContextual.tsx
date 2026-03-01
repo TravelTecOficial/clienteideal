@@ -22,9 +22,10 @@ interface PromptAtendimentoRow {
   follow_up_tentativas: number | null;
 }
 
-function rowToFormValues(row: PromptAtendimentoRow): FormValues {
+function rowToFormValues(row: PromptAtendimentoRow, identifyingPhrase: string): FormValues {
   return {
     name: row.name ?? "",
+    identifying_phrase: identifyingPhrase,
     fluxo_objetivo: row.fluxo_objetivo ?? "",
     prompt_template_id: row.prompt_template_id ?? "",
     follow_up_active: row.follow_up_active ?? false,
@@ -55,6 +56,8 @@ export function PromptAtendimentoContextual({ clienteIdealId }: PromptAtendiment
 
   const basePath = id ? `/dashboard/cliente-ideal/${id}` : "/dashboard/cliente-ideal";
 
+  const [personaIdentifyingPhrase, setPersonaIdentifyingPhrase] = useState<string>("");
+
   useEffect(() => {
     if (!clienteIdealId || !companyId || !supabase) {
       setIsLoading(false);
@@ -64,18 +67,20 @@ export function PromptAtendimentoContextual({ clienteIdealId }: PromptAtendiment
     (async () => {
       const { data, error } = await supabase
         .from("ideal_customers")
-        .select("prompt_atendimento_id")
+        .select("prompt_atendimento_id, identifying_phrase")
         .eq("id", clienteIdealId)
         .eq("company_id", companyId)
         .maybeSingle();
       if (cancelled) return;
       if (error || !data) {
         setPromptAtendimentoId(null);
+        setPersonaIdentifyingPhrase("");
         setIsLoading(false);
         return;
       }
-      const pid = (data as { prompt_atendimento_id: string | null }).prompt_atendimento_id;
-      setPromptAtendimentoId(pid);
+      const row = data as { prompt_atendimento_id: string | null; identifying_phrase: string | null };
+      setPromptAtendimentoId(row.prompt_atendimento_id);
+      setPersonaIdentifyingPhrase(row.identifying_phrase ?? "");
       setIsLoading(false);
     })();
     return () => { cancelled = true; };
@@ -134,6 +139,7 @@ export function PromptAtendimentoContextual({ clienteIdealId }: PromptAtendiment
   const handleSave = useCallback(async (promptId: string | null, values: FormValues) => {
     if (!companyId || !supabase) return;
     const newPersonaId = (values.persona_id?.trim() || clienteIdealId) ?? null;
+    const identifyingPhrase = values.identifying_phrase?.trim() || null;
     const payload = {
       company_id: companyId,
       name: values.name?.trim() || null,
@@ -158,9 +164,10 @@ export function PromptAtendimentoContextual({ clienteIdealId }: PromptAtendiment
       if (newPersonaId) {
         await supabase
           .from("ideal_customers")
-          .update({ prompt_atendimento_id: promptId })
+          .update({ prompt_atendimento_id: promptId, identifying_phrase: identifyingPhrase })
           .eq("id", newPersonaId)
           .eq("company_id", companyId);
+        setPersonaIdentifyingPhrase(identifyingPhrase ?? "");
       }
       toast({ title: "Atualizado", description: "Prompt atualizado com sucesso." });
       setPromptRow((prev) => (prev ? { ...prev, ...payload } : null));
@@ -175,9 +182,10 @@ export function PromptAtendimentoContextual({ clienteIdealId }: PromptAtendiment
       if (newPromptId && clienteIdealId) {
         await supabase
           .from("ideal_customers")
-          .update({ prompt_atendimento_id: newPromptId })
+          .update({ prompt_atendimento_id: newPromptId, identifying_phrase: identifyingPhrase })
           .eq("id", clienteIdealId)
           .eq("company_id", companyId);
+        setPersonaIdentifyingPhrase(identifyingPhrase ?? "");
       }
       toast({ title: "Salvo", description: "Novo prompt criado com sucesso." });
       setPromptAtendimentoId(newPromptId ?? null);
@@ -214,6 +222,7 @@ export function PromptAtendimentoContextual({ clienteIdealId }: PromptAtendiment
   const initialValues: FormValues = isCreateMode
     ? {
         name: "",
+        identifying_phrase: personaIdentifyingPhrase,
         fluxo_objetivo: "",
         prompt_template_id: "",
         follow_up_active: false,
@@ -225,7 +234,7 @@ export function PromptAtendimentoContextual({ clienteIdealId }: PromptAtendiment
         tom_voz: "",
         persona_id: clienteIdealId ?? "",
       }
-    : rowToFormValues(promptRow!);
+    : rowToFormValues(promptRow!, personaIdentifyingPhrase);
 
   return (
     <Card>
@@ -249,6 +258,7 @@ export function PromptAtendimentoContextual({ clienteIdealId }: PromptAtendiment
           promptTemplates={promptTemplates}
           fluxoObjetivo={initialValues.fluxo_objetivo ?? ""}
           allowDefaultPersona={false}
+          hidePersonaField
           onLoadTemplates={loadPromptTemplates}
           onSave={handleSave}
           onCancel={() => {}}

@@ -69,6 +69,12 @@ npx supabase functions deploy get-gtm-config --project-ref $PROJECT_REF
 npx supabase functions deploy admin-briefing-questions --project-ref $PROJECT_REF
 npx supabase functions deploy persona-generate-avatar --project-ref $PROJECT_REF
 npx supabase functions deploy persona-template-generate-avatar --project-ref $PROJECT_REF
+npx supabase functions deploy places-search-nearby --project-ref $PROJECT_REF --no-verify-jwt
+```
+
+**DEV (localhost)**: Se o app usa `mrkvvgofjyvlutqpvedt`, deploy com:
+```bash
+npx supabase functions deploy places-search-nearby --project-ref mrkvvgofjyvlutqpvedt --no-verify-jwt
 ```
 
 ---

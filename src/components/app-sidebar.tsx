@@ -15,6 +15,8 @@ import {
   Package,
   Settings,
   HandCoins,
+  Share2,
+  MapPin,
 } from "lucide-react"
 
 import { SearchForm } from "@/components/search-form"
@@ -50,6 +52,8 @@ const navItemsBase = [
   { title: "Agenda", url: "/dashboard/agenda", icon: Calendar },
   { title: "Atendimentos", url: "/dashboard/atendimentos", icon: Headphones },
   { title: "Base de conhecimento", url: "/dashboard/base-conhecimento", icon: BookOpen },
+  { title: "Social Media", url: "/dashboard/social-hub", icon: Share2 },
+  { title: "GMB Local", url: "/dashboard/gmb-local", icon: MapPin },
   { title: "Produtos & Serviços", url: "/dashboard/items", icon: Package, segmentFilter: "produtos" as const },
   { title: "Consórcios", url: "/dashboard/consorcio", icon: HandCoins, segmentFilter: "consorcio" as const },
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },

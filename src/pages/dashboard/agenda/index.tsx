@@ -52,6 +52,25 @@ const localizer = dateFnsLocalizer({
   locales: { "pt-BR": ptBR },
 });
 
+const calendarMessages = {
+  today: "Hoje",
+  previous: "Voltar",
+  next: "Avançar",
+  month: "Mês",
+  week: "Semana",
+  work_week: "Semana de trabalho",
+  day: "Dia",
+  agenda: "Agenda",
+  date: "Data",
+  time: "Hora",
+  event: "Evento",
+  allDay: "Dia inteiro",
+  yesterday: "Ontem",
+  tomorrow: "Amanhã",
+  noEventsInRange: "Não há eventos neste período.",
+  showMore: (total: number) => `+${total} mais`,
+};
+
 function formatDataHora(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
@@ -97,6 +116,8 @@ export default function AgendaPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [view, setView] = useState<"table" | "calendar">("table");
+  const [calendarDate, setCalendarDate] = useState(() => new Date());
+  const [calendarView, setCalendarView] = useState<"month" | "week" | "day" | "agenda">("month");
 
   const loadVendedores = useCallback(async () => {
     if (!effectiveCompanyId) return;
@@ -456,12 +477,16 @@ export default function AgendaPage() {
               <Calendar
                 localizer={localizer}
                 culture="pt-BR"
+                messages={calendarMessages}
                 events={calendarEvents}
                 startAccessor="start"
                 endAccessor="end"
                 titleAccessor="title"
                 views={["month", "week", "day", "agenda"]}
-                defaultView="month"
+                view={calendarView}
+                date={calendarDate}
+                onView={setCalendarView}
+                onNavigate={(newDate: Date) => setCalendarDate(newDate)}
                 style={{ height: "100%" }}
                 onSelectEvent={(event) => {
                   const item = agenda.find((a) => a.id === event.id);

@@ -37,6 +37,7 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -54,9 +55,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { useSupabaseClient } from "@/lib/supabase-context";
+import { SUPABASE_URL } from "@/lib/supabase";
 import { getErrorMessage } from "@/lib/utils";
 import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Envia webhook CRM quando estágio muda. Fire-and-forget (não bloqueia UI). */
 async function notifyCrmWebhook(
@@ -95,6 +96,7 @@ type OpportunityStage =
 
 interface Opportunity {
   id: string;
+  company_id: string;
   title: string;
   value: number;
   expected_closing_date: string | null;
@@ -142,33 +144,33 @@ function KanbanCardContent({
 }) {
   return (
     <>
-      <h3 className="font-bold text-slate-800 text-sm">{opportunity.title}</h3>
-      <p className="text-blue-600 font-bold text-xs mt-1">
+      <h3 className="font-bold text-foreground text-sm">{opportunity.title}</h3>
+      <p className="text-primary font-semibold text-xs mt-1">
         {formatCurrency(opportunity.value)}
       </p>
       <div className="mt-4 space-y-2">
         {sellerName && (
-          <div className="flex items-center gap-2 text-[10px] text-slate-500">
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
             <User className="size-3" />
             <Badge variant="secondary" className="text-[9px] font-normal py-0">
               Vendedor: {sellerName}
             </Badge>
           </div>
         )}
-        <div className="flex items-center gap-2 text-[10px] text-slate-400">
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
           <Calendar className="size-3" />
           <span>Prev: {formatDate(opportunity.expected_closing_date)}</span>
         </div>
       </div>
       <div
-        className="mt-3 pt-3 border-t flex justify-center"
+        className="mt-3 pt-3 border-t border-border flex justify-center"
         onClick={(e) => e.stopPropagation()}
       >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="link"
-              className="text-[10px] h-auto p-0 text-blue-500"
+              className="text-[10px] h-auto p-0 text-primary"
               onClick={(e) => e.stopPropagation()}
             >
               Escolha uma ação
@@ -179,7 +181,7 @@ function KanbanCardContent({
               <Pencil className="h-3 w-3 mr-2" /> Editar
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="text-red-600"
+              className="text-destructive"
               onClick={() => onDelete()}
             >
               <Trash2 className="h-3 w-3 mr-2" /> Excluir
@@ -202,8 +204,8 @@ function DroppableColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 bg-slate-50/50 rounded-xl p-2 space-y-3 border-t-2 min-h-[200px] transition-all ${
-        isOver ? "border-blue-400 bg-blue-50/50" : "border-transparent hover:border-slate-200"
+      className={`flex-1 bg-muted/50 rounded-xl p-2 space-y-3 border-t-2 min-h-[200px] transition-all ${
+        isOver ? "border-primary bg-primary/5" : "border-transparent hover:border-muted"
       }`}
     >
       {children}
@@ -228,12 +230,12 @@ function DraggableKanbanCard({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
   return (
-    <div
+    <Card
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
-      className={`bg-white p-4 rounded-xl border shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing ${
+      className={`p-4 rounded-xl hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing ${
         isDragging ? "opacity-50 shadow-lg" : ""
       }`}
       onClick={onEdit}
@@ -244,12 +246,12 @@ function DraggableKanbanCard({
         onEdit={onEdit}
         onDelete={onDelete}
       />
-    </div>
+    </Card>
   );
 }
 
 export default function OportunidadesPage() {
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
   const navigate = useNavigate();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
@@ -339,7 +341,7 @@ export default function OportunidadesPage() {
     try {
       const { data, error } = await supabase
         .from("opportunities")
-        .select("id, title, value, expected_closing_date, stage, seller_id, product_id, lead_id, sinopse, leads(name, external_id), vendedores!seller_id(nome)")
+        .select("id, company_id, title, value, expected_closing_date, stage, seller_id, product_id, lead_id, sinopse, leads(name, external_id), vendedores!seller_id(nome)")
         .eq("company_id", effectiveCompanyId)
         .order("created_at", { ascending: false });
 
@@ -437,6 +439,11 @@ export default function OportunidadesPage() {
     const opp = opportunities.find((o) => o.id === oppId);
     if (!opp || opp.stage === targetStage) return;
 
+    // Optimistic update: atualizar UI imediatamente para evitar snap-back
+    setOpportunities((prev) =>
+      prev.map((o) => (o.id === oppId ? { ...o, stage: targetStage! } : o))
+    );
+
     try {
       const { error } = await supabase
         .from("opportunities")
@@ -445,9 +452,6 @@ export default function OportunidadesPage() {
         .eq("company_id", effectiveCompanyId);
 
       if (error) throw error;
-      setOpportunities((prev) =>
-        prev.map((o) => (o.id === oppId ? { ...o, stage: targetStage! } : o))
-      );
       notifyCrmWebhook(
         supabase,
         opp.lead_id ?? null,
@@ -456,6 +460,10 @@ export default function OportunidadesPage() {
       );
       toast({ title: "Estágio atualizado", description: "A oportunidade foi movida." });
     } catch (err) {
+      // Rollback em caso de erro
+      setOpportunities((prev) =>
+        prev.map((o) => (o.id === oppId ? { ...o, stage: opp.stage } : o))
+      );
       toast({
         variant: "destructive",
         title: "Erro",
@@ -521,7 +529,15 @@ export default function OportunidadesPage() {
   }
 
   async function onSubmitEdit(values: OpportunityFormValues) {
-    if (!editingOpportunity || !effectiveCompanyId) return;
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'onSubmitEdit called',data:{hasEditingOpp:!!editingOpportunity,editingOppId:editingOpportunity?.id,oppCompanyId:editingOpportunity?.company_id,effectiveCompanyId,companyIdMatch:editingOpportunity?.company_id===effectiveCompanyId},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (!editingOpportunity || !effectiveCompanyId) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'EARLY RETURN - editingOpportunity or effectiveCompanyId null',data:{editingOpportunity:!!editingOpportunity,effectiveCompanyId:!!effectiveCompanyId},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      return;
+    }
     setIsSaving(true);
     try {
       const payload: Record<string, unknown> = {
@@ -538,13 +554,39 @@ export default function OportunidadesPage() {
       } else {
         payload.product_id = values.product_id || null;
       }
-      const { error } = await supabase
-        .from("opportunities")
-        .update(payload)
-        .eq("id", editingOpportunity.id)
-        .eq("company_id", effectiveCompanyId);
+      const token = await getToken();
+      if (!token) throw new Error("Sessão expirada. Faça login novamente.");
 
-      if (error) throw error;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/update-opportunity`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: editingOpportunity.id,
+          title: payload.title,
+          value: payload.value,
+          expected_closing_date: payload.expected_closing_date,
+          stage: payload.stage,
+          lead_id: payload.lead_id || null,
+          seller_id: payload.seller_id || null,
+          product_id: payload.product_id || null,
+          sinopse: payload.sinopse || null,
+        }),
+      });
+
+      const fnData = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'Edge fn update-opportunity result',data:{status:res.status,fnData},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
+      if (!res.ok) {
+        throw new Error(fnData?.error ?? `Erro ao atualizar (${res.status})`);
+      }
+      if (!fnData?.success && fnData?.error) {
+        throw new Error(fnData.error);
+      }
       if (values.stage !== editingOpportunity.stage) {
         const idLead = values.lead_id || editingOpportunity.lead_id;
         const externalId =
@@ -553,6 +595,9 @@ export default function OportunidadesPage() {
           null;
         notifyCrmWebhook(supabase, idLead ?? null, externalId ?? null, values.stage);
       }
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'SUCCESS - update completed, closing dialog',data:{},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       toast({
         title: "Oportunidade atualizada",
         description: "As alterações foram salvas.",
@@ -561,6 +606,9 @@ export default function OportunidadesPage() {
       setEditingOpportunity(null);
       loadOpportunities();
     } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'CATCH - update failed',data:{errMsg:String(err)},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       toast({
         variant: "destructive",
         title: "Erro ao atualizar",
@@ -598,14 +646,14 @@ export default function OportunidadesPage() {
   const activeOpp = activeId ? opportunities.find((o) => o.id === activeId) : null;
 
   return (
-    <div className="flex flex-col h-screen bg-[#f9fafb] p-6 space-y-6">
+    <div className="flex flex-col h-screen bg-background p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Pipeline de oportunidades</h1>
+          <h1 className="text-2xl font-bold text-foreground">Pipeline de oportunidades</h1>
           <div className="flex items-center gap-2 mt-1">
-            <div className="h-2 w-48 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-2 w-48 bg-muted rounded-full overflow-hidden">
               <div
-                className="h-full bg-blue-500 transition-all"
+                className="h-full bg-primary transition-all"
                 style={{
                   width: `${Math.min(100, (openCount / Math.max(opportunities.length, 1)) * 100)}%`,
                 }}
@@ -619,7 +667,7 @@ export default function OportunidadesPage() {
 
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg px-4">
+            <Button variant="default" className="rounded-lg px-4">
               Criar uma oportunidade
             </Button>
           </DialogTrigger>
@@ -647,7 +695,7 @@ export default function OportunidadesPage() {
         </Dialog>
       </div>
 
-      <div className="flex justify-between items-center bg-white p-2 rounded-xl border shadow-sm">
+      <div className="flex justify-between items-center bg-card p-2 rounded-xl border shadow-sm">
         <div className="flex items-center gap-2 border-r pr-4 mr-4">
           <Button
             variant={viewMode === "kanban" ? "secondary" : "ghost"}
@@ -671,7 +719,7 @@ export default function OportunidadesPage() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Nome da oportunidade"
-              className="pl-8 bg-slate-50 border-none"
+              className="pl-8 bg-muted/50 border-none"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -697,7 +745,7 @@ export default function OportunidadesPage() {
                   ? "font-bold text-sm text-success"
                   : stage.id === "perdido"
                     ? "font-bold text-sm text-destructive"
-                    : "font-bold text-sm text-slate-700";
+                    : "font-bold text-sm text-foreground";
               return (
                 <div
                   key={stage.id}
@@ -708,7 +756,7 @@ export default function OportunidadesPage() {
                       <span className={stageLabelClass}>
                         {stage.label}
                       </span>
-                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                      <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded">
                         {opps.length}
                       </span>
                     </div>
@@ -738,24 +786,24 @@ export default function OportunidadesPage() {
 
           <DragOverlay>
             {activeOpp ? (
-              <div className="bg-white p-4 rounded-xl border shadow-lg w-[180px]">
-                <h3 className="font-bold text-slate-800 text-sm">
+              <Card className="p-4 rounded-xl shadow-lg w-[180px]">
+                <h3 className="font-bold text-foreground text-sm">
                   {activeOpp.title}
                 </h3>
-                <p className="text-blue-600 font-bold text-xs mt-1">
+                <p className="text-primary font-semibold text-xs mt-1">
                   {formatCurrency(activeOpp.value)}
                 </p>
-                <div className="mt-2 text-[10px] text-slate-500">
+                <div className="mt-2 text-[10px] text-muted-foreground">
                   {getSellerDisplayName(activeOpp) && (
                     <span>Vendedor: {getSellerDisplayName(activeOpp)}</span>
                   )}
                 </div>
-              </div>
+              </Card>
             ) : null}
           </DragOverlay>
         </DndContext>
       ) : (
-        <div className="bg-white rounded-xl border shadow-sm overflow-hidden flex-1 min-h-0 overflow-auto">
+        <Card className="rounded-xl overflow-hidden flex-1 min-h-0 overflow-auto">
           {isFetching ? (
             <div className="p-8 flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -828,7 +876,7 @@ export default function OportunidadesPage() {
                             <Pencil className="h-4 w-4" /> Editar
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className="gap-2 cursor-pointer text-red-600"
+                            className="gap-2 cursor-pointer text-destructive"
                             onClick={() => handleDelete(opp)}
                           >
                             <Trash2 className="h-4 w-4" /> Excluir
@@ -841,7 +889,7 @@ export default function OportunidadesPage() {
               </TableBody>
             </Table>
           )}
-        </div>
+        </Card>
       )}
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

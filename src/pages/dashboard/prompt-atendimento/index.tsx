@@ -116,7 +116,8 @@ interface PromptAtendimentoRow {
 }
 
 const formSchema = z.object({
-  name: z.string().min(1, "Nome do prompt é obrigatório"),
+  name: z.string().optional(),
+  identifying_phrase: z.string().optional(),
   fluxo_objetivo: z.string().optional(),
   prompt_template_id: z.string().optional(),
   follow_up_active: z.boolean().default(false),
@@ -139,6 +140,7 @@ export type FormValues = z.infer<typeof formSchema>
 
 const DEFAULT_EMPTY_VALUES: FormValues = {
   name: "",
+  identifying_phrase: "",
   fluxo_objetivo: "",
   prompt_template_id: "",
   follow_up_active: false,
@@ -169,6 +171,8 @@ interface PromptFormProps {
   fluxoObjetivo: string
   /** Se false, "Nenhuma (padrão)" não pode ser selecionado (já existe prompt padrão). */
   allowDefaultPersona: boolean
+  /** Quando true, oculta o campo Persona e o botão "Criar persona". Usado no contexto do Cliente Ideal, onde o prompt é vinculado automaticamente. */
+  hidePersonaField?: boolean
   onLoadTemplates: (fluxo: string) => void
   onSave: (id: string | null, values: FormValues) => Promise<void>
   onCancel: () => void
@@ -183,6 +187,7 @@ export function PromptForm({
   promptTemplates,
   fluxoObjetivo,
   allowDefaultPersona,
+  hidePersonaField = false,
   onLoadTemplates,
   onSave,
   onCancel,
@@ -197,6 +202,7 @@ export function PromptForm({
     resolver: zodResolver(formSchema),
     defaultValues: initialValues ?? {
       name: "",
+      identifying_phrase: "",
       fluxo_objetivo: "",
       prompt_template_id: "",
       follow_up_active: false,
@@ -231,7 +237,15 @@ export function PromptForm({
   }, [currentFluxo, form])
 
   async function handleSubmit(values: FormValues) {
-    if (!allowDefaultPersona && !values.persona_id?.trim()) {
+    if (!hidePersonaField && !values.name?.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Nome obrigatório",
+        description: "Informe o nome do prompt.",
+      })
+      return
+    }
+    if (!hidePersonaField && !allowDefaultPersona && !values.persona_id?.trim()) {
       toast({
         variant: "destructive",
         title: "Persona obrigatória",
@@ -268,59 +282,77 @@ export function PromptForm({
 
   return (
     <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-      <div className="space-y-2">
-        <Label htmlFor="prompt-name">Nome do prompt</Label>
-        <Input
-          id="prompt-name"
-          placeholder="Ex: Atendimento B2B"
-          {...form.register("name")}
-        />
-        {form.formState.errors.name && (
-          <p className="text-xs text-destructive">
-            {form.formState.errors.name.message}
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <Label>Persona (Cliente Ideal)</Label>
-        <div className="flex gap-2">
-          <Select
-            value={form.watch("persona_id") || "__none__"}
-            onValueChange={(v) => form.setValue("persona_id", v === "__none__" ? "" : v)}
-          >
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Selecione uma persona" />
-            </SelectTrigger>
-            <SelectContent>
-              {allowDefaultPersona ? (
-                <SelectItem value="__none__">Nenhuma (padrão)</SelectItem>
-              ) : (
-                <SelectItem value="__none__" disabled>
-                  Nenhuma (padrão) — já existe um prompt padrão
-                </SelectItem>
-              )}
-              {personas.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.profile_name ?? "Sem nome"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link
-              to={`/dashboard/cliente-ideal/novo?returnTo=/dashboard/prompt-atendimento`}
-              className="flex items-center gap-1"
-            >
-              <UserPlus className="h-4 w-4" />
-              Criar persona
-            </Link>
-          </Button>
+      {!hidePersonaField && (
+        <div className="space-y-2">
+          <Label htmlFor="prompt-name">Nome do prompt</Label>
+          <Input
+            id="prompt-name"
+            placeholder="Ex: Atendimento B2B"
+            {...form.register("name")}
+          />
+          {form.formState.errors.name && (
+            <p className="text-xs text-destructive">
+              {form.formState.errors.name.message}
+            </p>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground">
-          A IA usará este prompt quando o lead for identificado como esta persona.
-        </p>
-      </div>
+      )}
+
+      {!hidePersonaField && (
+        <div className="space-y-2">
+          <Label>Persona (Cliente Ideal)</Label>
+          <div className="flex gap-2">
+            <Select
+              value={form.watch("persona_id") || "__none__"}
+              onValueChange={(v) => form.setValue("persona_id", v === "__none__" ? "" : v)}
+            >
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Selecione uma persona" />
+              </SelectTrigger>
+              <SelectContent>
+                {allowDefaultPersona ? (
+                  <SelectItem value="__none__">Nenhuma (padrão)</SelectItem>
+                ) : (
+                  <SelectItem value="__none__" disabled>
+                    Nenhuma (padrão) — já existe um prompt padrão
+                  </SelectItem>
+                )}
+                {personas.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.profile_name ?? "Sem nome"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link
+                to={`/dashboard/cliente-ideal/novo?returnTo=/dashboard/prompt-atendimento`}
+                className="flex items-center gap-1"
+              >
+                <UserPlus className="h-4 w-4" />
+                Criar persona
+              </Link>
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            A IA usará este prompt quando o lead for identificado como esta persona.
+          </p>
+        </div>
+      )}
+
+      {hidePersonaField && (
+        <div className="space-y-2">
+          <Label htmlFor="identifying_phrase">Frase de identificação</Label>
+          <Input
+            id="identifying_phrase"
+            placeholder="Ex: Quero sair do aluguel, quero comprar meu carro novo"
+            {...form.register("identifying_phrase")}
+          />
+          <p className="text-xs text-muted-foreground">
+            Frase que identifica o perfil quando o lead for qualificado como este Cliente Ideal.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>Objetivo do atendimento</Label>
@@ -743,6 +775,7 @@ export function PromptAtendimentoPage() {
   function rowToFormValues(row: PromptAtendimentoRow): FormValues {
     return {
       name: row.name ?? "",
+      identifying_phrase: "",
       fluxo_objetivo: row.fluxo_objetivo ?? "",
       prompt_template_id: row.prompt_template_id ?? "",
       follow_up_active: row.follow_up_active ?? false,
@@ -899,6 +932,7 @@ export function PromptAtendimentoPage() {
                             initialValues={
                               editingId ? editingValues : {
                                 name: "",
+                                identifying_phrase: "",
                                 fluxo_objetivo: "",
                                 prompt_template_id: "",
                                 follow_up_active: false,

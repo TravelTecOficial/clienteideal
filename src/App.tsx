@@ -37,6 +37,8 @@ import { ProdutosServicosPage } from "@/pages/dashboard/ProdutosServicosPage"
 import { ConfiguracoesPage } from "@/pages/dashboard/ConfiguracoesPage"
 import ConsorcioPage from "@/pages/dashboard/consorcio"
 import { IndicadoresPage } from "@/pages/dashboard/IndicadoresPage"
+import { SocialHubPage } from "@/pages/dashboard/SocialHubPage"
+import { GMBLocalPage } from "@/pages/dashboard/GMBLocalPage"
 import { SupabaseProvider } from "@/lib/supabase-context"
 import { Toaster } from "@/components/ui/toast"
 import { StyleguideLayout } from "@/styleguide/StyleguideLayout"
@@ -235,6 +237,30 @@ function App() {
               <ProtectedRoute>
                 <DashboardRouteWrapper>
                   <BaseConhecimentoPage />
+                </DashboardRouteWrapper>
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/social-hub"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <DashboardRouteWrapper>
+                  <SocialHubPage />
+                </DashboardRouteWrapper>
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/dashboard/gmb-local"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <DashboardRouteWrapper>
+                  <GMBLocalPage />
                 </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>

@@ -466,3 +466,9 @@ entrypoint = "./functions/upload-kb-to-webhook/index.ts"
 verify_jwt = false
 import_map = "./functions/crm-webhook-stage-change/deno.json"
 entrypoint = "./functions/crm-webhook-stage-change/index.ts"
+
+# update-opportunity: atualização de oportunidade via Clerk JWT validado internamente.
+[functions.update-opportunity]
+verify_jwt = false
+import_map = "./functions/update-opportunity/deno.json"
+entrypoint = "./functions/update-opportunity/index.ts"

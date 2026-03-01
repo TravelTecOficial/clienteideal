@@ -61,7 +61,6 @@ import {
   Loader2,
   ArrowLeft,
   ImageIcon,
-  MessageSquare,
   ShoppingCart,
 } from "lucide-react";
 
@@ -76,8 +75,6 @@ const AGE_RANGE_OPTIONS = [
 
 const idealCustomerSchema = z.object({
   profile_name: z.string().min(2, "O nome do perfil é obrigatório"),
-  identifying_phrase: z.string().optional(),
-  prompt_atendimento_id: z.string().optional(),
   age_range: z.string().optional(),
   gender: z.string().optional(),
   location: z.string().optional(),
@@ -119,14 +116,10 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
   const isNew = id === "novo";
   const editingId = isNew ? null : id ?? null;
 
-  const [prompts, setPrompts] = useState<{ id: string; label: string }[]>([]);
-
   const form = useForm<IdealCustomerFormValues>({
     resolver: zodResolver(idealCustomerSchema),
     defaultValues: {
       profile_name: "",
-      identifying_phrase: "",
-      prompt_atendimento_id: "",
       age_range: "",
       gender: "",
       location: "",
@@ -143,33 +136,9 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
     },
   });
 
-  const loadPrompts = useCallback(async () => {
-    if (!effectiveCompanyId) return;
-    try {
-      const { data, error } = await supabase
-        .from("prompt_atendimento")
-        .select("id, name, ideal_customers!persona_id(profile_name)")
-        .eq("company_id", effectiveCompanyId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setPrompts(
-        (data ?? []).map((r: { id: string; name: string | null; ideal_customers: { profile_name: string | null } | null }) => {
-          const label = r.name?.trim() || (r.ideal_customers as { profile_name: string | null } | null)?.profile_name || "Prompt padrão";
-          return { id: String(r.id), label };
-        })
-      );
-    } catch (err) {
-      console.error("Erro ao carregar prompts:", err);
-    }
-  }, [effectiveCompanyId, supabase]);
-
   const loadData = useCallback(async () => {
     if (!editingId || !effectiveCompanyId) return;
     try {
-      // Carregar prompts antes do reset para evitar race condition no Select
-      await loadPrompts();
-
       const { data, error } = await supabase
         .from("ideal_customers")
         .select("*")
@@ -189,8 +158,6 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
       }
       form.reset({
           profile_name: data.profile_name ?? "",
-          identifying_phrase: data.identifying_phrase ?? "",
-          prompt_atendimento_id: data.prompt_atendimento_id ?? "",
           age_range: data.age_range ?? "",
           gender: data.gender ?? "",
           location: data.location ?? "",
@@ -214,17 +181,13 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
       });
       navigate(embedInLayout && id ? `/dashboard/cliente-ideal/${id}/perfil` : "/dashboard/cliente-ideal");
     }
-  }, [editingId, effectiveCompanyId, supabase, toast, navigate, form, embedInLayout, id, loadPrompts]);
+  }, [editingId, effectiveCompanyId, supabase, toast, navigate, form, embedInLayout, id]);
 
   useEffect(() => {
     if (!isNew && editingId && effectiveCompanyId) {
       loadData();
     }
   }, [isNew, editingId, effectiveCompanyId, loadData]);
-
-  useEffect(() => {
-    if (effectiveCompanyId) loadPrompts();
-  }, [effectiveCompanyId, loadPrompts]);
 
   async function onSubmit(values: IdealCustomerFormValues) {
     if (!userId) {
@@ -246,11 +209,8 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
 
     setIsLoading(true);
     try {
-      const promptId = values.prompt_atendimento_id?.trim() || null;
       const payload = {
         profile_name: values.profile_name.trim(),
-        identifying_phrase: values.identifying_phrase?.trim() || null,
-        prompt_atendimento_id: promptId,
         age_range: values.age_range?.trim() || null,
         gender: values.gender?.trim() || null,
         location: values.location?.trim() || null,
@@ -269,17 +229,6 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
       };
 
       if (editingId) {
-        const { data: current, error: selectError } = await supabase
-          .from("ideal_customers")
-          .select("prompt_atendimento_id")
-          .eq("id", editingId)
-          .eq("company_id", effectiveCompanyId)
-          .maybeSingle();
-
-        if (selectError) throw selectError;
-
-        const previousPromptId = (current as { prompt_atendimento_id: string | null } | null)?.prompt_atendimento_id;
-
         const { error } = await supabase
           .from("ideal_customers")
           .update(payload)
@@ -287,21 +236,6 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
           .eq("company_id", effectiveCompanyId);
 
         if (error) throw error;
-
-        if (previousPromptId && previousPromptId !== promptId) {
-          await supabase
-            .from("prompt_atendimento")
-            .update({ persona_id: null })
-            .eq("id", previousPromptId)
-            .eq("company_id", effectiveCompanyId);
-        }
-        if (promptId) {
-          await supabase
-            .from("prompt_atendimento")
-            .update({ persona_id: editingId })
-            .eq("id", promptId)
-            .eq("company_id", effectiveCompanyId);
-        }
 
         toast({
           title: "Atualizado!",
@@ -317,13 +251,6 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
         if (error) throw error;
 
         const newPersonaId = data?.id;
-        if (newPersonaId && promptId) {
-          await supabase
-            .from("prompt_atendimento")
-            .update({ persona_id: newPersonaId })
-            .eq("id", promptId)
-            .eq("company_id", effectiveCompanyId);
-        }
 
         toast({
           title: "Cadastrado!",
@@ -547,46 +474,6 @@ export function ClienteIdealFormPage({ embedInLayout = false }: ClienteIdealForm
                     <CardDescription>Quem é o seu cliente ideal?</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Frase de identificação</Label>
-                      <Input
-                        {...form.register("identifying_phrase")}
-                        placeholder="Ex: Quero sair do aluguel, quero comprar meu carro novo"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <MessageSquare className="h-4 w-4" />
-                        Prompt de Atendimento
-                      </Label>
-                      <Select
-                        value={form.watch("prompt_atendimento_id") || "__none__"}
-                        onValueChange={(v) =>
-                          form.setValue("prompt_atendimento_id", v === "__none__" ? "" : v)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o prompt associado a este persona" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Nenhum</SelectItem>
-                          {prompts.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        O prompt de atendimento que a IA usará quando o lead for identificado como este persona.{" "}
-                        <Link
-                          to={editingId ? `/dashboard/prompt-atendimento?personaId=${editingId}` : "/dashboard/prompt-atendimento"}
-                          className="underline hover:no-underline font-medium"
-                        >
-                          Criar novo prompt
-                        </Link>
-                      </p>
-                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Nome Fictício do Perfil</Label>

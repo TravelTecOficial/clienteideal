@@ -267,6 +267,7 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
   const effectiveCompanyId = useEffectiveCompanyId();
 
   const [promptAtendimentoIdFromPersona, setPromptAtendimentoIdFromPersona] = useState<string | null>(null);
+  const [identifyingPhraseFromPersona, setIdentifyingPhraseFromPersona] = useState<string>("");
   const [isPromptPersonaResolved, setIsPromptPersonaResolved] = useState(!clienteIdealId);
   const [qualificadores, setQualificadores] = useState<Qualificador[]>([]);
   const [prompts, setPrompts] = useState<{ id: string; label: string }[]>([]);
@@ -316,6 +317,7 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
   useEffect(() => {
     if (!clienteIdealId || !effectiveCompanyId || !supabase) {
       setPromptAtendimentoIdFromPersona(null);
+      setIdentifyingPhraseFromPersona("");
       setIsPromptPersonaResolved(true);
       return;
     }
@@ -324,15 +326,18 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
     (async () => {
       const { data, error } = await supabase
         .from("ideal_customers")
-        .select("prompt_atendimento_id")
+        .select("prompt_atendimento_id, identifying_phrase")
         .eq("id", clienteIdealId)
         .eq("company_id", effectiveCompanyId)
         .maybeSingle();
       if (cancelled) return;
       if (error || !data) {
         setPromptAtendimentoIdFromPersona(null);
+        setIdentifyingPhraseFromPersona("");
       } else {
-        setPromptAtendimentoIdFromPersona((data as { prompt_atendimento_id: string | null }).prompt_atendimento_id);
+        const row = data as { prompt_atendimento_id: string | null; identifying_phrase: string | null };
+        setPromptAtendimentoIdFromPersona(row.prompt_atendimento_id);
+        setIdentifyingPhraseFromPersona(row.identifying_phrase?.trim() ?? "");
       }
       setIsPromptPersonaResolved(true);
     })();
@@ -806,8 +811,11 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
   );
 
   function validateForm(): string | null {
-    const nomeTrim = nome.trim();
+    const nomeTrim = isContextual ? identifyingPhraseFromPersona.trim() : nome.trim();
     if (!nomeTrim || nomeTrim.length < 3) {
+      if (isContextual && !identifyingPhraseFromPersona.trim()) {
+        return "Configure a frase de identificação na aba Prompt de Atendimento deste Cliente Ideal primeiro.";
+      }
       return "O nome do qualificador deve ter pelo menos 3 caracteres.";
     } else if (perguntas.every((p) => !p.pergunta.trim())) {
       return "Adicione pelo menos uma pergunta.";
@@ -857,12 +865,13 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
       const writeCompanyId = isSaasAdmin ? effectiveCompanyId : (profileCompanyId ?? effectiveCompanyId);
       let qualificadorId: string;
 
+      const nomeToSave = isContextual ? identifyingPhraseFromPersona.trim() : nome.trim();
       if (qualificadorIdToEdit) {
         const { error: errUpdate } = await supabase
           .from("qualificadores")
           .update({
-            nome: nome.trim(),
-            prompt_atendimento_id: promptAtendimentoId || null,
+            nome: nomeToSave,
+            prompt_atendimento_id: isContextual ? (promptAtendimentoIdFromPersona ?? null) : (promptAtendimentoId || null),
           })
           .eq("id", qualificadorIdToEdit)
           .eq("company_id", writeCompanyId ?? "");
@@ -870,7 +879,7 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
         if (errUpdate) {
           const { error: errUpdate2 } = await supabase
             .from("qualificadores")
-            .update({ nome: nome.trim() })
+            .update({ nome: nomeToSave })
             .eq("id", qualificadorIdToEdit)
             .eq("company_id", writeCompanyId ?? "");
           if (errUpdate2) throw errUpdate2;
@@ -889,8 +898,8 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
           .insert({
             company_id: writeCompanyId ?? "",
             user_id: userId,
-            nome: nome.trim(),
-            prompt_atendimento_id: promptAtendimentoId || null,
+            nome: nomeToSave,
+            prompt_atendimento_id: isContextual ? (promptAtendimentoIdFromPersona ?? null) : (promptAtendimentoId || null),
           })
           .select("id")
           .single();
@@ -901,7 +910,7 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
             .insert({
               company_id: writeCompanyId ?? "",
               user_id: userId,
-              nome: nome.trim(),
+              nome: nomeToSave,
             })
             .select("id")
             .single();
@@ -1007,36 +1016,32 @@ export default function QualificacaoPage({ clienteIdealId }: QualificacaoPagePro
 
   const qualificadorFormContent = (
     <div className="space-y-6 pt-4">
-      <div className="flex gap-6">
-        <div className="flex-1 space-y-2">
-          <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-            Nome do qualificador
-          </Label>
-          <Input
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            placeholder="Ex: Qualificador de vendas B2B"
-            className="border-input"
-          />
+      {!isContextual && (
+        <div className="flex gap-6">
+          <div className="flex-1 space-y-2">
+            <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+              Nome do qualificador
+            </Label>
+            <Input
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Ex: Qualificador de vendas B2B"
+              className="border-input"
+            />
+          </div>
+          <div className="flex-1 space-y-2">
+            <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+              Prompt (opcional)
+            </Label>
+            <StyledSelect
+              value={promptAtendimentoId}
+              onChange={setPromptAtendimentoId}
+              options={[{ value: "", label: "Nenhum" }, ...prompts.map((p) => ({ value: p.id, label: p.label }))]}
+              placeholder="Selecione..."
+            />
+          </div>
         </div>
-        <div className="flex-1 space-y-2">
-          <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-            Prompt (opcional)
-          </Label>
-          <StyledSelect
-            value={promptAtendimentoId}
-            onChange={setPromptAtendimentoId}
-            options={
-              promptAtendimentoIdFromPersona
-                ? prompts
-                    .filter((p) => p.id === promptAtendimentoIdFromPersona)
-                    .map((p) => ({ value: p.id, label: p.label }))
-                : [{ value: "", label: "Nenhum" }, ...prompts.map((p) => ({ value: p.id, label: p.label }))]
-            }
-            placeholder="Selecione..."
-          />
-        </div>
-      </div>
+      )}
 
       <div className="space-y-4">
         <div className="flex justify-between items-center">
