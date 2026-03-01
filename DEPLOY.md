@@ -18,6 +18,8 @@ Configure no painel da plataforma (Vercel/Netlify) ou em `.env.production`:
 | `VITE_SUPABASE_ANON_KEY` | Sim | Chave anon do projeto Supabase PROD |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Sim | Chave `pk_live_...` do Clerk (produção) |
 | `VITE_N8N_CHAT_WEBHOOK_URL` | Não | `https://jobs.traveltec.com.br/webhook/consulta-chat` (default) |
+| `VITE_GOOGLE_MAPS_API_KEY` | Para GMB Local (mapa) | Mesma chave do Places API; habilite **Maps JavaScript API** no [Google Cloud Console](https://console.cloud.google.com/apis/library/maps-backend.googleapis.com) |
+| `VITE_GOOGLE_MAPS_MAP_ID` | Opcional (GMB Local) | Map ID com Vector/Advanced Markers em [Map Management](https://console.cloud.google.com/google/maps-apis/studio/maps); evita aviso de depreciação do `google.maps.Marker` |
 
 **Importante**: Nunca commite `.env.production` com chaves reais.
 
@@ -70,7 +72,12 @@ npx supabase functions deploy admin-briefing-questions --project-ref $PROJECT_RE
 npx supabase functions deploy persona-generate-avatar --project-ref $PROJECT_REF
 npx supabase functions deploy persona-template-generate-avatar --project-ref $PROJECT_REF
 npx supabase functions deploy places-search-nearby --project-ref $PROJECT_REF --no-verify-jwt
+npx supabase functions deploy geocode-address --project-ref $PROJECT_REF --no-verify-jwt
 ```
+
+**Importante (CORS)**: As funções `geocode-address` e `places-search-nearby` são chamadas pelo front (clienteideal.online) com anon key. Se forem deployadas **sem** `--no-verify-jwt`, o gateway do Supabase pode rejeitar o preflight OPTIONS com 401 e o navegador reporta erro de CORS ("preflight doesn't pass access control / doesn't have HTTP ok status"). Sempre use `--no-verify-jwt` para essas duas.
+
+**Lista de concorrentes (avaliações no Remoto)**: A `places-search-nearby` prioriza `searchText` quando o tipo tem mapeamento (ex.: corretor de seguros), para que rating/avaliações venham consistentes em produção. Após alterações nessa função, faça redeploy em PROD: `npx supabase functions deploy places-search-nearby --project-ref bctjodobbsxieywgulvl --no-verify-jwt`.
 
 **DEV (localhost)**: Se o app usa `mrkvvgofjyvlutqpvedt`, deploy com:
 ```bash

@@ -142,7 +142,37 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // 1. Tentar searchNearby (por tipo)
+    // Preferir searchText quando há mapeamento: retorna rating/userRatingCount de forma
+    // consistente (DEV e Remoto). searchNearby em produção costuma vir sem avaliações.
+    const textQuery = PLACE_TYPE_TO_QUERY[trimmedType] ?? trimmedType.replace(/_/g, " ")
+    const hasTextMapping = trimmedType in PLACE_TYPE_TO_QUERY
+
+    if (hasTextMapping) {
+      const textPayload = {
+        textQuery,
+        maxResultCount: MAX_RESULTS,
+        locationRestriction,
+        rankPreference: "DISTANCE",
+        languageCode: "pt-BR",
+        regionCode: "BR",
+      }
+      const textRes = await fetch(PLACES_TEXT_URL, {
+        method: "POST",
+        headers: commonHeaders,
+        body: JSON.stringify(textPayload),
+      })
+      if (textRes.ok) {
+        const textData = (await textRes.json()) as PlacesApiResponse
+        const places = mapPlaces(textData)
+        if (places.length > 0) {
+          return jsonResponse({ places })
+        }
+      } else {
+        console.error("Places searchText error:", textRes.status, await textRes.text())
+      }
+    }
+
+    // searchNearby (ou fallback quando searchText não tem mapeamento / falhou)
     const nearbyPayload = {
       includedTypes: [trimmedType],
       maxResultCount: MAX_RESULTS,
@@ -151,7 +181,6 @@ Deno.serve(async (req) => {
       languageCode: "pt-BR",
       regionCode: "BR",
     }
-
     const nearbyRes = await fetch(PLACES_NEARBY_URL, {
       method: "POST",
       headers: commonHeaders,
@@ -168,35 +197,31 @@ Deno.serve(async (req) => {
       console.error("Places searchNearby error:", nearbyRes.status, await nearbyRes.text())
     }
 
-    // 2. Fallback: searchText (busca textual em português - melhor cobertura no Brasil)
-    const textQuery = PLACE_TYPE_TO_QUERY[trimmedType] ?? trimmedType.replace(/_/g, " ")
-    const textPayload = {
-      textQuery,
-      maxResultCount: MAX_RESULTS,
-      locationRestriction,
-      rankPreference: "DISTANCE",
-      languageCode: "pt-BR",
-      regionCode: "BR",
+    // Último fallback: searchText sem mapeamento (ex.: tipo customizado)
+    if (!hasTextMapping) {
+      const textPayload = {
+        textQuery,
+        maxResultCount: MAX_RESULTS,
+        locationRestriction,
+        rankPreference: "DISTANCE",
+        languageCode: "pt-BR",
+        regionCode: "BR",
+      }
+      const textRes = await fetch(PLACES_TEXT_URL, {
+        method: "POST",
+        headers: commonHeaders,
+        body: JSON.stringify(textPayload),
+      })
+      if (textRes.ok) {
+        const textData = (await textRes.json()) as PlacesApiResponse
+        const places = mapPlaces(textData)
+        if (places.length > 0) {
+          return jsonResponse({ places })
+        }
+      }
     }
 
-    const textRes = await fetch(PLACES_TEXT_URL, {
-      method: "POST",
-      headers: commonHeaders,
-      body: JSON.stringify(textPayload),
-    })
-
-    if (!textRes.ok) {
-      const errText = await textRes.text()
-      console.error("Places searchText error:", textRes.status, errText)
-      return jsonResponse(
-        { error: "Erro ao buscar lugares. Verifique endereço e categoria." },
-        502
-      )
-    }
-
-    const textData = (await textRes.json()) as PlacesApiResponse
-    const places = mapPlaces(textData)
-    return jsonResponse({ places })
+    return jsonResponse({ error: "Nenhum resultado encontrado.", places: [] }, 200)
   } catch (err) {
     console.error("Places search error:", err)
     return jsonResponse({ error: "Erro ao buscar lugares." }, 500)

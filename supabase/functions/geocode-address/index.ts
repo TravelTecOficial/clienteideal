@@ -10,10 +10,11 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
-const corsHeaders = {
+const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
 }
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
@@ -69,7 +70,7 @@ async function tryNominatim(params: URLSearchParams): Promise<{ lat: number; lng
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 200, headers: corsHeaders })
+    return new Response(null, { status: 204, headers: corsHeaders })
   }
 
   if (req.method !== "POST") {

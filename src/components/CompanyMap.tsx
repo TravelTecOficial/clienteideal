@@ -36,21 +36,69 @@ function hasAddressData(addr: CompanyAddress | null): boolean {
 
 async function geocodeAddress(addr: CompanyAddress): Promise<{ lat: number; lng: number } | null> {
   const url = `${SUPABASE_URL}/functions/v1/geocode-address`;
-  const res = await fetch(url, {
+  // #region agent log
+  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    },
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fe9ade" },
     body: JSON.stringify({
-      logradouro: addr.logradouro ?? undefined,
-      numero: addr.numero ?? undefined,
-      bairro: addr.bairro ?? undefined,
-      cidade: addr.cidade ?? undefined,
-      uf: addr.uf ?? undefined,
-      cep: addr.cep ?? undefined,
+      sessionId: "fe9ade",
+      location: "CompanyMap.tsx:geocodeAddress",
+      message: "geocodeAddress before fetch",
+      data: { url, hasAnonKey: !!SUPABASE_ANON_KEY },
+      timestamp: Date.now(),
+      hypothesisId: "CORS",
     }),
-  });
+  }).catch(() => {});
+  // #endregion
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        logradouro: addr.logradouro ?? undefined,
+        numero: addr.numero ?? undefined,
+        bairro: addr.bairro ?? undefined,
+        cidade: addr.cidade ?? undefined,
+        uf: addr.uf ?? undefined,
+        cep: addr.cep ?? undefined,
+      }),
+    });
+  } catch (err) {
+    // #region agent log
+    const errMsg = err instanceof Error ? err.message : String(err);
+    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fe9ade" },
+      body: JSON.stringify({
+        sessionId: "fe9ade",
+        location: "CompanyMap.tsx:geocodeAddress",
+        message: "geocodeAddress fetch threw (CORS/network)",
+        data: { url, error: errMsg },
+        timestamp: Date.now(),
+        hypothesisId: "CORS",
+      }),
+    }).catch(() => {});
+    // #endregion
+    throw err;
+  }
+  // #region agent log
+  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fe9ade" },
+    body: JSON.stringify({
+      sessionId: "fe9ade",
+      location: "CompanyMap.tsx:geocodeAddress",
+      message: "geocodeAddress response",
+      data: { status: res.status, statusText: res.statusText, ok: res.ok },
+      timestamp: Date.now(),
+      hypothesisId: "CORS",
+    }),
+  }).catch(() => {});
+  // #endregion
   const rawText = await res.text();
   let parsed: { lat?: number; lng?: number; error?: string } | null = null;
   try {
@@ -85,7 +133,7 @@ interface CompanyMapProps {
 }
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim() || "";
-/** Map ID do Google Cloud (Maps Management). Necessário para AdvancedMarker. Crie em: console.cloud.google.com/google/maps-apis/studio/maps */
+/** Map ID do Google Cloud (Maps Management). Necessário para AdvancedMarker; sem ele o mapa usa Marker (deprecated). Em produção defina VITE_GOOGLE_MAPS_MAP_ID para remover o aviso. */
 const GOOGLE_MAPS_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID?.trim() || "";
 
 function MapContent({
