@@ -1,0 +1,23 @@
+export const GMB_CATEGORIES: { value: string; label: string }[] = [
+  { value: "real_estate_agency", label: "Corretora de imóveis" },
+  { value: "dentist", label: "Dentista" },
+  { value: "lawyer", label: "Advogado" },
+  { value: "doctor", label: "Médico" },
+  { value: "restaurant", label: "Restaurante" },
+  { value: "insurance_agency", label: "Seguradora" },
+  { value: "insurance_agent", label: "Corretor de Seguros" },
+  { value: "accounting", label: "Contabilidade" },
+  { value: "hair_salon", label: "Salão de beleza" },
+  { value: "pharmacy", label: "Farmácia" },
+  { value: "gym", label: "Academia" },
+  { value: "veterinary_care", label: "Veterinário" },
+  { value: "car_dealer", label: "Concessionária" },
+  { value: "bakery", label: "Padaria" },
+  { value: "cafe", label: "Café" },
+  { value: "plumber", label: "Encanador" },
+  { value: "electrician", label: "Eletricista" },
+  { value: "auto_repair", label: "Oficina mecânica" },
+  { value: "florist", label: "Florista" },
+  { value: "locksmith", label: "Chaveiro" },
+];
+

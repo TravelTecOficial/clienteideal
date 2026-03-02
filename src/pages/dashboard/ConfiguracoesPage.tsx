@@ -82,6 +82,7 @@ interface CompanyRow {
   facebook_url: string | null;
   linkedin_url: string | null;
   gmb_place_type: string | null;
+  gmb_place_type_secondary: string | null;
   gmb_place_id: string | null;
   estancia_whatsapp: string | null;
   whatsapp_group_image_url: string | null;
@@ -193,30 +194,6 @@ const PLATAFORMA_CAMPANHA_OPTIONS = [
   { value: "Outro", label: "Outro" },
 ] as const;
 
-/** Categorias GMB sugeridas. O usuário pode digitar qualquer outra (ex: plumber, electrician). */
-const GMB_CATEGORIES = [
-  { value: "real_estate_agency", label: "Corretora de imóveis" },
-  { value: "dentist", label: "Dentista" },
-  { value: "lawyer", label: "Advogado" },
-  { value: "doctor", label: "Médico" },
-  { value: "restaurant", label: "Restaurante" },
-  { value: "insurance_agency", label: "Seguradora" },
-  { value: "insurance_agent", label: "Corretor de Seguros" },
-  { value: "accounting", label: "Contabilidade" },
-  { value: "hair_salon", label: "Salão de beleza" },
-  { value: "pharmacy", label: "Farmácia" },
-  { value: "gym", label: "Academia" },
-  { value: "veterinary_care", label: "Veterinário" },
-  { value: "car_dealer", label: "Concessionária" },
-  { value: "bakery", label: "Padaria" },
-  { value: "cafe", label: "Café" },
-  { value: "plumber", label: "Encanador" },
-  { value: "electrician", label: "Eletricista" },
-  { value: "auto_repair", label: "Oficina mecânica" },
-  { value: "florist", label: "Florista" },
-  { value: "locksmith", label: "Chaveiro" },
-];
-
 // --- Component ---
 export function ConfiguracoesPage() {
   const { userId } = useAuth();
@@ -260,8 +237,6 @@ export function ConfiguracoesPage() {
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [isDeleteEvolutionOpen, setIsDeleteEvolutionOpen] = useState(false);
   const [isDeletingEvolution, setIsDeletingEvolution] = useState(false);
-  const [gmbMapsUrl, setGmbMapsUrl] = useState("");
-  const [isIdentifyingGmb, setIsIdentifyingGmb] = useState(false);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
   const evolutionForm = useForm<EvolutionFormValues>({
@@ -326,6 +301,7 @@ export function ConfiguracoesPage() {
       facebook_url: "",
       linkedin_url: "",
       gmb_place_type: "",
+      gmb_place_type_secondary: "",
       gmb_place_id: "",
     },
   });
@@ -368,8 +344,8 @@ export function ConfiguracoesPage() {
         .from("companies")
         .select(
           "name, nome_fantasia, cnpj, logradouro, numero, bairro, cidade, uf, cep, " +
-          "site_oficial, celular_atendimento, email_atendimento, horario_funcionamento, " +
-          "instagram_url, facebook_url, linkedin_url, gmb_place_type, gmb_place_id"
+            "site_oficial, celular_atendimento, email_atendimento, horario_funcionamento, " +
+            "instagram_url, facebook_url, linkedin_url, gmb_place_type, gmb_place_type_secondary, gmb_place_id"
         )
         .eq("id", companyId)
         .maybeSingle();
@@ -394,6 +370,7 @@ export function ConfiguracoesPage() {
         facebook_url: row?.facebook_url ?? "",
         linkedin_url: row?.linkedin_url ?? "",
         gmb_place_type: row?.gmb_place_type ?? "",
+        gmb_place_type_secondary: row?.gmb_place_type_secondary ?? "",
         gmb_place_id: row?.gmb_place_id ?? "",
       });
     } catch (err) {
@@ -640,6 +617,7 @@ export function ConfiguracoesPage() {
           facebook_url: values.facebook_url?.trim() || null,
           linkedin_url: values.linkedin_url?.trim() || null,
           gmb_place_type: values.gmb_place_type?.trim() || null,
+          gmb_place_type_secondary: values.gmb_place_type_secondary?.trim() || null,
           gmb_place_id: values.gmb_place_id?.trim() || null,
         })
         .eq("id", companyId);
@@ -702,85 +680,6 @@ export function ConfiguracoesPage() {
         title: "Erro",
         description: "Falha ao buscar endereço. Tente novamente.",
       });
-    }
-  }
-
-  // Identificar negócio via link do Google Maps e gravar categoria
-  async function handleIdentifyGmb() {
-    const url = gmbMapsUrl.trim();
-    if (!url) {
-      toast({
-        variant: "destructive",
-        title: "URL obrigatória",
-        description: "Cole o link do seu negócio no Google Maps.",
-      });
-      return;
-    }
-    if (!companyId) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Empresa não identificada.",
-      });
-      return;
-    }
-    setIsIdentifyingGmb(true);
-    try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/place-from-url`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ mapsUrl: url }),
-      });
-      const rawText = await res.text();
-      let data: { placeId?: string; primaryType?: string; displayName?: string; error?: string } | null = null;
-      try {
-        data = JSON.parse(rawText) as typeof data;
-      } catch {
-        /* ignore */
-      }
-      if (!res.ok || data?.error) {
-        toast({
-          variant: "destructive",
-          title: "Erro ao identificar",
-          description: data?.error ?? `Erro ${res.status}`,
-        });
-        return;
-      }
-      const primaryType = data?.primaryType?.trim();
-      if (!primaryType) {
-        toast({
-          variant: "destructive",
-          title: "Categoria não encontrada",
-          description: "O Google não retornou a categoria deste negócio.",
-        });
-        return;
-      }
-      empresaForm.setValue("gmb_place_type", primaryType);
-      empresaForm.setValue("gmb_place_id", data?.placeId?.trim() ?? "");
-      const { error } = await supabase
-        .from("companies")
-        .update({
-          gmb_place_type: primaryType,
-          gmb_place_id: data?.placeId?.trim() || null,
-        })
-        .eq("id", companyId);
-      if (error) throw error;
-      setGmbMapsUrl("");
-      toast({
-        title: "Negócio identificado",
-        description: `${data?.displayName || "Negócio"} — Categoria: ${primaryType}. Dados gravados.`,
-      });
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao gravar",
-        description: getErrorMessage(err),
-      });
-    } finally {
-      setIsIdentifyingGmb(false);
     }
   }
 
@@ -1413,64 +1312,6 @@ export function ConfiguracoesPage() {
                               {...empresaForm.register("uf")}
                             />
                           </div>
-                          <div className="space-y-2 sm:col-span-2">
-                            <Label htmlFor="empresa_gmb_maps_url">Link do Google Maps</Label>
-                            <div className="flex gap-2">
-                              <Input
-                                id="empresa_gmb_maps_url"
-                                type="url"
-                                placeholder="https://maps.app.goo.gl/... ou link do seu negócio no Google Maps"
-                                value={gmbMapsUrl}
-                                onChange={(e) => setGmbMapsUrl(e.target.value)}
-                                disabled={isIdentifyingGmb}
-                              />
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={handleIdentifyGmb}
-                                disabled={isIdentifyingGmb || !gmbMapsUrl.trim()}
-                              >
-                                {isIdentifyingGmb ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <>
-                                    <Search className="w-4 h-4 mr-1" />
-                                    Identificar
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Cole o link do seu negócio no Google Maps e clique em Identificar. A categoria será obtida automaticamente e gravada.
-                            </p>
-                          </div>
-                          <div className="space-y-2 sm:col-span-2">
-                            <Label htmlFor="empresa_gmb_place_type">Categoria GMB (identificada ou manual)</Label>
-                            <Controller
-                              name="gmb_place_type"
-                              control={empresaForm.control}
-                              render={({ field }) => (
-                                <>
-                                  <Input
-                                    id="empresa_gmb_place_type"
-                                    list="gmb_place_type_options"
-                                    placeholder="Preenchido ao identificar ou digite manualmente (ex: dentist, insurance_agent)"
-                                    value={field.value ?? ""}
-                                    onChange={(e) => field.onChange(e.target.value)}
-                                    onBlur={field.onBlur}
-                                  />
-                                  <datalist id="gmb_place_type_options">
-                                    {GMB_CATEGORIES.map((opt) => (
-                                      <option key={opt.value} value={opt.value} label={opt.label} />
-                                    ))}
-                                  </datalist>
-                                </>
-                              )}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Usado na aba Explorar do GMB Local para buscar concorrentes próximos.
-                            </p>
-                          </div>
                         </div>
                       </div>
 
@@ -1524,6 +1365,53 @@ export function ConfiguracoesPage() {
                             placeholder="Ex: Segunda a Sexta, 08h às 18h"
                             {...empresaForm.register("horario_funcionamento")}
                           />
+                        </div>
+                      </div>
+
+                      {/* Google Business (avançado) */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-foreground">Google Business (avançado)</h4>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="empresa_gmb_place_id">Place ID (somente leitura)</Label>
+                            <Input
+                              id="empresa_gmb_place_id"
+                              type="text"
+                              value={empresaForm.watch("gmb_place_id") ?? ""}
+                              readOnly
+                              className="font-mono text-xs bg-muted"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Identificador do seu local no Google. Normalmente preenchido automaticamente pelo módulo
+                              GMB Local.
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_gmb_place_type">Categoria principal</Label>
+                            <Input
+                              id="empresa_gmb_place_type"
+                              type="text"
+                              placeholder="Ex: dentist, insurance_agent"
+                              className="font-mono text-xs"
+                              {...empresaForm.register("gmb_place_type")}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Categoria principal do Google Places. Usada para buscar concorrentes no GMB Local.
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="empresa_gmb_place_type_secondary">Categoria secundária (opcional)</Label>
+                            <Input
+                              id="empresa_gmb_place_type_secondary"
+                              type="text"
+                              placeholder="Ex: doctor, health"
+                              className="font-mono text-xs"
+                              {...empresaForm.register("gmb_place_type_secondary")}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Categoria secundária opcional do Google Places. Pode ser usada para análises futuras.
+                            </p>
+                          </div>
                         </div>
                       </div>
 

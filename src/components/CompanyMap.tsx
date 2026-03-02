@@ -6,7 +6,7 @@
  * Note: UI-level display only. Dados vêm do Supabase com RLS.
  */
 import { useEffect, useState, useMemo } from "react";
-import { APIProvider, Map, Marker, AdvancedMarker, InfoWindow } from "@vis.gl/react-google-maps";
+import { APIProvider, Map, AdvancedMarker, InfoWindow } from "@vis.gl/react-google-maps";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase";
 
 export interface CompanyAddress {
@@ -133,8 +133,8 @@ interface CompanyMapProps {
 }
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim() || "";
-/** Map ID do Google Cloud (Maps Management). Necessário para AdvancedMarker; sem ele o mapa usa Marker (deprecated). Em produção defina VITE_GOOGLE_MAPS_MAP_ID para remover o aviso. */
-const GOOGLE_MAPS_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID?.trim() || "";
+/** Map ID para AdvancedMarker. Fallback DEMO_MAP_ID evita aviso de depreciação do Marker; em produção use VITE_GOOGLE_MAPS_MAP_ID (crie em Map Management). */
+const GOOGLE_MAPS_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID?.trim() || "DEMO_MAP_ID";
 
 function MapContent({
   coords,
@@ -151,19 +151,16 @@ function MapContent({
 }) {
   const [openInfo, setOpenInfo] = useState<string | null>(null);
   const validCompetitors = competitors.filter((c) => c.lat != null && c.lng != null);
-  const useAdvanced = !!GOOGLE_MAPS_MAP_ID;
-
-  const MarkerComponent = useAdvanced ? AdvancedMarker : Marker;
 
   return (
     <Map
-      mapId={GOOGLE_MAPS_MAP_ID || undefined}
+      mapId={GOOGLE_MAPS_MAP_ID}
       defaultCenter={{ lat: coords[0], lng: coords[1] }}
       defaultZoom={15}
       gestureHandling="greedy"
       style={{ width: "100%", height: "100%", minHeight }}
     >
-      <MarkerComponent
+      <AdvancedMarker
         position={{ lat: coords[0], lng: coords[1] }}
         onClick={() => setOpenInfo(openInfo === "company" ? null : "company")}
       />
@@ -180,7 +177,7 @@ function MapContent({
         </InfoWindow>
       )}
       {validCompetitors.map((c, i) => (
-        <MarkerComponent
+        <AdvancedMarker
           key={`${c.name}-${i}`}
           position={{ lat: c.lat!, lng: c.lng! }}
           onClick={() => setOpenInfo(openInfo === `comp-${i}` ? null : `comp-${i}`)}
