@@ -29,6 +29,7 @@ interface GmbPost {
   scheduledAt: string | null;
   publishedAt: string | null;
   platform: string | null;
+  mediaUrl: string | null;
 }
 
 export default function SocialHub() {
@@ -138,7 +139,7 @@ export default function SocialHub() {
         variant: "destructive",
         title: "Configure o Late Account ID",
         description:
-          "Vincule seu Google Meu Negócio na tela GMB Local antes de publicar.",
+          "Configure o Late Account ID em Configurações → Integrações → Google Meu Negócio antes de publicar.",
       });
       return;
     }
@@ -355,7 +356,7 @@ export default function SocialHub() {
                         return (
                           <div
                             key={post.id}
-                            className="rounded-md border bg-card/60 p-3 space-y-1"
+                            className="rounded-md border bg-card/60 p-3 space-y-2"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <Badge variant="outline" className="text-xs">
@@ -367,6 +368,19 @@ export default function SocialHub() {
                                 </span>
                               )}
                             </div>
+                            {post.mediaUrl && (
+                              <div className="rounded overflow-hidden bg-muted max-w-sm">
+                                <img
+                                  src={post.mediaUrl}
+                                  alt=""
+                                  className="w-full h-auto max-h-48 object-cover"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
+                              </div>
+                            )}
                             <p className="text-sm">
                               {post.content && post.content.length > 160
                                 ? `${post.content.slice(0, 160)}…`

@@ -141,15 +141,24 @@ Deno.serve(async (req) => {
     const raw = Array.isArray(lateData) ? lateData : (lateData?.data ?? lateData?.posts ?? [])
     const list = Array.isArray(raw) ? raw : []
 
-    const posts = list.map((p: Record<string, unknown>) => ({
-      id: p.id ?? p._id ?? "",
-      content: typeof p.content === "string" ? p.content : (p.text as string) ?? "",
-      status: typeof p.status === "string" ? p.status : (p.state as string) ?? "",
-      createdAt: p.created_at ?? p.createdAt ?? null,
-      scheduledAt: p.scheduled_at ?? p.scheduledAt ?? null,
-      publishedAt: p.published_at ?? p.publishedAt ?? null,
-      platform: typeof p.platform === "string" ? p.platform : null,
-    }))
+    const posts = list.map((p: Record<string, unknown>) => {
+      const mediaItems = (p.media_items ?? p.mediaItems ?? p.media) as Array<{ url?: string; type?: string }> | undefined
+      const firstMedia = Array.isArray(mediaItems) && mediaItems.length > 0 ? mediaItems[0] : null
+      const mediaUrl =
+        (firstMedia && typeof firstMedia === "object" && typeof firstMedia.url === "string" ? firstMedia.url : null) ??
+        (typeof p.image_url === "string" ? p.image_url : null) ??
+        (typeof p.thumbnail_url === "string" ? p.thumbnail_url : null)
+      return {
+        id: p.id ?? p._id ?? "",
+        content: typeof p.content === "string" ? p.content : (p.text as string) ?? "",
+        status: typeof p.status === "string" ? p.status : (p.state as string) ?? "",
+        createdAt: p.created_at ?? p.createdAt ?? null,
+        scheduledAt: p.scheduled_at ?? p.scheduledAt ?? null,
+        publishedAt: p.published_at ?? p.publishedAt ?? null,
+        platform: typeof p.platform === "string" ? p.platform : null,
+        mediaUrl: mediaUrl ?? null,
+      }
+    })
 
     const byDate = (a: { publishedAt: string | null; scheduledAt: string | null; createdAt: string | null }, b: { publishedAt: string | null; scheduledAt: string | null; createdAt: string | null }) => {
       const da = a.publishedAt || a.scheduledAt || a.createdAt || ""

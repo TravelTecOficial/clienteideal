@@ -62,6 +62,7 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useEvolutionProxy } from "@/hooks/use-evolution-proxy";
 import { ChatBriefingModal } from "@/components/chat-briefing/ChatBriefingModal";
+import { GmbProfileManager } from "@/components/gmb/GmbProfileManager";
 
 // --- Interfaces ---
 interface CompanyRow {
@@ -228,6 +229,7 @@ export function ConfiguracoesPage() {
   const [briefingCompleted, setBriefingCompleted] = useState(false);
   const [isBriefingModalOpen, setIsBriefingModalOpen] = useState(false);
   const [googleAdsOAuthOpen, setGoogleAdsOAuthOpen] = useState(false);
+  const [isGmbManagerOpen, setIsGmbManagerOpen] = useState(false);
   const [googleAdsOAuthStep, setGoogleAdsOAuthStep] = useState<"login" | "account" | "success">("login");
   const [googleAdsOAuthEmail, setGoogleAdsOAuthEmail] = useState("");
   const [googleAdsSelectedAccount, setGoogleAdsSelectedAccount] = useState<string | null>(null);
@@ -1689,15 +1691,36 @@ export function ConfiguracoesPage() {
                             <CardDescription>{platform.description}</CardDescription>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant="secondary">Em breve</Badge>
-                            <Button disabled size="sm">
-                              Conectar
-                            </Button>
+                            {platform.id === "google-meu-negocio" ? (
+                              <Button size="sm" onClick={() => setIsGmbManagerOpen(true)}>
+                                Gerenciar perfil
+                              </Button>
+                            ) : (
+                              <>
+                                <Badge variant="secondary">Em breve</Badge>
+                                <Button disabled size="sm">
+                                  Conectar
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </CardHeader>
                       </Card>
                     ))}
                   </div>
+
+                  <Dialog open={isGmbManagerOpen} onOpenChange={setIsGmbManagerOpen}>
+                    <DialogContent className="max-w-3xl">
+                      <DialogHeader>
+                        <DialogTitle>Google Meu Negócio</DialogTitle>
+                        <DialogDescription>
+                          Identifique o negócio, escolha a categoria e configure o Late Account ID para
+                          publicar posts pelo Social Media.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <GmbProfileManager />
+                    </DialogContent>
+                  </Dialog>
                 </CardContent>
               </Card>
 
