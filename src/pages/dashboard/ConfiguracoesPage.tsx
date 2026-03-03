@@ -1139,7 +1139,7 @@ export function ConfiguracoesPage() {
                 <Plug2 className="h-4 w-4" /> Integrações
               </TabsTrigger>
               <TabsTrigger value="evolution" className="gap-2">
-                <Smartphone className="h-4 w-4" /> Evolution API
+                <Smartphone className="h-4 w-4" /> WhatsApp
               </TabsTrigger>
               <TabsTrigger value="anuncios" className="gap-2">
                 <Megaphone className="h-4 w-4" /> Anúncios
@@ -1477,7 +1477,7 @@ export function ConfiguracoesPage() {
                 <CardHeader>
                   <CardTitle>Dados de integração</CardTitle>
                   <CardDescription>
-                    Estância Whatsapp e imagem para grupos. Celular e e-mail estão na aba Empresa.
+                    As configurações de WhatsApp foram movidas para a aba WhatsApp. Celular e e-mail continuam na aba Empresa.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1486,141 +1486,9 @@ export function ConfiguracoesPage() {
                       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     </div>
                   ) : (
-                    <form
-                      onSubmit={dadosForm.handleSubmit(onDadosSubmit)}
-                      className="grid gap-4 sm:grid-cols-2"
-                    >
-                      <div className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50/70 p-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="space-y-1">
-                            <Label htmlFor="support_access_enabled" className="text-sm font-semibold text-red-900">
-                              Liberar acesso do suporte Cliente Ideal
-                            </Label>
-                            <p className="text-xs text-red-800">
-                              Quando habilitado, o suporte pode abrir seu dashboard no Admin para implantação e atendimento.
-                            </p>
-                          </div>
-                          <Switch
-                            id="support_access_enabled"
-                            checked={supportAccessEnabled}
-                            disabled={isSavingSupportAccess}
-                            onCheckedChange={onSupportAccessChange}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="estancia_whatsapp">
-                          Estância Whatsapp
-                        </Label>
-                        <Input
-                          id="estancia_whatsapp"
-                          type="text"
-                          placeholder="Ex: nome-da-instancia"
-                          {...dadosForm.register("estancia_whatsapp")}
-                        />
-                        {dadosForm.formState.errors.estancia_whatsapp && (
-                          <p className="text-xs text-destructive">
-                            {
-                              dadosForm.formState.errors.estancia_whatsapp
-                                .message
-                            }
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label className="flex items-center gap-2">
-                          <ImagePlus className="h-4 w-4" />
-                          Imagem para grupos WhatsApp
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Imagem pequena para uso em grupos (máx. 1MB, JPEG/PNG/WebP)
-                        </p>
-                        <div className="flex items-center gap-4">
-                          {whatsappImageUrl && (
-                            <img
-                              src={whatsappImageUrl}
-                              alt="Imagem WhatsApp"
-                              className="h-16 w-16 rounded-lg border object-cover"
-                            />
-                          )}
-                          <input
-                            ref={whatsappImageInputRef}
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file || !companyId) return;
-                              if (file.size > 1048576) {
-                                toast({
-                                  variant: "destructive",
-                                  title: "Arquivo grande",
-                                  description: "Máximo 1MB.",
-                                });
-                                return;
-                              }
-                              setIsUploadingImage(true);
-                              try {
-                                const ext = file.name.split(".").pop() || "jpg";
-                                const path = `${companyId}/whatsapp-group.${ext}`;
-                                const { error: uploadError } = await supabase.storage
-                                  .from("company-assets")
-                                  .upload(path, file, { upsert: true });
-                                if (uploadError) throw uploadError;
-                                const { data: urlData } = supabase.storage
-                                  .from("company-assets")
-                                  .getPublicUrl(path);
-                                const url = urlData.publicUrl;
-                                const { error: updateError } = await supabase
-                                  .from("companies")
-                                  .update({ whatsapp_group_image_url: url })
-                                  .eq("id", companyId);
-                                if (updateError) throw updateError;
-                                setWhatsappImageUrl(url);
-                                toast({ title: "Imagem salva", description: "A imagem foi atualizada." });
-                              } catch (err) {
-                                toast({
-                                  variant: "destructive",
-                                  title: "Erro ao enviar",
-                                  description: getErrorMessage(err),
-                                });
-                              } finally {
-                                setIsUploadingImage(false);
-                                e.target.value = "";
-                              }
-                            }}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={isUploadingImage}
-                            onClick={() => whatsappImageInputRef.current?.click()}
-                          >
-                            {isUploadingImage ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              "Selecionar imagem"
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <Button type="submit" disabled={isSavingDados}>
-                          {isSavingDados ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Salvando…
-                            </>
-                          ) : (
-                            <>
-                              <Check className="h-4 w-4" />
-                              Salvar
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </form>
+                    <p className="text-sm text-muted-foreground">
+                      Em breve, novos dados de integração poderão ser configurados aqui.
+                    </p>
                   )}
                 </CardContent>
               </Card>
@@ -1885,9 +1753,10 @@ export function ConfiguracoesPage() {
             <TabsContent value="evolution" className="space-y-4 pt-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Evolution API (WhatsApp)</CardTitle>
+                  <CardTitle>WhatsApp</CardTitle>
                   <CardDescription>
-                    Crie uma instância e conecte via QR Code. A URL e a API Key da Evolution API são configuradas pelo administrador.
+                    Integração atual via Evolution API (WhatsApp). Crie uma instância e conecte via QR Code.
+                    A URL e a API Key da Evolution API são configuradas pelo administrador.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -2043,6 +1912,127 @@ export function ConfiguracoesPage() {
                           </p>
                         </div>
                       )}
+
+                      <div className="space-y-4 border-t pt-4">
+                        <h4 className="text-sm font-medium">Branding do WhatsApp</h4>
+                        <form
+                          onSubmit={dadosForm.handleSubmit(onDadosSubmit)}
+                          className="grid gap-4 sm:grid-cols-2"
+                        >
+                          <div className="space-y-2">
+                            <Label htmlFor="estancia_whatsapp">
+                              Estância Whatsapp
+                            </Label>
+                            <Input
+                              id="estancia_whatsapp"
+                              type="text"
+                              placeholder="Ex: nome-da-instancia"
+                              {...dadosForm.register("estancia_whatsapp")}
+                            />
+                            {dadosForm.formState.errors.estancia_whatsapp && (
+                              <p className="text-xs text-destructive">
+                                {
+                                  dadosForm.formState.errors.estancia_whatsapp
+                                    .message
+                                }
+                              </p>
+                            )}
+                          </div>
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label className="flex items-center gap-2">
+                              <ImagePlus className="h-4 w-4" />
+                              Imagem para grupos WhatsApp
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              Imagem pequena para uso em grupos (máx. 1MB, JPEG/PNG/WebP)
+                            </p>
+                            <div className="flex items-center gap-4">
+                              {whatsappImageUrl && (
+                                <img
+                                  src={whatsappImageUrl}
+                                  alt="Imagem WhatsApp"
+                                  className="h-16 w-16 rounded-lg border object-cover"
+                                />
+                              )}
+                              <input
+                                ref={whatsappImageInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/gif"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file || !companyId) return;
+                                  if (file.size > 1048576) {
+                                    toast({
+                                      variant: "destructive",
+                                      title: "Arquivo grande",
+                                      description: "Máximo 1MB.",
+                                    });
+                                    return;
+                                  }
+                                  setIsUploadingImage(true);
+                                  try {
+                                    const ext = file.name.split(".").pop() || "jpg";
+                                    const path = `${companyId}/whatsapp-group.${ext}`;
+                                    const { error: uploadError } = await supabase.storage
+                                      .from("company-assets")
+                                      .upload(path, file, { upsert: true });
+                                    if (uploadError) throw uploadError;
+                                    const { data: urlData } = supabase.storage
+                                      .from("company-assets")
+                                      .getPublicUrl(path);
+                                    const url = urlData.publicUrl;
+                                    const { error: updateError } = await supabase
+                                      .from("companies")
+                                      .update({ whatsapp_group_image_url: url })
+                                      .eq("id", companyId);
+                                    if (updateError) throw updateError;
+                                    setWhatsappImageUrl(url);
+                                    toast({ title: "Imagem salva", description: "A imagem foi atualizada." });
+                                  } catch (err) {
+                                    toast({
+                                      variant: "destructive",
+                                      title: "Erro ao enviar",
+                                      description: getErrorMessage(err),
+                                    });
+                                  } finally {
+                                    setIsUploadingImage(false);
+                                    e.target.value = "";
+                                  }
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={isUploadingImage}
+                                onClick={() => whatsappImageInputRef.current?.click()}
+                              >
+                                {isUploadingImage ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  "Selecionar imagem"
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <Button type="submit" disabled={isSavingDados}>
+                              {isSavingDados ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Salvando…
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="h-4 w-4" />
+                                  Salvar
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </form>
+                      </div>
                     </div>
                   )}
                 </CardContent>

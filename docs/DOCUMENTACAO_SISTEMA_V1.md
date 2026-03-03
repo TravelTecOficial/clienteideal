@@ -325,7 +325,11 @@ Módulo específico para gestão de consórcios.
 
 **Rota:** `/dashboard/configuracoes`
 
-Configurações da empresa (acessível apenas por usuários autorizados). Inclui o **Chat de Briefing Estratégico** — modal que guia a empresa por um questionário de 5 pilares (DNA, Produto/Oferta, Público/Persona, Mercado/Concorrência, Objetivos/Metas). As respostas são salvas em `company_briefing_responses` e enviadas ao webhook n8n (`https://jobs.traveltec.com.br/webhook/briefing`).
+Configurações da empresa (acessível apenas por usuários autorizados). Inclui:
+
+- **Chat de Briefing Estratégico** — modal que guia a empresa por um questionário de 5 pilares (DNA, Produto/Oferta, Público/Persona, Mercado/Concorrência, Objetivos/Metas). As respostas são salvas em `company_briefing_responses` e enviadas ao webhook n8n (`https://jobs.traveltec.com.br/webhook/briefing`).
+- **Aba WhatsApp** — centraliza a integração de WhatsApp via Evolution API (instância, QR Code, estado da conexão) e o branding de grupos (estância e imagem).
+- **Controle de acesso de suporte** — o flag `companies.support_access_enabled` pode ser gerenciado pelo admin da empresa através do menu de perfil (ícone no canto superior direito) na opção **Suporte**, permitindo ou bloqueando o acesso de preview do Admin SaaS.
 
 ---
 

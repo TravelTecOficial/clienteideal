@@ -386,14 +386,20 @@ export function LandingPage() {
               <h5 className="font-bold text-lg mb-6 text-accent">Legal</h5>
               <ul className="space-y-4 text-primary-foreground/60 text-sm">
                 <li>
-                  <a href="#" className="hover:text-primary-foreground transition">
-                    Privacidade
-                  </a>
+                  <Link
+                    to="/politica-de-privacidade"
+                    className="hover:text-primary-foreground transition"
+                  >
+                    Política de Privacidade
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-primary-foreground transition">
-                    Termos
-                  </a>
+                  <Link
+                    to="/termos-de-uso"
+                    className="hover:text-primary-foreground transition"
+                  >
+                    Termos de Uso
+                  </Link>
                 </li>
               </ul>
             </div>

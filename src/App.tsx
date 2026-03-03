@@ -46,6 +46,8 @@ import { StyleguidePage } from "@/styleguide/StyleguidePage"
 import { componentShowcases, blockShowcases } from "@/styleguide/registry"
 import { LandingPage } from "@/pages/LandingPage"
 import { PrecosPage } from "@/pages/PrecosPage"
+import { PoliticaPrivacidadePage } from "@/pages/PoliticaPrivacidadePage"
+import { TermosUsoPage } from "@/pages/TermosUsoPage"
 import { GtmInjector } from "@/components/GtmInjector"
 
 function ShowcaseFallback() {
@@ -76,6 +78,8 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/precos" element={<PrecosPage />} />
+        <Route path="/politica-de-privacidade" element={<PoliticaPrivacidadePage />} />
+        <Route path="/termos-de-uso" element={<TermosUsoPage />} />
         
         {/* Note o /* necessário para o Clerk funcionar em sub-rotas */}
         <Route path="/entrar/*" element={<LoginPage />} />
