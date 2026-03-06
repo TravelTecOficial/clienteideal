@@ -236,64 +236,31 @@ export default function VendedoresPage() {
       const statusToPersist = canEditStatus ? form.status : false;
       const isEdit = Boolean(editingEmail);
       const insertId = `vend_${crypto.randomUUID()}`;
-      const vendedorPayload = {
-        email,
-        company_id: companyId,
-        nome: form.nome.trim() || null,
-        celular: form.celular.trim() || null,
-        status: statusToPersist,
-      };
-      let vendErr: { message?: string; code?: string; details?: string; hint?: string } | null = null;
-      if (isEdit) {
-        const { error } = await supabase
-          .from("vendedores")
-          .update(vendedorPayload)
-          .eq("email", email)
-          .eq("company_id", companyId);
-        vendErr = error as { message?: string; code?: string; details?: string; hint?: string } | null;
-      } else {
-        const { error } = await supabase.from("vendedores").insert({
-          id: insertId,
-          ...vendedorPayload,
-        });
-        vendErr = error as { message?: string; code?: string; details?: string; hint?: string } | null;
-      }
-
-      if (vendErr) {
-        setSaveError(vendErr.message ?? "Erro ao salvar vendedor.");
-        return;
-      }
-
-      for (const d of DIAS_SEMANA) {
-        const ativo = formDiasAtivos[d.id];
+      const horariosPayload = DIAS_SEMANA.filter(
+        (d) => formDiasAtivos[d.id] && formHorarios[d.id]
+      ).map((d) => {
         const h = formHorarios[d.id];
-        if (ativo && h) {
-          const { error: horErr } = await supabase.from("horarios_vendedor").upsert(
-            {
-              vendedor_email: email,
-              company_id: companyId,
-              dia_semana: d.id,
-              entrada: h.entrada || null,
-              saida: h.saida || null,
-            },
-            { onConflict: "vendedor_email,dia_semana" }
-          );
-          if (horErr) {
-            setSaveError(horErr.message ?? "Erro ao salvar horário.");
-            return;
-          }
-        } else {
-          const { error: delErr } = await supabase
-            .from("horarios_vendedor")
-            .delete()
-            .eq("vendedor_email", email)
-            .eq("company_id", companyId)
-            .eq("dia_semana", d.id);
-          if (delErr) {
-            setSaveError(delErr.message ?? "Erro ao remover horário.");
-            return;
-          }
-        }
+        return {
+          dia_semana: d.id,
+          entrada: h?.entrada || null,
+          saida: h?.saida || null,
+        };
+      });
+
+      const { error: rpcErr } = await supabase.rpc("save_vendedor_horarios", {
+        p_email: email,
+        p_company_id: companyId,
+        p_nome: form.nome.trim() || null,
+        p_celular: form.celular.trim() || null,
+        p_status: statusToPersist,
+        p_is_edit: isEdit,
+        p_vendedor_id: insertId,
+        p_horarios: horariosPayload,
+      });
+
+      if (rpcErr) {
+        setSaveError(rpcErr.message ?? "Erro ao salvar vendedor.");
+        return;
       }
 
       await loadCompanyAndData();

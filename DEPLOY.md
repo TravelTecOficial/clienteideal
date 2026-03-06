@@ -160,6 +160,7 @@ Se este é o primeiro deploy após as alterações de v1.1.7, as seguintes migra
 | `20260228140000_admin_webhook_segment_3campos.sql` | Webhooks por segmento (produção, teste, enviar arquivos) |
 | `20260228140100_companies_segment_type.sql` | Coluna segment_type em companies |
 | `20260228150000_prompt_atendimento_rls_saas_admin.sql` | RLS prompt_atendimento para admin preview |
+| `20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql` | RLS vendedores/horarios_vendedor INSERT/UPDATE/DELETE com is_saas_admin (corrige 403 ao gravar vendedor) |
 
 **Scripts opcionais** (se precisar corrigir RLS manualmente): `supabase/scripts/fix_*.sql`
 

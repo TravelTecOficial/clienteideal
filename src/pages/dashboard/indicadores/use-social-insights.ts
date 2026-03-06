@@ -43,6 +43,30 @@ export function useInstagramOverview(): HookState<InstagramOverview> {
           throw new Error("Token de autenticação indisponível. Faça login novamente.")
         }
 
+        // #region agent log - meta-instagram fetch preflight
+        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "ab699e",
+          },
+          body: JSON.stringify({
+            sessionId: "ab699e",
+            runId: "pre-fix",
+            hypothesisId: "H-CORS-meta",
+            location:
+              "src/pages/dashboard/indicadores/use-social-insights.ts:useInstagramOverview:before-fetch",
+            message: "Instagram overview fetch about to run",
+            data: {
+              supabaseUrl: SUPABASE_URL || null,
+              locationOrigin: typeof window !== "undefined" ? window.location.origin : null,
+              hasAuthorizationHeader: true,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {})
+        // #endregion agent log - meta-instagram fetch preflight
+
         const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
           method: "POST",
           headers: {
@@ -86,6 +110,35 @@ export function useInstagramOverview(): HookState<InstagramOverview> {
         })
       } catch (err) {
         if (cancelled) return
+
+        // #region agent log - meta-instagram fetch error
+        {
+          const errAny = err as unknown
+          const message = errAny instanceof Error ? errAny.message : String(errAny)
+          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "ab699e",
+            },
+            body: JSON.stringify({
+              sessionId: "ab699e",
+              runId: "pre-fix",
+              hypothesisId: "H-CORS-meta",
+              location:
+                "src/pages/dashboard/indicadores/use-social-insights.ts:useInstagramOverview:catch",
+              message: "Instagram overview fetch error",
+              data: {
+                errorMessage: message,
+                errorName: errAny instanceof Error ? errAny.name : typeof errAny,
+                isTypeError: errAny instanceof TypeError,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {})
+        }
+        // #endregion agent log - meta-instagram fetch error
+
         setState({
           data: null,
           isLoading: false,
@@ -122,6 +175,30 @@ export function useFacebookOverview(): HookState<FacebookOverview> {
         if (!token) {
           throw new Error("Token de autenticação indisponível. Faça login novamente.")
         }
+
+        // #region agent log - facebook overview fetch preflight
+        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "ab699e",
+          },
+          body: JSON.stringify({
+            sessionId: "ab699e",
+            runId: "pre-fix",
+            hypothesisId: "H-CORS-meta",
+            location:
+              "src/pages/dashboard/indicadores/use-social-insights.ts:useFacebookOverview:before-fetch",
+            message: "Facebook overview fetch about to run",
+            data: {
+              supabaseUrl: SUPABASE_URL || null,
+              locationOrigin: typeof window !== "undefined" ? window.location.origin : null,
+              hasAuthorizationHeader: true,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {})
+        // #endregion agent log - facebook overview fetch preflight
 
         const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
           method: "POST",
@@ -170,6 +247,35 @@ export function useFacebookOverview(): HookState<FacebookOverview> {
         })
       } catch (err) {
         if (cancelled) return
+
+        // #region agent log - facebook overview fetch error
+        {
+          const errAny = err as unknown
+          const message = errAny instanceof Error ? errAny.message : String(errAny)
+          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "ab699e",
+            },
+            body: JSON.stringify({
+              sessionId: "ab699e",
+              runId: "pre-fix",
+              hypothesisId: "H-CORS-meta",
+              location:
+                "src/pages/dashboard/indicadores/use-social-insights.ts:useFacebookOverview:catch",
+              message: "Facebook overview fetch error",
+              data: {
+                errorMessage: message,
+                errorName: errAny instanceof Error ? errAny.name : typeof errAny,
+                isTypeError: errAny instanceof TypeError,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {})
+        }
+        // #endregion agent log - facebook overview fetch error
+
         setState({
           data: null,
           isLoading: false,
