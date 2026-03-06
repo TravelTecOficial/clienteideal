@@ -180,6 +180,7 @@ export default function SocialHub() {
       });
 
       const data = (await res.json().catch(() => ({}))) as { error?: string };
+
       if (!res.ok) {
         throw new Error(data?.error ?? `Erro ${res.status}`);
       }

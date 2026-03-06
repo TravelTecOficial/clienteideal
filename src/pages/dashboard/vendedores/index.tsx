@@ -43,6 +43,7 @@ import { Switch } from "@/components/ui/switch";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { SUPABASE_URL } from "@/lib/supabase";
 import { formatPhone } from "@/lib/phone-mask";
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 
 /** Dia da semana: 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb (Date.getDay()) */
 const DIAS_SEMANA = [

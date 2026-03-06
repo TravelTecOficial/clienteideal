@@ -2,9 +2,12 @@
  * Edge Function: gmb-post-create
  *
  * Proxy para Late API - POST /api/v1/posts (criar post no Google Business).
- * Requer: Authorization: Bearer <clerk_jwt>
+ * Requer: Authorization: Bearer <clerk_jwt> (JWT do Clerk; a função valida com CLERK_SECRET_KEY).
  * Body: { content: string, mediaUrl?: string, accountId: string }
- * Secret: LATE_API_KEY
+ * Secrets: CLERK_SECRET_KEY, LATE_API_KEY
+ *
+ * IMPORTANTE: Deploy com --no-verify-jwt. O frontend envia JWT do Clerk; o gateway do Supabase
+ * rejeita com "Invalid JWT" se verify_jwt estiver ativo.
  *
  * Deploy: npx supabase functions deploy gmb-post-create --project-ref mrkvvgofjyvlutqpvedt --no-verify-jwt
  */
@@ -137,17 +140,82 @@ Deno.serve(async (req) => {
     )
   }
 
-  const latePayload: Record<string, unknown> = {
-    content,
-    platforms: [{ platform: "googlebusiness", accountId }],
-    publishNow: true,
-  }
-
-  if (mediaUrl && mediaUrl.startsWith("https://")) {
-    latePayload.mediaItems = [{ type: "image", url: mediaUrl }]
-  }
-
   try {
+    // Verificar se o accountId realmente pertence à conta Late dessa API key
+    // Isso ajuda a diagnosticar erros de "account does not belong to this user".
+    const accountsRes = await fetch("https://getlate.dev/api/v1/accounts", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${lateApiKey}`,
+      },
+    })
+
+    if (!accountsRes.ok) {
+      const accountsError = (await accountsRes.json().catch(() => ({}))) as {
+        error?: string
+      }
+      console.error(
+        "[gmb-post-create] Late accounts error:",
+        accountsRes.status,
+        accountsError
+      )
+      return jsonResponse(
+        {
+          error:
+            "Falha ao listar contas na Late API. Verifique se a LATE_API_KEY é válida para o workspace correto.",
+        },
+        502
+      )
+    }
+
+    const accountsData = (await accountsRes.json().catch(() => ({}))) as {
+      accounts?: Array<{
+        _id?: string
+        platform?: string
+        username?: string
+        displayName?: string
+      }>
+    }
+
+    const allAccounts = Array.isArray(accountsData.accounts)
+      ? accountsData.accounts
+      : []
+    const googleBusinessAccounts = allAccounts.filter(
+      (acc) => acc.platform === "googlebusiness"
+    )
+    const hasMatchingAccount = googleBusinessAccounts.some(
+      (acc) => (acc._id ?? "").trim() === accountId
+    )
+
+    if (!hasMatchingAccount) {
+      const availableIds = googleBusinessAccounts.map((acc) => ({
+        id: acc._id ?? null,
+        username: acc.username ?? null,
+        displayName: acc.displayName ?? null,
+      }))
+      return jsonResponse(
+        {
+          error:
+            "A Late API não retornou este Late Account ID para a sua API key. Confira se o ID e o workspace estão corretos.",
+          details: {
+            requestedAccountId: accountId,
+            availableGoogleBusinessAccounts: availableIds,
+          },
+        },
+        403
+      )
+    }
+
+    const latePayload: Record<string, unknown> = {
+      content,
+      platforms: [{ platform: "googlebusiness", accountId }],
+      publishNow: true,
+    }
+
+    if (mediaUrl && mediaUrl.startsWith("https://")) {
+      latePayload.mediaItems = [{ type: "image", url: mediaUrl }]
+    }
+
     const lateRes = await fetch(LATE_API_URL, {
       method: "POST",
       headers: {
@@ -161,10 +229,14 @@ Deno.serve(async (req) => {
 
     if (!lateRes.ok) {
       console.error("[gmb-post-create] Late API error:", lateRes.status, lateData)
-      const errMsg =
+      const rawMsg =
         (lateData?.message as string) ??
         (lateData?.error as string) ??
         `Late API retornou ${lateRes.status}`
+      const errMsg =
+        /do not belong to this user/i.test(rawMsg)
+          ? "O Late Account ID configurado não pertence à conta Late vinculada a esta integração. Corrija o ID em GMB Local (Configurações) ou use a chave API do workspace Late correto."
+          : rawMsg
       return jsonResponse({ error: errMsg }, 502)
     }
 

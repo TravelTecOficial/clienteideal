@@ -1,92 +1,137 @@
 # Cliente Ideal Online v1.1.7
 
-Plataforma SaaS de qualificação de leads e gestão comercial.
-
-## Documentação
-
-| Documento | Descrição |
-|-----------|-----------|
-| [**Documentação do Sistema**](./docs/DOCUMENTACAO_SISTEMA_V1.md) | Visão geral, arquitetura, módulos, Edge Functions |
-| [**CHANGELOG**](./CHANGELOG.md) | Histórico de alterações |
-| [**Deploy**](./DEPLOY.md) | Guia de deploy para produção |
-| [**Release v1.0.0**](./docs/RELEASE_V1.0.0_GITHUB.md) | Guia para deploy final no GitHub e encerramento |
-| [**Release v1.1.7**](./docs/RELEASE_V1.1.7_DEPLOY.md) | Guia de deploy v1.1.7 |
-| [**Ambientes**](./docs/AMBIENTES-DEV-PROD.md) | Configuração dev vs prod |
+Plataforma SaaS de **qualificação de leads e gestão comercial**, com módulos de cliente ideal (ICP), qualificadores, leads, oportunidades, agenda, atendimentos de IA, base de conhecimento, indicadores, consórcio e painel administrativo SaaS. O sistema é **multitenant**, com isolamento por empresa via RLS no Supabase.
 
 ---
 
-## Stack
+## Visão geral técnica
 
-React + TypeScript + Vite
+- **Frontend**: React 19 + Vite 5 + TypeScript
+- **UI/UX**: Tailwind CSS, Radix UI, componentes próprios
+- **Autenticação**: Clerk (JWT template `supabase`)
+- **Backend/BaaS**: Supabase (PostgreSQL + Row Level Security + Edge Functions)
+- **Integrações**:
+  - Chat de conhecimento via n8n (webhooks por segmento)
+  - WhatsApp (Evolution API e nova integração via Meta/WhatsApp Cloud API)
+  - Integrações sociais (Meta/Instagram, Google My Business / Social Hub)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Para detalhes completos de módulos, rotas, modelo de dados e Edge Functions, veja a documentação principal em [`docs/DOCUMENTACAO_SISTEMA_V1.md`](./docs/DOCUMENTACAO_SISTEMA_V1.md).
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Stack principal
 
-## React Compiler
+| Categoria        | Tecnologia                                                                 |
+|-----------------|----------------------------------------------------------------------------|
+| Framework        | React 19.2, Vite 5                                                        |
+| Linguagem        | TypeScript 5.4                                                            |
+| Roteamento       | React Router v7                                                           |
+| Estilo/UI        | Tailwind CSS 3.4, tailwindcss-animate, Radix UI                          |
+| Formulários      | react-hook-form, zod, @hookform/resolvers                                |
+| Gráficos         | Recharts                                                                  |
+| Calendário       | react-big-calendar, date-fns                                              |
+| Drag & Drop      | @dnd-kit/core, @dnd-kit/sortable                                          |
+| Backend/Banco    | Supabase (PostgreSQL + RLS + Edge Functions)                              |
+| Autenticação     | Clerk (publishable key no frontend; secret key apenas em Edge Functions) |
+| Sanitização HTML | DOMPurify                                                                 |
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+---
 
-## Expanding the ESLint configuration
+## Como rodar localmente
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Pré-requisitos
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Node.js 20+ (ou versão LTS estável)
+- Gerenciador de pacotes (`npm`, `pnpm` ou `yarn`)
+- Acesso a um projeto Supabase de desenvolvimento (com migrations aplicadas)
+- Projeto Clerk configurado com template JWT `supabase`
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### 1. Instalar dependências
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+# ou
+pnpm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 2. Configurar variáveis de ambiente (desenvolvimento)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Crie um arquivo `.env.local` na raiz (não deve ser commitado) com as chaves **públicas**:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```env
+VITE_SUPABASE_URL=https://SEU_PROJETO_DEV.supabase.co
+VITE_SUPABASE_ANON_KEY=sua_chave_anon_publica
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
 ```
+
+> Segredos como `CLERK_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY` e chaves privadas de integrações devem ficar **apenas** nas secrets das Edge Functions do Supabase, nunca em variáveis `VITE_` ou código do frontend.
+
+Para guias mais completos de ambientes, consulte [`docs/AMBIENTES-DEV-PROD.md`](./docs/AMBIENTES-DEV-PROD.md).
+
+### 3. Rodar o projeto em desenvolvimento
+
+```bash
+npm run dev
+```
+
+Aplicação será iniciada em `http://localhost:5173` (porta padrão do Vite).
+
+---
+
+## Build e preview de produção (resumo)
+
+```bash
+npm run build    # Gera build de produção
+npm run preview  # Sobe o build localmente para validação
+```
+
+Para detalhes de deploy (Supabase, ambientes dev/prod, variáveis de produção), consulte:
+
+- [`DEPLOY.md`](./DEPLOY.md) – guia geral de deploy
+- [`docs/AMBIENTES-DEV-PROD.md`](./docs/AMBIENTES-DEV-PROD.md) – separação dev vs prod
+- [`docs/RELEASE_V1.1.7_DEPLOY.md`](./docs/RELEASE_V1.1.7_DEPLOY.md) – passo a passo específico desta versão
+
+---
+
+## Estrutura de pastas (resumo)
+
+```text
+src/
+├── components/        # Componentes de UI e blocos reutilizáveis
+├── hooks/             # Hooks customizados
+├── lib/               # Configurações de Supabase, helpers, integrações
+├── pages/
+│   ├── admin/         # Rotas do admin SaaS
+│   ├── auth/          # Auth, callbacks e fluxos de integração
+│   ├── dashboard/     # Módulos principais (leads, oportunidades, indicadores, etc.)
+│   └── ...            # Outras páginas
+└── main.tsx           # Bootstrap do app React
+
+supabase/
+├── migrations/        # Migrations SQL do banco
+└── functions/         # Edge Functions (Clerk, integrações, chat de conhecimento, etc.)
+```
+
+Para uma visão detalhada de rotas, módulos e tabelas, veja [`docs/DOCUMENTACAO_SISTEMA_V1.md`](./docs/DOCUMENTACAO_SISTEMA_V1.md).
+
+---
+
+## Documentação adicional
+
+| Documento | Descrição |
+|----------|-----------|
+| [`docs/DOCUMENTACAO_SISTEMA_V1.md`](./docs/DOCUMENTACAO_SISTEMA_V1.md) | Visão geral completa, arquitetura, módulos, Edge Functions |
+| [`docs/architecture.md`](./docs/architecture.md) | Arquitetura de alto nível, camadas e fluxos principais |
+| [`docs/integrations.md`](./docs/integrations.md) | Integrações (Clerk, n8n, WhatsApp, Meta/Instagram, GMB/Social Hub) |
+| [`docs/database.md`](./docs/database.md) | Visão geral do schema e principais tabelas/migrations |
+| [`docs/deploy.md`](./docs/deploy.md) | Runbook de deploy (check-list) |
+| [`docs/security.md`](./docs/security.md) | Diretrizes de segurança, RLS e uso de secrets |
+| [`CHANGELOG.md`](./CHANGELOG.md) | Histórico de alterações |
+| [`DEPLOY.md`](./DEPLOY.md) | Guia geral de deploy para produção |
+| [`docs/RELEASE_V1.0.0_GITHUB.md`](./docs/RELEASE_V1.0.0_GITHUB.md) | Release v1.0.0 (deploy final no GitHub) |
+| [`docs/RELEASE_V1.1.7_DEPLOY.md`](./docs/RELEASE_V1.1.7_DEPLOY.md) | Release v1.1.7 (passos específicos) |
+| [`docs/AMBIENTES-DEV-PROD.md`](./docs/AMBIENTES-DEV-PROD.md) | Configuração de ambientes dev e prod |
+| [`docs/LEADS_API_PAYLOAD.md`](./docs/LEADS_API_PAYLOAD.md) | Payload de leads para integrações (n8n, webhooks, formulários) |
+| [`docs/SETUP-CLERK-SUPABASE-AUTH.md`](./docs/SETUP-CLERK-SUPABASE-AUTH.md) | Setup Clerk + Supabase (auth e RLS) |
+| [`docs/SETUP-CLERK-SECRET.md`](./docs/SETUP-CLERK-SECRET.md) | Configuração de secrets do Clerk e templates |
+

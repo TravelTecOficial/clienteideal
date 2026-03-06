@@ -472,3 +472,7 @@ entrypoint = "./functions/crm-webhook-stage-change/index.ts"
 verify_jwt = false
 import_map = "./functions/update-opportunity/deno.json"
 entrypoint = "./functions/update-opportunity/index.ts"
+
+# meta-instagram: integrações Meta/Facebook/Instagram por empresa.
+[functions.meta-instagram]
+verify_jwt = false

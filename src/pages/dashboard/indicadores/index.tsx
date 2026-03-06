@@ -4,6 +4,7 @@
  */
 
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import {
   Area,
   AreaChart,
@@ -58,6 +59,7 @@ import {
   useDashboardKpis,
   type DashboardKpis,
 } from "./use-dashboard-kpis"
+import { useInstagramOverview, useFacebookOverview } from "./use-social-insights"
 import {
   getPeriodRange,
   hasVariacao,
@@ -163,6 +165,10 @@ export default function IndicadoresPageContent() {
   const periodo = getPeriodRange(periodoKey)
   const { kpis, isLoading, error } = useDashboardKpis(periodo)
   const showVariacao = hasVariacao(periodoKey)
+  const { data: instagramOverview, isLoading: isLoadingIg, error: instagramError } =
+    useInstagramOverview()
+  const { data: facebookOverview, isLoading: isLoadingFb, error: facebookError } =
+    useFacebookOverview()
 
   return (
     <div className="space-y-6">
@@ -426,68 +432,230 @@ export default function IndicadoresPageContent() {
         </TabsContent>
 
         <TabsContent value="social" className="mt-6 space-y-6">
-          {/* 4 Cards de métricas - Redes Sociais (padrão ShadCN) */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {MOCK_CANAIS.map((canal) => (
-              <Card
-                key={canal.canal}
-                className="overflow-hidden border-l-4"
-                style={{ borderLeftColor: canal.cor }}
-              >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {canal.canal}
-                  </CardTitle>
+          {/* Estado de erro geral das integrações */}
+          {(instagramError || facebookError) && (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {instagramError && <p>Instagram: {instagramError}</p>}
+              {facebookError && <p>Facebook: {facebookError}</p>}
+            </div>
+          )}
+
+          {/* Estado vazio: nenhuma integração configurada ou sem dados */}
+          {!isLoadingIg &&
+            !isLoadingFb &&
+            !instagramError &&
+            !facebookError &&
+            !instagramOverview &&
+            !facebookOverview && (
+              <Card className="border-dashed">
+                <CardHeader>
+                  <CardTitle>Conecte suas contas Meta</CardTitle>
+                  <CardDescription>
+                    Ainda não encontramos dados de Instagram ou Facebook para esta empresa.
+                    Conecte uma conta na tela de Integrações para ver os insights aqui.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {canal.seguidores.toLocaleString("pt-BR")}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    seguidores · {canal.engajamento}% engajamento
-                  </p>
+                  <Link
+                    to="/dashboard/configuracoes"
+                    className="inline-flex items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Ir para Configurações → Integrações
+                  </Link>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            )}
 
-          {/* BarChart Engajamento por canal */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-base font-semibold">
-                Engajamento por Canal
-              </CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <ChartContainer
-                config={engajamentoChartConfig}
-                className="min-h-[200px] w-full"
-                aria-label="Engajamento por canal de rede social"
-              >
-                <BarChart accessibilityLayer data={MOCK_CANAIS}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="canal"
-                    tickLine={false}
-                    tickMargin={10}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: number) => `${v}%`}
-                  />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar
-                    dataKey="engajamento"
-                    fill="var(--color-engajamento)"
-                    radius={4}
-                  />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Bloco Instagram */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle className="text-base font-semibold">Instagram</CardTitle>
+                  <CardDescription>
+                    Alcance diário do perfil selecionado no módulo de Integrações.
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoadingIg ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-8 w-40" />
+                    <Skeleton className="h-40 w-full" />
+                  </div>
+                ) : !instagramOverview || instagramOverview.reach.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum dado de alcance encontrado para o Instagram selecionado.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Alcance dos últimos 7 dias
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {instagramOverview.reach
+                          .slice(-7)
+                          .reduce((acc, cur) => acc + (cur.value ?? 0), 0)
+                          .toLocaleString("pt-BR")}
+                      </p>
+                    </div>
+                    <ChartContainer
+                      config={{
+                        reach: { label: "Alcance", color: "#636F4E" },
+                      }}
+                      className="min-h-[200px] w-full"
+                      aria-label="Alcance diário no Instagram"
+                    >
+                      <AreaChart
+                        accessibilityLayer
+                        data={instagramOverview.reach.slice(-7).map((p) => ({
+                          data:
+                            p.endTime != null
+                              ? new Date(p.endTime).toLocaleDateString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                })
+                              : "",
+                          reach: p.value,
+                        }))}
+                      >
+                        <defs>
+                          <linearGradient id="fillIgReach" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#636F4E" stopOpacity={0.8} />
+                            <stop offset="95%" stopColor="#636F4E" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="data"
+                          tickLine={false}
+                          tickMargin={10}
+                          axisLine={false}
+                        />
+                        <YAxis tickLine={false} axisLine={false} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Area
+                          type="monotone"
+                          dataKey="reach"
+                          stroke="#636F4E"
+                          fill="url(#fillIgReach)"
+                          strokeWidth={2}
+                        />
+                      </AreaChart>
+                    </ChartContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Bloco Facebook Page */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle className="text-base font-semibold">Facebook</CardTitle>
+                  <CardDescription>
+                    Impressões e usuários engajados da página selecionada no módulo de Integrações.
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoadingFb ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-8 w-40" />
+                    <Skeleton className="h-40 w-full" />
+                  </div>
+                ) : !facebookOverview ||
+                  (facebookOverview.impressions.length === 0 &&
+                    facebookOverview.engagedUsers.length === 0) ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum dado de insights encontrado para a página Facebook selecionada.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Impressões (últimos 7 dias)
+                        </p>
+                        <p className="text-2xl font-bold">
+                          {facebookOverview.impressions
+                            .slice(-7)
+                            .reduce((acc, cur) => acc + (cur.value ?? 0), 0)
+                            .toLocaleString("pt-BR")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Usuários engajados (últimos 7 dias)
+                        </p>
+                        <p className="text-2xl font-bold">
+                          {facebookOverview.engagedUsers
+                            .slice(-7)
+                            .reduce((acc, cur) => acc + (cur.value ?? 0), 0)
+                            .toLocaleString("pt-BR")}
+                        </p>
+                      </div>
+                    </div>
+                    <ChartContainer
+                      config={{
+                        impressions: {
+                          label: "Impressões",
+                          color: "#2563eb",
+                        },
+                        engaged: {
+                          label: "Usuários engajados",
+                          color: "#d97706",
+                        },
+                      }}
+                      className="min-h-[200px] w-full"
+                      aria-label="Impressões e usuários engajados no Facebook"
+                    >
+                      <BarChart
+                        accessibilityLayer
+                        data={facebookOverview.impressions
+                          .slice(-7)
+                          .map((p, idx) => {
+                            const engaged = facebookOverview.engagedUsers.slice(-7)[idx]
+                            return {
+                              data:
+                                p.endTime != null
+                                  ? new Date(p.endTime).toLocaleDateString("pt-BR", {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                    })
+                                  : "",
+                              impressions: p.value,
+                              engaged: engaged?.value ?? 0,
+                            }
+                          })}
+                      >
+                        <CartesianGrid vertical={false} />
+                        <XAxis
+                          dataKey="data"
+                          tickLine={false}
+                          tickMargin={10}
+                          axisLine={false}
+                        />
+                        <YAxis tickLine={false} axisLine={false} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar
+                          dataKey="impressions"
+                          fill="#2563eb"
+                          radius={[4, 4, 0, 0]}
+                        />
+                        <Bar
+                          dataKey="engaged"
+                          fill="#d97706"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </BarChart>
+                    </ChartContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

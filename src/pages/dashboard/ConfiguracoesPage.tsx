@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { DashboardLink } from "@/components/DashboardLink";
 import { useAuth } from "@clerk/clerk-react";
 import { useForm, Controller } from "react-hook-form";
@@ -182,6 +182,43 @@ type PagamentoFormValues = z.infer<typeof pagamentoFormSchema>;
 type CampanhaFormValues = z.infer<typeof campanhaFormSchema>;
 type EvolutionFormValues = z.infer<typeof evolutionFormSchema>;
 
+interface MetaAccount {
+  id: string;
+  name: string;
+  instagramBusinessId: string | null;
+  isSelected?: boolean;
+}
+
+interface InstagramMetricValue {
+  value: number;
+  endTime: string | null;
+}
+
+interface InstagramMetric {
+  metric: string;
+  period: string;
+  values: InstagramMetricValue[];
+}
+
+interface WhatsappPhoneNumber {
+  id: string;
+  display_phone_number: string;
+  verified_name: string | null;
+}
+
+interface WhatsappConnectSuccessResponse {
+  success: true;
+  wabaId: string;
+  expiresAt: string;
+  phoneNumbers: WhatsappPhoneNumber[];
+}
+
+interface WhatsappErrorResponse {
+  error: string;
+  code?: string;
+  hint?: string;
+}
+
 const PLATAFORMA_OPTIONS = [
   { value: "Google Ads", label: "Google Ads" },
   { value: "Meta Ads", label: "Meta Ads" },
@@ -197,7 +234,8 @@ const PLATAFORMA_CAMPANHA_OPTIONS = [
 
 // --- Component ---
 export function ConfiguracoesPage() {
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
+  const [searchParams] = useSearchParams();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
   const companyId = useEffectiveCompanyId();
@@ -239,6 +277,20 @@ export function ConfiguracoesPage() {
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [isDeleteEvolutionOpen, setIsDeleteEvolutionOpen] = useState(false);
   const [isDeletingEvolution, setIsDeletingEvolution] = useState(false);
+
+  const [isMetaConnecting, setIsMetaConnecting] = useState(false);
+  const [isLoadingMetaAccounts, setIsLoadingMetaAccounts] = useState(false);
+  const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
+  const [isLoadingMetaInsights, setIsLoadingMetaInsights] = useState(false);
+  const [selectedInstagramId, setSelectedInstagramId] = useState<string | null>(null);
+  const [metaInsights, setMetaInsights] = useState<InstagramMetric[] | null>(null);
+
+  const [isWhatsappConnecting, setIsWhatsappConnecting] = useState(false);
+  const [whatsappPhoneNumbers, setWhatsappPhoneNumbers] = useState<WhatsappPhoneNumber[]>([]);
+  const [selectedWhatsappPhoneId, setSelectedWhatsappPhoneId] = useState<string | null>(null);
+  const [isWhatsappConnected, setIsWhatsappConnected] = useState(false);
+  const [whatsappSelectedDisplay, setWhatsappSelectedDisplay] = useState<string | null>(null);
+  const [isSelectingWhatsappNumber, setIsSelectingWhatsappNumber] = useState(false);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
   const evolutionForm = useForm<EvolutionFormValues>({
@@ -430,6 +482,46 @@ export function ConfiguracoesPage() {
     loadDados();
   }, [loadDados]);
 
+  // Após retorno do OAuth WhatsApp: buscar números para seleção (fluxo direto Meta, sem Clerk).
+  const whatsappFlowSelectRef = useRef(false);
+  useEffect(() => {
+    const flow = searchParams.get("whatsapp_flow");
+    if (flow !== "select" || whatsappFlowSelectRef.current) return;
+    whatsappFlowSelectRef.current = true;
+
+    const run = async () => {
+      const token = await getToken();
+      if (!token) return;
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ action: "getPhoneNumbers", token }),
+        });
+        const raw = await res.text();
+        const data = (() => {
+          try {
+            return JSON.parse(raw) as { phoneNumbers?: WhatsappPhoneNumber[]; error?: string } | null;
+          } catch {
+            return null;
+          }
+        })();
+        if (res.ok && data?.phoneNumbers) {
+          setWhatsappPhoneNumbers(data.phoneNumbers);
+          if (data.phoneNumbers.length > 0) {
+            setSelectedWhatsappPhoneId(data.phoneNumbers[0].id);
+          }
+        }
+      } catch {
+        // silencioso; usuário pode reconectar
+      }
+    };
+    void run();
+  }, [searchParams, getToken]);
+
   // Carregar pagamentos
   const loadPagamentos = useCallback(async () => {
     if (!companyId) {
@@ -586,6 +678,466 @@ export function ConfiguracoesPage() {
       stopConnectionPolling();
     };
   }, [stopConnectionPolling]);
+
+  async function handleMetaConnectClick() {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description: "Acesse o painel com uma empresa selecionada antes de conectar a Meta.",
+      });
+      return;
+    }
+    setIsMetaConnecting(true);
+    try {
+      // JWT de sessão do Clerk (getToken sem template — template "default" não existe no projeto e retorna 404)
+      const token = await getToken();
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f42ba2" },
+        body: JSON.stringify({
+          sessionId: "f42ba2",
+          location: "ConfiguracoesPage.tsx:handleMetaConnectClick",
+          message: "meta-instagram request: token readiness",
+          data: { hasToken: !!token, tokenLength: token?.length ?? 0 },
+          runId: "meta-connect",
+          hypothesisId: "H1",
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      if (!token) {
+        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      }
+      const state =
+        (window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      window.sessionStorage.setItem("meta_oauth_state", state);
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "getLoginUrl",
+          state,
+          token,
+        }),
+      });
+      const raw = await res.text();
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as {
+            url?: string;
+            error?: string;
+            hint?: string;
+            code?: string;
+          } | null;
+        } catch {
+          return null;
+        }
+      })();
+      // #region agent log
+      if (!res.ok) {
+        fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f42ba2" },
+          body: JSON.stringify({
+            sessionId: "f42ba2",
+            location: "ConfiguracoesPage.tsx:meta-instagram response",
+            message: "meta-instagram 4xx/5xx response body",
+            data: {
+              status: res.status,
+              error: data?.error ?? null,
+              hint: data?.hint ?? null,
+              rawPreview: raw.slice(0, 300),
+            },
+            runId: "meta-connect",
+            hypothesisId: "H2",
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+      }
+      // #endregion
+      if (!res.ok || data?.error) {
+        const parts = [data?.error ?? `Erro ${res.status}`];
+        if (data?.code) parts.push(`[${data.code}]`);
+        if (data?.hint) parts.push(data.hint);
+        throw new Error(parts.join(" — "));
+      }
+
+      if (!data?.url) {
+        throw new Error("A função não retornou a URL de login da Meta.");
+      }
+
+      window.location.href = data.url;
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao iniciar conexão com a Meta",
+        description: getErrorMessage(err),
+      });
+      setIsMetaConnecting(false);
+    }
+  }
+
+  async function handleWhatsappConnectClick() {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description:
+          "Acesse o painel com uma empresa selecionada antes de conectar o WhatsApp.",
+      });
+      return;
+    }
+
+    setIsWhatsappConnecting(true);
+    try {
+      const state =
+        window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      window.sessionStorage.setItem("whatsapp_oauth_state", state);
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "getLoginUrl",
+          state,
+        }),
+      });
+
+      const raw = await res.text();
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as { url?: string } & WhatsappErrorResponse | null;
+        } catch {
+          return null;
+        }
+      })();
+
+      if (!res.ok || data?.error) {
+        const parts = [data?.error ?? `Erro ${res.status}`];
+        if (data?.code) parts.push(`[${data.code}]`);
+        if (data?.hint) parts.push(data.hint ?? "");
+        toast({
+          variant: "destructive",
+          title: "Erro ao iniciar conexão WhatsApp",
+          description: parts.filter(Boolean).join(" — "),
+        });
+        return;
+      }
+
+      if (!data?.url) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "A função não retornou a URL de login da Meta.",
+        });
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao conectar o WhatsApp",
+        description: getErrorMessage(err),
+      });
+      setIsWhatsappConnecting(false);
+    }
+  }
+
+  async function handleWhatsappSelectPhoneNumber() {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description:
+          "Acesse o painel com uma empresa selecionada antes de configurar o número do WhatsApp.",
+      });
+      return;
+    }
+
+    const phoneNumberId = selectedWhatsappPhoneId;
+    if (!phoneNumberId) {
+      toast({
+        variant: "destructive",
+        title: "Selecione um número",
+        description: "Escolha o número de WhatsApp que será usado pelo SDR antes de confirmar.",
+      });
+      return;
+    }
+
+    setIsSelectingWhatsappNumber(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      }
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "selectPhoneNumber" as const,
+          phone_number_id: phoneNumberId,
+          token,
+        }),
+      });
+
+      const raw = await res.text();
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as { success?: boolean; error?: string; hint?: string } | null;
+        } catch {
+          return null;
+        }
+      })();
+
+      const isError = !data || data.error || !data.success;
+      if (!res.ok || isError) {
+        const parts = [
+          data?.error ?? `Erro ${res.status}`,
+          data?.hint ?? "",
+        ].filter(Boolean);
+
+        toast({
+          variant: "destructive",
+          title: "Erro ao salvar número de WhatsApp",
+          description: parts.join(" — "),
+        });
+        return;
+      }
+
+      const selectedPhone = whatsappPhoneNumbers.find((p) => p.id === phoneNumberId) ?? null;
+      setIsWhatsappConnected(true);
+      if (selectedPhone) {
+        const display =
+          selectedPhone.verified_name && selectedPhone.verified_name.length > 0
+            ? `${selectedPhone.display_phone_number} (${selectedPhone.verified_name})`
+            : selectedPhone.display_phone_number;
+        setWhatsappSelectedDisplay(display);
+      }
+
+      toast({
+        title: "Número de WhatsApp selecionado",
+        description:
+          "O número escolhido será utilizado como remetente oficial nas mensagens do SDR.",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar número de WhatsApp",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSelectingWhatsappNumber(false);
+    }
+  }
+
+  async function handleLoadMetaAccounts() {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description: "Acesse o painel com uma empresa selecionada antes de listar contas.",
+      });
+      return;
+    }
+    setIsLoadingMetaAccounts(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      }
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "listAccounts",
+          token,
+        }),
+      });
+      const raw = await res.text();
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as {
+            accounts?: MetaAccount[];
+            error?: string;
+            hint?: string;
+          } | null;
+        } catch {
+          return null;
+        }
+      })();
+      if (!res.ok || data?.error) {
+        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        throw new Error(msg);
+      }
+      const accounts = data?.accounts ?? [];
+      setMetaAccounts(accounts);
+
+      const selected = accounts.find((a) => a.isSelected && a.instagramBusinessId);
+      if (selected?.instagramBusinessId) {
+        // Carrega automaticamente insights da conta vinculada, se existir.
+        void handleLoadMetaInsights(selected.instagramBusinessId);
+      }
+
+      if (!accounts.length) {
+        toast({
+          title: "Nenhuma página encontrada",
+          description:
+            "Conecte uma conta da Meta com páginas que possuam Instagram Business vinculado.",
+        });
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao listar contas da Meta",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsLoadingMetaAccounts(false);
+    }
+  }
+
+  async function handleSelectMetaAccount(account: MetaAccount) {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description: "Acesse o painel com uma empresa selecionada antes de selecionar a conta.",
+      });
+      return;
+    }
+    if (!account.instagramBusinessId) {
+      toast({
+        variant: "destructive",
+        title: "Instagram não vinculado",
+        description:
+          "Esta página não possui um Instagram Business vinculado. Ajuste a vinculação no Business Manager antes de selecionar.",
+      });
+      return;
+    }
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      }
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "selectAccount",
+          pageId: account.id,
+          pageName: account.name,
+          instagramId: account.instagramBusinessId,
+          token,
+        }),
+      });
+      const raw = await res.text();
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as { success?: boolean; error?: string; hint?: string } | null;
+        } catch {
+          return null;
+        }
+      })();
+      if (!res.ok || data?.error || !data?.success) {
+        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        throw new Error(msg);
+      }
+
+      toast({
+        title: "Conta Meta vinculada à empresa",
+        description:
+          "A página selecionada será usada como padrão para os insights de Instagram desta empresa.",
+      });
+
+      // Recarrega lista para refletir a seleção única.
+      void handleLoadMetaAccounts();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao vincular conta Meta",
+        description: getErrorMessage(err),
+      });
+    }
+  }
+
+  async function handleLoadMetaInsights(instagramId: string | null) {
+    if (!instagramId) {
+      toast({
+        variant: "destructive",
+        title: "Conta do Instagram não vinculada",
+        description:
+          "Esta página não possui um Instagram Business vinculado. Ajuste a vinculação no Business Manager.",
+      });
+      return;
+    }
+    setSelectedInstagramId(instagramId);
+    setIsLoadingMetaInsights(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      }
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "getInsights",
+          instagramId,
+          token,
+        }),
+      });
+      const raw = await res.text();
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as { metrics?: InstagramMetric[]; error?: string; hint?: string } | null;
+        } catch {
+          return null;
+        }
+      })();
+      if (!res.ok || data?.error) {
+        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        throw new Error(msg);
+      }
+      setMetaInsights(data?.metrics ?? null);
+      if (!data?.metrics || data.metrics.length === 0) {
+        toast({
+          title: "Nenhuma métrica retornada",
+          description: "A Meta não retornou dados de alcance ou impressões para este perfil.",
+        });
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao buscar insights do Instagram",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsLoadingMetaInsights(false);
+    }
+  }
 
   // Salvar informações da empresa (aba Empresa)
   async function onEmpresaSubmit(values: EmpresaFormValues) {
@@ -1537,6 +2089,12 @@ export function ConfiguracoesPage() {
                         description: "Facebook e Instagram Ads",
                       },
                       {
+                        id: "whatsapp-cloud",
+                        name: "WhatsApp",
+                        icon: "💬",
+                        description: "Conta oficial via API de Nuvem (Cloud API)",
+                      },
+                      {
                         id: "google-meu-negocio",
                         name: "Google Meu Negócio",
                         icon: "📍",
@@ -1559,11 +2117,151 @@ export function ConfiguracoesPage() {
                             <CardDescription>{platform.description}</CardDescription>
                           </div>
                           <div className="flex items-center gap-2">
-                            {platform.id === "google-meu-negocio" ? (
+                            {platform.id === "google-meu-negocio" && (
                               <Button size="sm" onClick={() => setIsGmbManagerOpen(true)}>
                                 Gerenciar perfil
                               </Button>
-                            ) : (
+                            )}
+                            {platform.id === "meta-ads" && (
+                              <div className="flex flex-col items-end gap-1">
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    disabled={isMetaConnecting}
+                                    onClick={handleMetaConnectClick}
+                                  >
+                                    {isMetaConnecting ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Conectando…
+                                      </>
+                                    ) : (
+                                      <>Conectar Instagram</>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={isLoadingMetaAccounts}
+                                    onClick={handleLoadMetaAccounts}
+                                  >
+                                    {isLoadingMetaAccounts ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Buscando contas…
+                                      </>
+                                    ) : (
+                                      <>Ver contas</>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={isMetaConnecting || isLoadingMetaAccounts}
+                                    onClick={async () => {
+                                      const confirmDisconnect = window.confirm(
+                                        "Tem certeza que deseja desconectar a integração da Meta desta empresa? Isso irá remover o vínculo atual e você precisará conectar novamente para voltar a usar os insights.",
+                                      );
+                                      if (!confirmDisconnect) return;
+                                      try {
+                                        const token = await getToken();
+                                        if (!token) {
+                                          throw new Error(
+                                            "Token de autenticação indisponível. Faça login novamente.",
+                                          );
+                                        }
+                                        const res = await fetch(
+                                          `${SUPABASE_URL}/functions/v1/meta-instagram`,
+                                          {
+                                            method: "POST",
+                                            headers: {
+                                              "Content-Type": "application/json",
+                                              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                                            },
+                                            body: JSON.stringify({
+                                              action: "disconnect",
+                                              token,
+                                            }),
+                                          },
+                                        );
+                                        const raw = await res.text();
+                                        const data = (() => {
+                                          try {
+                                            return JSON.parse(raw) as {
+                                              success?: boolean;
+                                              error?: string;
+                                              hint?: string;
+                                            } | null;
+                                          } catch {
+                                            return null;
+                                          }
+                                        })();
+                                        if (!res.ok || data?.error) {
+                                          const msg = data?.hint
+                                            ? `${data.error ?? res.status} — ${data.hint}`
+                                            : data?.error ?? `Erro ${res.status}`;
+                                          throw new Error(msg);
+                                        }
+                                        setMetaAccounts([]);
+                                        setSelectedInstagramId(null);
+                                        setMetaInsights(null);
+                                        toast({
+                                          title: "Integração Meta desconectada",
+                                          description:
+                                            "A empresa não está mais vinculada a nenhuma conta da Meta. Você pode conectar novamente quando quiser.",
+                                        });
+                                      } catch (err) {
+                                        toast({
+                                          variant: "destructive",
+                                          title: "Erro ao desconectar a Meta",
+                                          description: getErrorMessage(err),
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    Desconectar
+                                  </Button>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Fluxo real usando Graph API. UI-level; tokens ficam apenas na Edge Function.
+                                </p>
+                              </div>
+                            )}
+                            {platform.id === "whatsapp-cloud" && (
+                              <div className="flex flex-col items-end gap-1">
+                                <Button
+                                  size="sm"
+                                  variant={isWhatsappConnected ? "outline" : "default"}
+                                  disabled={isWhatsappConnecting}
+                                  className={cn(
+                                    isWhatsappConnected &&
+                                      "border-emerald-500 bg-emerald-50 text-emerald-700",
+                                  )}
+                                  onClick={handleWhatsappConnectClick}
+                                >
+                                  {isWhatsappConnecting ? (
+                                    <>
+                                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                      Conectando…
+                                    </>
+                                  ) : isWhatsappConnected ? (
+                                    <>
+                                      <Check className="mr-1 h-4 w-4" />
+                                      Conectado
+                                    </>
+                                  ) : (
+                                    <>Conectar WhatsApp</>
+                                  )}
+                                </Button>
+                                {isWhatsappConnected && whatsappSelectedDisplay && (
+                                  <p className="text-[11px] text-muted-foreground">
+                                    Número conectado:{" "}
+                                    <span className="font-mono">{whatsappSelectedDisplay}</span>
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {platform.id === "rd-station" && (
                               <>
                                 <Badge variant="secondary">Em breve</Badge>
                                 <Button disabled size="sm">
@@ -1576,6 +2274,177 @@ export function ConfiguracoesPage() {
                       </Card>
                     ))}
                   </div>
+
+                  {whatsappPhoneNumbers.length > 0 && (
+                    <div className="mt-6 space-y-3">
+                      <h3 className="text-sm font-medium">Selecione o número do WhatsApp</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Escolha qual número oficial será utilizado pelo SDR para enviar mensagens.
+                      </p>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <div className="w-full space-y-1 sm:max-w-xs">
+                          <Label htmlFor="whatsapp-phone-number">Número do WhatsApp</Label>
+                          <Select
+                            value={selectedWhatsappPhoneId ?? ""}
+                            onValueChange={(value) => setSelectedWhatsappPhoneId(value)}
+                          >
+                            <SelectTrigger id="whatsapp-phone-number">
+                              <SelectValue placeholder="Selecione um número" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {whatsappPhoneNumbers.map((phone) => (
+                                <SelectItem key={phone.id} value={phone.id}>
+                                  {phone.display_phone_number}
+                                  {phone.verified_name ? ` — ${phone.verified_name}` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          type="button"
+                          className="sm:ml-2"
+                          disabled={!selectedWhatsappPhoneId || isSelectingWhatsappNumber}
+                          onClick={handleWhatsappSelectPhoneNumber}
+                        >
+                          {isSelectingWhatsappNumber ? (
+                            <>
+                              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                              Salvando…
+                            </>
+                          ) : (
+                            <>Confirmar número</>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {metaAccounts.length > 0 && (
+                    <div className="mt-6 space-y-3">
+                      <h3 className="text-sm font-medium">Páginas Facebook conectadas</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Clique em uma conta com Instagram vinculado para simular a leitura de
+                        métricas de alcance e impressões. Use o botão de seleção para definir qual
+                        conta será vinculada a esta empresa no Cliente Ideal.
+                      </p>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {metaAccounts.map((account) => (
+                          <div
+                            key={account.id}
+                            className="flex h-full flex-col items-stretch rounded-lg border border-border bg-muted/30 px-3 py-3 text-left transition-colors hover:bg-muted"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => void handleLoadMetaInsights(account.instagramBusinessId)}
+                              className="flex flex-1 flex-col items-stretch text-left"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {account.name || "Página sem nome"}
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    Page ID:{" "}
+                                    <span className="font-mono text-[11px]">{account.id}</span>
+                                  </p>
+                                </div>
+                                <div className="flex flex-col items-end gap-1">
+                                  <div className="rounded-full bg-background px-2 py-1 text-[10px] font-medium text-muted-foreground">
+                                    {account.instagramBusinessId
+                                      ? "Instagram vinculado"
+                                      : "Sem Instagram vinculado"}
+                                  </div>
+                                  {account.isSelected && account.instagramBusinessId && (
+                                    <Badge variant="outline" className="text-[10px] px-2 py-0.5">
+                                      Conta da empresa
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              {account.instagramBusinessId && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  Instagram Business ID:{" "}
+                                  <span className="font-mono text-[11px]">
+                                    {account.instagramBusinessId}
+                                  </span>
+                                </p>
+                              )}
+                            </button>
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <p className="text-[11px] text-muted-foreground">
+                                {account.isSelected
+                                  ? "Esta é a conta atualmente vinculada à empresa."
+                                  : account.instagramBusinessId
+                                    ? "Defina esta conta como padrão para os insights."
+                                    : "Vincule um Instagram Business a esta página para utilizá-la."}
+                              </p>
+                              <Button
+                                size="sm"
+                                variant={account.isSelected ? "outline" : "default"}
+                                disabled={isLoadingMetaAccounts || !account.instagramBusinessId}
+                                onClick={() => void handleSelectMetaAccount(account)}
+                                className="shrink-0"
+                              >
+                                {account.isSelected ? "Conta vinculada" : "Vincular à empresa"}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedInstagramId && (
+                    <div className="mt-6 space-y-3">
+                      <h3 className="text-sm font-medium">
+                        Métricas do Instagram{" "}
+                        <span className="font-mono text-[11px] align-middle">
+                          ({selectedInstagramId})
+                        </span>
+                      </h3>
+                      {isLoadingMetaInsights ? (
+                        <div className="flex min-h-[80px] items-center justify-center">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : metaInsights && metaInsights.length > 0 ? (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {metaInsights.map((metric) => {
+                            const latest = metric.values[metric.values.length - 1];
+                            const label =
+                              metric.metric === "reach"
+                                ? "Alcance (último dia)"
+                                : metric.metric === "profile_views"
+                                  ? "Visualizações de perfil (último dia)"
+                                  : metric.metric;
+                            return (
+                              <Card key={metric.metric}>
+                                <CardHeader className="pb-2">
+                                  <CardTitle className="text-sm">{label}</CardTitle>
+                                  <CardDescription>Período diário (period=day)</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                  <p className="text-2xl font-semibold">
+                                    {latest ? latest.value.toLocaleString("pt-BR") : "—"}
+                                  </p>
+                                  {latest?.endTime && (
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      Até {new Date(latest.endTime).toLocaleDateString("pt-BR")}
+                                    </p>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Nenhuma métrica carregada ainda. Clique em uma conta com Instagram
+                          vinculado para buscar os dados.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <Dialog open={isGmbManagerOpen} onOpenChange={setIsGmbManagerOpen}>
                     <DialogContent className="max-w-3xl">

@@ -49,6 +49,8 @@ import { PrecosPage } from "@/pages/PrecosPage"
 import { PoliticaPrivacidadePage } from "@/pages/PoliticaPrivacidadePage"
 import { TermosUsoPage } from "@/pages/TermosUsoPage"
 import { GtmInjector } from "@/components/GtmInjector"
+import { MetaInstagramCallbackPage } from "@/pages/auth/MetaInstagramCallbackPage"
+import { WhatsappCallbackPage } from "@/pages/auth/WhatsappCallbackPage"
 
 function ShowcaseFallback() {
   return <div className="flex min-h-[200px] items-center justify-center p-8 text-muted-foreground">Carregando…</div>
@@ -84,7 +86,27 @@ function App() {
         {/* Note o /* necessário para o Clerk funcionar em sub-rotas */}
         <Route path="/entrar/*" element={<LoginPage />} />
         <Route path="/cadastrar/*" element={<SignupPage />} />
-        
+
+        <Route
+          path="/auth/meta/callback"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <MetaInstagramCallbackPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/auth/whatsapp/callback"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <WhatsappCallbackPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
         <Route
           path="/planos"
           element={
