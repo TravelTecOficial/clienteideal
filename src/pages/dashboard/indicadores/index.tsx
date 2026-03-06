@@ -162,13 +162,15 @@ function FunilVendas({ kpis, isLoading }: FunilVendasProps) {
 
 export default function IndicadoresPageContent() {
   const [periodoKey, setPeriodoKey] = useState<PeriodoKey>("todo")
+  const [activeTab, setActiveTab] = useState<string>("comercial")
   const periodo = getPeriodRange(periodoKey)
   const { kpis, isLoading, error } = useDashboardKpis(periodo)
   const showVariacao = hasVariacao(periodoKey)
+  const socialTabActive = activeTab === "social"
   const { data: instagramOverview, isLoading: isLoadingIg, error: instagramError } =
-    useInstagramOverview()
+    useInstagramOverview({ enabled: socialTabActive })
   const { data: facebookOverview, isLoading: isLoadingFb, error: facebookError } =
-    useFacebookOverview()
+    useFacebookOverview({ enabled: socialTabActive })
 
   return (
     <div className="space-y-6">
@@ -200,7 +202,7 @@ export default function IndicadoresPageContent() {
         </div>
       )}
 
-      <Tabs defaultValue="comercial" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid">
           <TabsTrigger value="comercial">Performance Comercial</TabsTrigger>
           <TabsTrigger value="social">Insights Redes Sociais</TabsTrigger>

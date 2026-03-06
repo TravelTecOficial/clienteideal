@@ -24,15 +24,20 @@ interface HookState<T> {
   error: string | null
 }
 
-export function useInstagramOverview(): HookState<InstagramOverview> {
+export function useInstagramOverview(options?: { enabled?: boolean }): HookState<InstagramOverview> {
+  const enabled = options?.enabled !== false
   const { getToken } = useAuth()
   const [state, setState] = useState<HookState<InstagramOverview>>({
     data: null,
-    isLoading: true,
+    isLoading: enabled,
     error: null,
   })
 
   useEffect(() => {
+    if (!enabled) {
+      setState({ data: null, isLoading: false, error: null })
+      return
+    }
     let cancelled = false
 
     const run = async () => {
@@ -90,6 +95,37 @@ export function useInstagramOverview(): HookState<InstagramOverview> {
             return null
           }
         })()
+
+        // #region agent log
+        if (!res.ok) {
+          const serverError = data?.error ?? raw.slice(0, 200)
+          const serverHint = data?.hint ?? null
+          console.error("[meta-instagram] Resposta de erro:", res.status, {
+            action: "getInstagramOverview",
+            error: serverError,
+            hint: serverHint,
+          })
+          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e89451" },
+            body: JSON.stringify({
+              sessionId: "e89451",
+              location: "use-social-insights.ts:meta-instagram response",
+              message: "meta-instagram non-ok response",
+              data: {
+                action: "getInstagramOverview",
+                status: res.status,
+                statusText: res.statusText,
+                error: data?.error ?? null,
+                hint: data?.hint ?? null,
+                rawPreview: raw.slice(0, 400),
+              },
+              hypothesisId: "H-500",
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {})
+        }
+        // #endregion agent log
 
         if (!res.ok || data?.error) {
           const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : data?.error ?? `Erro ${res.status}`
@@ -152,20 +188,25 @@ export function useInstagramOverview(): HookState<InstagramOverview> {
     return () => {
       cancelled = true
     }
-  }, [getToken])
+  }, [getToken, enabled])
 
   return state
 }
 
-export function useFacebookOverview(): HookState<FacebookOverview> {
+export function useFacebookOverview(options?: { enabled?: boolean }): HookState<FacebookOverview> {
+  const enabled = options?.enabled !== false
   const { getToken } = useAuth()
   const [state, setState] = useState<HookState<FacebookOverview>>({
     data: null,
-    isLoading: true,
+    isLoading: enabled,
     error: null,
   })
 
   useEffect(() => {
+    if (!enabled) {
+      setState({ data: null, isLoading: false, error: null })
+      return
+    }
     let cancelled = false
 
     const run = async () => {
@@ -224,6 +265,37 @@ export function useFacebookOverview(): HookState<FacebookOverview> {
             return null
           }
         })()
+
+        // #region agent log
+        if (!res.ok) {
+          const serverError = data?.error ?? raw.slice(0, 200)
+          const serverHint = data?.hint ?? null
+          console.error("[meta-instagram] Resposta de erro:", res.status, {
+            action: "getFacebookOverview",
+            error: serverError,
+            hint: serverHint,
+          })
+          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e89451" },
+            body: JSON.stringify({
+              sessionId: "e89451",
+              location: "use-social-insights.ts:meta-instagram Facebook response",
+              message: "meta-instagram non-ok response",
+              data: {
+                action: "getFacebookOverview",
+                status: res.status,
+                statusText: res.statusText,
+                error: data?.error ?? null,
+                hint: data?.hint ?? null,
+                rawPreview: raw.slice(0, 400),
+              },
+              hypothesisId: "H-500",
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {})
+        }
+        // #endregion agent log
 
         if (!res.ok || data?.error) {
           const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : data?.error ?? `Erro ${res.status}`
@@ -289,7 +361,7 @@ export function useFacebookOverview(): HookState<FacebookOverview> {
     return () => {
       cancelled = true
     }
-  }, [getToken])
+  }, [getToken, enabled])
 
   return state
 }

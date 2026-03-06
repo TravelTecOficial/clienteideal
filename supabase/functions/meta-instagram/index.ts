@@ -641,8 +641,11 @@ async function handleInstagramOverview(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ) {
-  // Reutiliza a lógica de handleGetInsights: se instagramId não for informado,
-  // usa selected_instagram_id salvo na integração.
+  // Se a Meta não estiver configurada (secrets), retorna 200 com dados vazios para o dashboard não quebrar.
+  const metaConfig = getMetaConfig()
+  if ("error" in metaConfig) {
+    return jsonResponse({ metrics: [] })
+  }
   const delegateBody: GetInsightsBody = {
     action: "getInsights",
     instagramId: body.instagramId,
@@ -656,6 +659,11 @@ async function handleFacebookOverview(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ) {
+  // Se a Meta não estiver configurada (secrets), retorna 200 com dados vazios para o dashboard não quebrar.
+  const metaConfig = getMetaConfig()
+  if ("error" in metaConfig) {
+    return jsonResponse({ pageId: "", metrics: [] })
+  }
   const result = await getActiveIntegrationForCompany(ctx.companyId, supabase)
   if (result.error) return result.error
   const { row, metaConfig } = result
@@ -941,7 +949,7 @@ async function handleDisconnect(ctx: AuthContext, supabase: ReturnType<typeof cr
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("", { status: 200, headers: corsHeaders })
+    return new Response(null, { status: 204, headers: { ...corsHeaders, "Access-Control-Max-Age": "86400" } })
   }
 
   if (req.method !== "POST") {
