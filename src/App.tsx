@@ -50,6 +50,7 @@ import { PoliticaPrivacidadePage } from "@/pages/PoliticaPrivacidadePage"
 import { TermosUsoPage } from "@/pages/TermosUsoPage"
 import { GtmInjector } from "@/components/GtmInjector"
 import { MetaInstagramCallbackPage } from "@/pages/auth/MetaInstagramCallbackPage"
+import { SSOCallbackPage } from "@/pages/auth/SSOCallbackPage"
 import { WhatsappCallbackPage } from "@/pages/auth/WhatsappCallbackPage"
 
 function ShowcaseFallback() {
@@ -83,6 +84,8 @@ function App() {
         <Route path="/politica-de-privacidade" element={<PoliticaPrivacidadePage />} />
         <Route path="/termos-de-uso" element={<TermosUsoPage />} />
         
+        {/* Callback OAuth (ex.: Google) — rota mais específica antes de /entrar/* */}
+        <Route path="/entrar/sso-callback" element={<SSOCallbackPage />} />
         {/* Note o /* necessário para o Clerk funcionar em sub-rotas */}
         <Route path="/entrar/*" element={<LoginPage />} />
         <Route path="/cadastrar/*" element={<SignupPage />} />

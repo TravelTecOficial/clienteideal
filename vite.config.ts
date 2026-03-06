@@ -34,6 +34,34 @@ export default defineConfig(({ mode }) => {
     console.warn('[vite] VITE_SUPABASE_URL inválida. Configure em .env para o Chat de Conhecimento funcionar em localhost.')
   }
 
+  // Proxy da Clerk Frontend API em dev: evita CORS/530 quando *.clerk.accounts.dev falha ou bloqueia localhost
+  const clerkFapi = env.VITE_CLERK_FAPI?.replace(/\/$/, '')
+  if (mode === 'development' && clerkFapi) {
+    try {
+      new URL(clerkFapi)
+      chatProxy['/clerk-fapi'] = {
+        target: clerkFapi,
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path: string) => path.replace(/^\/clerk-fapi/, ''),
+      }
+    } catch {
+      console.warn('[vite] VITE_CLERK_FAPI inválida. Ignorando proxy Clerk.')
+    }
+  }
+
+  // Proxy do clerk-js (script + chunks) em dev: mesmo origin. 5.x = UI em um bundle; 6.x = chunks.
+  if (mode === 'development') {
+    const clerkJsVersion = env.VITE_CLERK_JS_VERSION || '5'
+    chatProxy['/clerk-js-dist'] = {
+      target: 'https://cdn.jsdelivr.net',
+      changeOrigin: true,
+      secure: true,
+      rewrite: (path: string) =>
+        path.replace(/^\/clerk-js-dist/, `/npm/@clerk/clerk-js@${clerkJsVersion}/dist`),
+    }
+  }
+
   return {
     plugins: [react()],
     resolve: {
