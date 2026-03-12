@@ -214,14 +214,14 @@ function getWhatsappConfig(): { appId: string; appSecret: string; redirectUri: s
   const appId = Deno.env.get("META_APP_ID")?.trim()
   const appSecret = Deno.env.get("META_APP_SECRET")?.trim()
   const redirectUri =
-    Deno.env.get("META_REDIRECT_URI")?.trim() ||
-    Deno.env.get("META_WHATSAPP_REDIRECT_URI")?.trim()
+    Deno.env.get("META_WHATSAPP_REDIRECT_URI")?.trim() ||
+    Deno.env.get("META_REDIRECT_URI")?.trim()
   if (!appId || !appSecret || !redirectUri) {
     return {
       error: jsonResponse(
         {
           error: "Configuração da Meta/WhatsApp incompleta.",
-          hint: "Configure META_APP_ID, META_APP_SECRET e META_REDIRECT_URI (ou META_WHATSAPP_REDIRECT_URI) nas secrets do Supabase.",
+          hint: "Configure META_APP_ID, META_APP_SECRET e META_WHATSAPP_REDIRECT_URI (ou META_REDIRECT_URI) nas secrets do Supabase.",
         } satisfies ErrorResponse,
         500,
       ),
