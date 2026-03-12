@@ -26,12 +26,19 @@ const clerkProxyUrl =
     : undefined
 
 // Meta SDK: inicializa FB para WhatsApp Embedded Signup (appId é público, seguro no client)
+// Carregamos o SDK dinamicamente após definir fbAsyncInit para evitar race condition ("init not called with valid version")
 const metaAppId = import.meta.env.VITE_META_APP_ID as string | undefined
 if (metaAppId) {
   ;(window as unknown as { fbAsyncInit?: () => void }).fbAsyncInit = function () {
     const FB = (window as unknown as { FB?: { init: (opts: { appId: string; cookie: boolean; xfbml: boolean; version: string }) => void } }).FB
     if (FB) FB.init({ appId: metaAppId, cookie: true, xfbml: true, version: "v21.0" })
   }
+  const sdkScript = document.createElement("script")
+  sdkScript.async = true
+  sdkScript.defer = true
+  sdkScript.crossOrigin = "anonymous"
+  sdkScript.src = "https://connect.facebook.net/pt_BR/sdk.js#xfbml=1&version=v21.0"
+  document.body.appendChild(sdkScript)
 }
 
 createRoot(document.getElementById("root")!).render(
