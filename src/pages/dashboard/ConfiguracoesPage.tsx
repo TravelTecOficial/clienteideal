@@ -834,102 +834,39 @@ export function ConfiguracoesPage() {
       return;
     }
 
-    // #region agent log
-    window.localStorage.setItem("whatsapp_connect_company_id", companyId);
-    fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff4a93'},body:JSON.stringify({sessionId:'ff4a93',location:'ConfiguracoesPage.tsx:837',message:'company_id saved before FB.login',data:{hasCompanyId:!!companyId,storage:'localStorage'},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-
-    const FB = (window as unknown as { FB?: { login: (cb: (r: { authResponse?: { accessToken?: string } }) => void, opts: { scope?: string; extras?: { setup?: { feature?: string } } }) => void } }).FB;
-    if (!FB) {
-      toast({
-        variant: "destructive",
-        title: "SDK não carregado",
-        description: "O SDK da Meta ainda não está carregado. Aguarde o carregamento e tente novamente.",
-      });
-      return;
-    }
-
     setIsWhatsappConnecting(true);
     try {
-      FB.login(
-        (response) => {
-          void (async () => {
-            const accessToken = response.authResponse?.accessToken;
-            if (!accessToken) {
-              setIsWhatsappConnecting(false);
-              if (response.status !== "unknown") {
-                toast({
-                  variant: "destructive",
-                  title: "Conexão cancelada",
-                  description: "O login com a Meta foi cancelado ou não foi concluído.",
-                });
-              }
-              return;
-            }
-
-            try {
-              const token = await getToken();
-              if (!token) {
-                throw new Error("Token de autenticação indisponível. Faça login novamente.");
-              }
-
-            const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-              },
-              body: JSON.stringify({
-                action: "connectEmbedded",
-                short_lived_token: accessToken,
-                company_id: companyId,
-                token,
-              }),
-            });
-
-              const raw = await res.text();
-              const data = (() => {
-                try {
-                  return JSON.parse(raw) as {
-                    success?: boolean;
-                    display_phone_number?: string;
-                    error?: string;
-                    code?: string;
-                  } | null;
-                } catch {
-                  return null;
-                }
-              })();
-
-              if (!res.ok || data?.error) {
-                const msg = data?.error ?? `Erro ${res.status}`;
-                throw new Error(msg);
-              }
-
-              if (data?.success && data?.display_phone_number) {
-                setIsWhatsappConnected(true);
-                setWhatsappSelectedDisplay(data.display_phone_number);
-                toast({
-                  title: "WhatsApp conectado",
-                  description: `Número vinculado: ${data.display_phone_number}`,
-                });
-              }
-            } catch (err) {
-              toast({
-                variant: "destructive",
-                title: "Erro ao completar conexão",
-                description: getErrorMessage(err),
-              });
-            } finally {
-              setIsWhatsappConnecting(false);
-            }
-          })();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        {
-          scope: "whatsapp_business_management,whatsapp_business_messaging",
-          extras: { setup: { feature: "whatsapp_embedded_signup" } },
-        },
-      );
+        body: JSON.stringify({
+          action: "getLoginUrl",
+          state: companyId,
+        }),
+      });
+
+      const raw = await res.text();
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as { url?: string; error?: string; hint?: string } | null;
+        } catch {
+          return null;
+        }
+      })();
+
+      if (!res.ok || data?.error) {
+        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        throw new Error(msg);
+      }
+
+      if (!data?.url) {
+        throw new Error("A função não retornou a URL de login da Meta.");
+      }
+
+      window.location.href = data.url;
     } catch (err) {
       toast({
         variant: "destructive",
