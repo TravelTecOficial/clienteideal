@@ -1253,11 +1253,16 @@ async function handleGetAdsAccountInfo(
     })()
     if (!adsRes.ok || !Array.isArray(adsData?.resourceNames) || adsData.resourceNames.length === 0) {
       const errMsg = adsData?.error?.message ?? (adsRaw?.slice(0, 200) ?? `Erro ${adsRes.status}`)
+      const isAuthError =
+        /missing.*auth|invalid.*credential|required.*authentication/i.test(errMsg)
+      const hint = isAuthError
+        ? `${errMsg} Desconecte e reconecte o Google Ads em Configurações > Integrações para renovar as permissões.`
+        : errMsg
       // #region agent log - debug para diagnóstico 502
       return jsonResponse(
         {
           error: "Erro ao obter conta Google Ads.",
-          hint: errMsg,
+          hint,
           debug: {
             hadAccessToken: !!accessToken,
             hadDeveloperToken: !!adsDeveloperToken,
