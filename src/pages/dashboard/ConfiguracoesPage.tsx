@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { DashboardLink } from "@/components/DashboardLink";
+import { Link } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,23 +8,7 @@ import * as z from "zod";
 import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2, Trash2, Pencil, Plug2, MapPin, MessageSquare, Sparkles, Search } from "lucide-react";
 import { SiWhatsapp, SiGoogleads, SiMeta, SiInstagram, SiGoogleanalytics, SiGoogle } from "react-icons/si";
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import { ProfileDropdown } from "@/components/profile-dropdown";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -233,9 +216,12 @@ const PLATAFORMA_CAMPANHA_OPTIONS = [
 ] as const;
 
 // --- Component ---
-export function ConfiguracoesPage() {
+interface ConfiguracoesPageProps {
+  section: "empresa" | "integracoes" | "whatsapp";
+}
+
+export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const { userId, getToken } = useAuth();
-  const [searchParams] = useSearchParams();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
   const companyId = useEffectiveCompanyId();
@@ -670,13 +656,12 @@ export function ConfiguracoesPage() {
   }, [companyId, getToken]);
 
   useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab === "integracoes") {
+    if (section === "integracoes") {
       void loadWhatsappConnectionState();
       void loadGoogleConnectionState();
       void loadMetaConnectionState();
     }
-  }, [searchParams, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState]);
+  }, [section, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState]);
 
   // Poll para SDK da Meta (carregado dinamicamente em main.tsx)
   useEffect(() => {
@@ -1818,45 +1803,9 @@ export function ConfiguracoesPage() {
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator
-            orientation="vertical"
-            className="mr-2 data-[orientation=vertical]:h-4"
-          />
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink asChild>
-                  <DashboardLink>Dashboard</DashboardLink>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator className="hidden md:block" />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Configurações</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-          <ProfileDropdown className="ml-auto" />
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          <Tabs defaultValue="empresa" className="w-full">
-            <TabsList className="grid w-full max-w-[1200px] grid-cols-3">
-              <TabsTrigger value="empresa" className="gap-2">
-                <Building2 className="h-4 w-4" /> Empresa
-              </TabsTrigger>
-              <TabsTrigger value="integracoes" className="gap-2">
-                <Plug2 className="h-4 w-4" /> Integrações
-              </TabsTrigger>
-              <TabsTrigger value="evolution" className="gap-2">
-                <Smartphone className="h-4 w-4" /> WhatsApp
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="empresa" className="space-y-4 pt-4">
+    <div className="space-y-4 pt-4">
+      {section === "empresa" && (
+        <>
               <Card>
                 <CardHeader>
                   <div className="flex flex-1 items-center justify-between gap-4">
@@ -2180,9 +2129,10 @@ export function ConfiguracoesPage() {
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
-
-            <TabsContent value="integracoes" className="space-y-4 pt-4">
+        </>
+      )}
+      {section === "integracoes" && (
+        <>
               <Card>
                 <CardHeader>
                   <CardTitle>Integrações</CardTitle>
@@ -2522,9 +2472,10 @@ export function ConfiguracoesPage() {
                 </CardContent>
               </Card>
 
-            </TabsContent>
-
-            <TabsContent value="evolution" className="space-y-4 pt-4">
+        </>
+      )}
+      {section === "whatsapp" && (
+        <>
               <Card>
                 <CardHeader>
                   <CardTitle>WhatsApp</CardTitle>
@@ -2848,11 +2799,8 @@ export function ConfiguracoesPage() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-            </TabsContent>
-
-          </Tabs>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+        </>
+      )}
+    </div>
   );
 }

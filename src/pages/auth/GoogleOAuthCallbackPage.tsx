@@ -29,7 +29,7 @@ export function GoogleOAuthCallbackPage() {
             title: "Código ausente",
             description: "Parâmetro 'code' não informado pelo Google. Tente novamente.",
           })
-          navigate("/dashboard/configuracoes?tab=integracoes")
+          navigate("/dashboard/configuracoes/integracoes")
           return
         }
 
@@ -40,7 +40,7 @@ export function GoogleOAuthCallbackPage() {
             title: "Sessão inválida",
             description: "Não foi possível validar o retorno do Google. Inicie a conexão novamente.",
           })
-          navigate("/dashboard/configuracoes?tab=integracoes")
+          navigate("/dashboard/configuracoes/integracoes")
           return
         }
 
@@ -50,7 +50,7 @@ export function GoogleOAuthCallbackPage() {
             title: "Empresa não identificada",
             description: "Selecione uma empresa antes de conectar. Redirecionando…",
           })
-          navigate("/dashboard/configuracoes?tab=integracoes")
+          navigate("/dashboard/configuracoes/integracoes")
           return
         }
 
@@ -130,14 +130,14 @@ export function GoogleOAuthCallbackPage() {
           description: "A conta do Google foi conectada com sucesso para este serviço.",
         })
 
-        navigate("/dashboard/configuracoes?tab=integracoes", { replace: true })
+        navigate("/dashboard/configuracoes/integracoes", { replace: true })
       } catch (err) {
         toast({
           variant: "destructive",
           title: "Erro ao finalizar conexão",
           description: getErrorMessage(err),
         })
-        navigate("/dashboard/configuracoes?tab=integracoes", { replace: true })
+        navigate("/dashboard/configuracoes/integracoes", { replace: true })
       }
     }
 

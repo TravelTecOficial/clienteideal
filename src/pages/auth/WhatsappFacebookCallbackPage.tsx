@@ -30,7 +30,7 @@ export function WhatsappFacebookCallbackPage() {
             title: "Código ausente",
             description: "Parâmetro 'code' não informado pela Meta. Tente novamente.",
           })
-          navigate("/dashboard/configuracoes?tab=integracoes")
+          navigate("/dashboard/configuracoes/integracoes")
           return
         }
 
@@ -40,7 +40,7 @@ export function WhatsappFacebookCallbackPage() {
             title: "Sessão expirada",
             description: "Inicie a conexão novamente na página de configurações.",
           })
-          navigate("/dashboard/configuracoes?tab=integracoes")
+          navigate("/dashboard/configuracoes/integracoes")
           return
         }
 

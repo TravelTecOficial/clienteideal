@@ -1,5 +1,5 @@
 import { Suspense, Component, type ReactNode } from "react"
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { DashboardRouteWrapper } from "@/components/DashboardRouteWrapper"
 import { AdminPage } from "@/pages/admin/AdminPage"
@@ -34,7 +34,7 @@ import { AgendaPage } from "@/pages/dashboard/AgendaPage"
 import { AtendimentosPage } from "@/pages/dashboard/AtendimentosPage"
 import { BaseConhecimentoPage } from "@/pages/dashboard/BaseConhecimentoPage"
 import { ProdutosServicosPage } from "@/pages/dashboard/ProdutosServicosPage"
-import { ConfiguracoesPage } from "@/pages/dashboard/ConfiguracoesPage"
+import { ConfiguracoesLayout } from "@/pages/dashboard/ConfiguracoesLayout"
 import ConsorcioPage from "@/pages/dashboard/consorcio"
 import { IndicadoresPage } from "@/pages/dashboard/IndicadoresPage"
 import { SocialHubPage } from "@/pages/dashboard/SocialHubPage"
@@ -320,11 +320,15 @@ function App() {
         />
         <Route
           path="/dashboard/configuracoes"
+          element={<Navigate to="/dashboard/configuracoes/empresa" replace />}
+        />
+        <Route
+          path="/dashboard/configuracoes/:section"
           element={
             <SupabaseProvider>
               <ProtectedRoute>
                 <DashboardRouteWrapper>
-                  <ConfiguracoesPage />
+                  <ConfiguracoesLayout />
                 </DashboardRouteWrapper>
               </ProtectedRoute>
             </SupabaseProvider>

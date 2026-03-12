@@ -28,7 +28,7 @@ export function MetaInstagramCallbackPage() {
             title: "Código ausente",
             description: "Parâmetro 'code' não informado pela Meta. Tente novamente.",
           })
-          navigate("/dashboard/configuracoes")
+          navigate("/dashboard/configuracoes/integracoes")
           return
         }
 
@@ -39,7 +39,7 @@ export function MetaInstagramCallbackPage() {
             title: "Sessão inválida",
             description: "Não foi possível validar o retorno da Meta. Inicie a conexão novamente.",
           })
-          navigate("/dashboard/configuracoes")
+          navigate("/dashboard/configuracoes/integracoes")
           return
         }
 

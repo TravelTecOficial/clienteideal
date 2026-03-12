@@ -17,6 +17,9 @@ import {
   HandCoins,
   Share2,
   MapPin,
+  Building2,
+  Plug2,
+  Smartphone,
 } from "lucide-react"
 
 import { SearchForm } from "@/components/search-form"
@@ -56,8 +59,18 @@ const navItemsBase = [
   { title: "GMB Local", url: "/dashboard/gmb-local", icon: MapPin },
   { title: "Produtos & Serviços", url: "/dashboard/items", icon: Package, segmentFilter: "produtos" as const },
   { title: "Consórcios", url: "/dashboard/consorcio", icon: HandCoins, segmentFilter: "consorcio" as const },
-  { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
 ]
+
+// Menu Configurações: subitens (Empresa, Integrações, WhatsApp)
+const configuracoesNav = {
+  title: "Configurações",
+  icon: Settings,
+  items: [
+    { title: "Empresa", url: "/dashboard/configuracoes/empresa", icon: Building2 },
+    { title: "Integrações", url: "/dashboard/configuracoes/integracoes", icon: Plug2 },
+    { title: "WhatsApp", url: "/dashboard/configuracoes/whatsapp", icon: Smartphone },
+  ],
+}
 
 // Menu Usuários: subitens (Vendedores integrado ao Clerk + Usuários do sistema)
 const usuariosNav = {
@@ -77,6 +90,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const storagePreviewId = getAdminPreviewCompanyId()
   const effectivePreviewId = previewCompanyId ?? storagePreviewId
   const UsuariosIcon = usuariosNav.icon
+  const ConfiguracoesIcon = configuracoesNav.icon
 
   const previewSuffix = effectivePreviewId ? getPreviewUrlSuffix(effectivePreviewId) : ""
 
@@ -157,6 +171,44 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             isActive={isActive(subItem.url)}
                           >
                             <Link to={subItem.url} className="flex items-center gap-2">
+                              <SubIcon className="size-4 shrink-0" />
+                              {subItem.title}
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )
+                    })}
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              </SidebarMenuItem>
+            </Collapsible>
+            <Collapsible
+              defaultOpen={location.pathname.startsWith("/dashboard/configuracoes")}
+              className="group/collapsible"
+            >
+              <SidebarMenuItem>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton
+                    isActive={location.pathname.startsWith("/dashboard/configuracoes")}
+                  >
+                    <ConfiguracoesIcon className="size-4 shrink-0" />
+                    {configuracoesNav.title}
+                    <Plus className="ml-auto group-data-[state=open]/collapsible:hidden" />
+                    <Minus className="ml-auto group-data-[state=closed]/collapsible:hidden" />
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <SidebarMenuSub>
+                    {configuracoesNav.items.map((subItem) => {
+                      const SubIcon = subItem.icon
+                      const url = previewSuffix ? `${subItem.url}${previewSuffix}` : subItem.url
+                      return (
+                        <SidebarMenuSubItem key={subItem.title}>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={isActive(subItem.url)}
+                          >
+                            <Link to={url} className="flex items-center gap-2">
                               <SubIcon className="size-4 shrink-0" />
                               {subItem.title}
                             </Link>
