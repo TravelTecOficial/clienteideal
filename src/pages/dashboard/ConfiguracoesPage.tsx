@@ -287,6 +287,7 @@ export function ConfiguracoesPage() {
 
   const [isWhatsappConnecting, setIsWhatsappConnecting] = useState(false);
   const [isMetaSdkReady, setIsMetaSdkReady] = useState(false);
+  const [metaSdkLoadFailed, setMetaSdkLoadFailed] = useState(false);
   const [whatsappPhoneNumbers, setWhatsappPhoneNumbers] = useState<WhatsappPhoneNumber[]>([]);
   const [selectedWhatsappPhoneId, setSelectedWhatsappPhoneId] = useState<string | null>(null);
   const [isWhatsappConnected, setIsWhatsappConnected] = useState(false);
@@ -541,15 +542,24 @@ export function ConfiguracoesPage() {
   useEffect(() => {
     if ((window as unknown as { FB?: unknown }).FB) {
       setIsMetaSdkReady(true);
+      setMetaSdkLoadFailed(false);
       return;
     }
+    const timeout = setTimeout(() => {
+      setMetaSdkLoadFailed(true);
+    }, 15000);
     const interval = setInterval(() => {
       if ((window as unknown as { FB?: unknown }).FB) {
         setIsMetaSdkReady(true);
+        setMetaSdkLoadFailed(false);
         clearInterval(interval);
+        clearTimeout(timeout);
       }
     }, 500);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
   }, []);
 
   // Carregar pagamentos
@@ -2306,18 +2316,24 @@ export function ConfiguracoesPage() {
                                 <Button
                                   size="sm"
                                   variant={isWhatsappConnected ? "outline" : "default"}
-                                  disabled={isWhatsappConnecting || !isMetaSdkReady}
+                                  disabled={isWhatsappConnecting || (!isMetaSdkReady && !metaSdkLoadFailed)}
                                   className={cn(
                                     isWhatsappConnected &&
                                       "border-emerald-500 bg-emerald-50 text-emerald-700",
                                   )}
-                                  onClick={handleWhatsappConnectClick}
+                                  onClick={
+                                    metaSdkLoadFailed
+                                      ? () => window.location.reload()
+                                      : handleWhatsappConnectClick
+                                  }
                                 >
                                   {isWhatsappConnecting ? (
                                     <>
                                       <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                       Conectando…
                                     </>
+                                  ) : metaSdkLoadFailed ? (
+                                    <>Recarregar página</>
                                   ) : !isMetaSdkReady ? (
                                     <>
                                       <Loader2 className="mr-1 h-4 w-4 animate-spin" />
