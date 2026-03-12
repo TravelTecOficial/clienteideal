@@ -1226,6 +1226,15 @@ async function handleGetAdsAccountInfo(
     )
   }
 
+  // #region agent log
+  console.log("[google-oauth] getAdsAccountInfo pre-fetch:", {
+    hasAccessToken: !!accessToken,
+    accessTokenPrefix: accessToken ? `${accessToken.slice(0, 10)}...` : "undefined",
+    hasDeveloperToken: !!adsDeveloperToken,
+    developerTokenPrefix: adsDeveloperToken ? `${adsDeveloperToken.slice(0, 4)}...` : "undefined",
+  })
+  // #endregion
+
   try {
     const adsRes = await fetch("https://googleads.googleapis.com/v20/customers:listAccessibleCustomers", {
       method: "GET",
