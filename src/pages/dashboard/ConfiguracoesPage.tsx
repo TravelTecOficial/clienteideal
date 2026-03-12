@@ -286,6 +286,7 @@ export function ConfiguracoesPage() {
   const [metaInsights, setMetaInsights] = useState<InstagramMetric[] | null>(null);
 
   const [isWhatsappConnecting, setIsWhatsappConnecting] = useState(false);
+  const [isMetaSdkReady, setIsMetaSdkReady] = useState(false);
   const [whatsappPhoneNumbers, setWhatsappPhoneNumbers] = useState<WhatsappPhoneNumber[]>([]);
   const [selectedWhatsappPhoneId, setSelectedWhatsappPhoneId] = useState<string | null>(null);
   const [isWhatsappConnected, setIsWhatsappConnected] = useState(false);
@@ -535,6 +536,21 @@ export function ConfiguracoesPage() {
       void loadWhatsappConnectionState();
     }
   }, [searchParams, loadWhatsappConnectionState]);
+
+  // Poll para SDK da Meta (carregado dinamicamente em main.tsx)
+  useEffect(() => {
+    if ((window as unknown as { FB?: unknown }).FB) {
+      setIsMetaSdkReady(true);
+      return;
+    }
+    const interval = setInterval(() => {
+      if ((window as unknown as { FB?: unknown }).FB) {
+        setIsMetaSdkReady(true);
+        clearInterval(interval);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
 
   // Carregar pagamentos
   const loadPagamentos = useCallback(async () => {
@@ -2290,7 +2306,7 @@ export function ConfiguracoesPage() {
                                 <Button
                                   size="sm"
                                   variant={isWhatsappConnected ? "outline" : "default"}
-                                  disabled={isWhatsappConnecting}
+                                  disabled={isWhatsappConnecting || !isMetaSdkReady}
                                   className={cn(
                                     isWhatsappConnected &&
                                       "border-emerald-500 bg-emerald-50 text-emerald-700",
@@ -2301,6 +2317,11 @@ export function ConfiguracoesPage() {
                                     <>
                                       <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                       Conectando…
+                                    </>
+                                  ) : !isMetaSdkReady ? (
+                                    <>
+                                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                      Carregando SDK…
                                     </>
                                   ) : isWhatsappConnected ? (
                                     <>
