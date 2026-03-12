@@ -294,14 +294,18 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [myBusinessLocations, setMyBusinessLocations] = useState<GoogleAnalyticsPropertyOption[]>([]);
   const [selectedMyBusinessPropertyName, setSelectedMyBusinessPropertyName] = useState<string | null>(null);
   const [selectedMyBusinessPropertyLabel, setSelectedMyBusinessPropertyLabel] = useState<string | null>(null);
-  const [isMetaConnected, setIsMetaConnected] = useState(false);
+  const [isInstagramConnected, setIsInstagramConnected] = useState(false);
+  const [isFacebookConnected, setIsFacebookConnected] = useState(false);
+  const [isMetaAdsConnected, setIsMetaAdsConnected] = useState(false);
+  const [metaConnectingService, setMetaConnectingService] = useState<
+    "instagram" | "facebook" | "meta_ads" | null
+  >(null);
   const [isCreatingInstance, setIsCreatingInstance] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [isDeleteEvolutionOpen, setIsDeleteEvolutionOpen] = useState(false);
   const [isDeletingEvolution, setIsDeletingEvolution] = useState(false);
 
-  const [isMetaConnecting, setIsMetaConnecting] = useState(false);
   const [isLoadingMetaAccounts, setIsLoadingMetaAccounts] = useState(false);
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
   const [isLoadingMetaInsights, setIsLoadingMetaInsights] = useState(false);
@@ -1041,36 +1045,49 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
   }, [companyId, getToken, myBusinessLocations, selectedMyBusinessPropertyName, toast]);
 
-  const handleMetaDisconnect = useCallback(async () => {
-    const ok = window.confirm("Desconectar Meta desta empresa?");
-    if (!ok) return;
-    try {
-      const token = await getToken();
-      if (!token) throw new Error("Token indisponível.");
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ action: "disconnect", token }),
-      });
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (!res.ok || data?.error) throw new Error(data?.error ?? "Erro");
-      setIsMetaConnected(false);
-      setMetaAccounts([]);
-      setSelectedInstagramId(null);
-      setMetaInsights(null);
-      toast({ title: "Meta desconectada" });
-    } catch (err) {
-      toast({ variant: "destructive", title: "Erro", description: getErrorMessage(err) });
-    }
-  }, [getToken, toast]);
+  const handleMetaDisconnect = useCallback(
+    async (service: "instagram" | "facebook" | "meta_ads") => {
+      const ok = window.confirm(
+        `Desconectar ${service === "instagram" ? "Instagram" : service === "facebook" ? "Facebook" : "Meta Ads"} desta empresa?`,
+      );
+      if (!ok) return;
+      try {
+        const token = await getToken();
+        if (!token) throw new Error("Token indisponível.");
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ action: "disconnect", service, token }),
+        });
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        if (!res.ok || data?.error) throw new Error(data?.error ?? "Erro");
+        if (service === "instagram") {
+          setIsInstagramConnected(false);
+        } else if (service === "facebook") {
+          setIsFacebookConnected(false);
+        } else {
+          setIsMetaAdsConnected(false);
+        }
+        setMetaAccounts([]);
+        setSelectedInstagramId(null);
+        setMetaInsights(null);
+        toast({ title: "Meta desconectada" });
+      } catch (err) {
+        toast({ variant: "destructive", title: "Erro", description: getErrorMessage(err) });
+      }
+    },
+    [getToken, toast],
+  );
 
   const loadMetaConnectionState = useCallback(async () => {
     if (!companyId) {
-      setIsMetaConnected(false);
+      setIsInstagramConnected(false);
+      setIsFacebookConnected(false);
+      setIsMetaAdsConnected(false);
       return;
     }
     try {
@@ -1083,12 +1100,27 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           apikey: SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ action: "listAccounts", token }),
+        body: JSON.stringify({ action: "getConnectionStatus", token }),
       });
-      const data = (await res.json().catch(() => null)) as { accounts?: unknown[]; error?: string } | null;
-      setIsMetaConnected(res.ok && !!data && !data.error);
+      const data = (await res.json().catch(() => null)) as {
+        instagram?: boolean;
+        facebook?: boolean;
+        meta_ads?: boolean;
+        error?: string;
+      } | null;
+      if (res.ok && data && !data.error) {
+        setIsInstagramConnected(Boolean(data.instagram));
+        setIsFacebookConnected(Boolean(data.facebook));
+        setIsMetaAdsConnected(Boolean(data.meta_ads));
+      } else {
+        setIsInstagramConnected(false);
+        setIsFacebookConnected(false);
+        setIsMetaAdsConnected(false);
+      }
     } catch {
-      setIsMetaConnected(false);
+      setIsInstagramConnected(false);
+      setIsFacebookConnected(false);
+      setIsMetaAdsConnected(false);
     }
   }, [companyId, getToken]);
 
@@ -1322,110 +1354,77 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     };
   }, [stopConnectionPolling]);
 
-  async function handleMetaConnectClick() {
-    if (!companyId) {
-      toast({
-        variant: "destructive",
-        title: "Empresa não identificada",
-        description: "Acesse o painel com uma empresa selecionada antes de conectar a Meta.",
-      });
-      return;
-    }
-    setIsMetaConnecting(true);
-    try {
-      // JWT de sessão do Clerk (getToken sem template — template "default" não existe no projeto e retorna 404)
-      const token = await getToken();
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f42ba2" },
-        body: JSON.stringify({
-          sessionId: "f42ba2",
-          location: "ConfiguracoesPage.tsx:handleMetaConnectClick",
-          message: "meta-instagram request: token readiness",
-          data: { hasToken: !!token, tokenLength: token?.length ?? 0 },
-          runId: "meta-connect",
-          hypothesisId: "H1",
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-      if (!token) {
-        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+  const handleMetaConnect = useCallback(
+    async (service: "instagram" | "facebook" | "meta_ads") => {
+      if (!companyId) {
+        toast({
+          variant: "destructive",
+          title: "Empresa não identificada",
+          description: "Acesse o painel com uma empresa selecionada antes de conectar a Meta.",
+        });
+        return;
       }
-      const state =
-        (window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-      window.sessionStorage.setItem("meta_oauth_state", state);
-
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          action: "getLoginUrl",
-          state,
-          token,
-        }),
-      });
-      const raw = await res.text();
-      const data = (() => {
-        try {
-          return JSON.parse(raw) as {
-            url?: string;
-            error?: string;
-            hint?: string;
-            code?: string;
-          } | null;
-        } catch {
-          return null;
+      setMetaConnectingService(service);
+      try {
+        const token = await getToken();
+        if (!token) {
+          throw new Error("Token de autenticação indisponível. Faça login novamente.");
         }
-      })();
-      // #region agent log
-      if (!res.ok) {
-        fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f42ba2" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
           body: JSON.stringify({
-            sessionId: "f42ba2",
-            location: "ConfiguracoesPage.tsx:meta-instagram response",
-            message: "meta-instagram 4xx/5xx response body",
-            data: {
-              status: res.status,
-              error: data?.error ?? null,
-              hint: data?.hint ?? null,
-              rawPreview: raw.slice(0, 300),
-            },
-            runId: "meta-connect",
-            hypothesisId: "H2",
-            timestamp: Date.now(),
+            action: "getLoginUrl",
+            state,
+            service,
+            token,
           }),
-        }).catch(() => {});
-      }
-      // #endregion
-      if (!res.ok || data?.error) {
-        const parts = [data?.error ?? `Erro ${res.status}`];
-        if (data?.code) parts.push(`[${data.code}]`);
-        if (data?.hint) parts.push(data.hint);
-        throw new Error(parts.join(" — "));
-      }
+        });
+        const raw = await res.text();
+        const data = (() => {
+          try {
+            return JSON.parse(raw) as {
+              url?: string;
+              state?: string;
+              error?: string;
+              hint?: string;
+              code?: string;
+            } | null;
+          } catch {
+            return null;
+          }
+        })();
 
-      if (!data?.url) {
-        throw new Error("A função não retornou a URL de login da Meta.");
-      }
+        if (!res.ok || data?.error) {
+          const parts = [data?.error ?? `Erro ${res.status}`];
+          if (data?.code) parts.push(`[${data.code}]`);
+          if (data?.hint) parts.push(data.hint);
+          throw new Error(parts.join(" — "));
+        }
 
-      window.location.href = data.url;
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao iniciar conexão com a Meta",
-        description: getErrorMessage(err),
-      });
-      setIsMetaConnecting(false);
-    }
-  }
+        if (!data?.url) {
+          throw new Error("A função não retornou a URL de login da Meta.");
+        }
+
+        if (typeof data.state === "string") {
+          window.sessionStorage.setItem("meta_oauth_state", data.state);
+        }
+        window.location.href = data.url;
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao iniciar conexão com a Meta",
+          description: getErrorMessage(err),
+        });
+        setMetaConnectingService(null);
+      }
+    },
+    [companyId, getToken, toast],
+  );
 
   async function handleWhatsappConnectClick() {
     if (!companyId) {
@@ -1581,6 +1580,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       });
       return;
     }
+    const service = isInstagramConnected ? "instagram" : isFacebookConnected ? "facebook" : null;
+    if (!service) return;
     setIsLoadingMetaAccounts(true);
     try {
       const token = await getToken();
@@ -1596,6 +1597,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         },
         body: JSON.stringify({
           action: "listAccounts",
+          service,
           token,
         }),
       });
@@ -1677,6 +1679,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           pageId: account.id,
           pageName: account.name,
           instagramId: account.instagramBusinessId,
+          service: isInstagramConnected ? "instagram" : "facebook",
           token,
         }),
       });
@@ -2681,30 +2684,30 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                         id: "instagram",
                         name: "Instagram",
                         icon: SiInstagram,
-                        connected: isMetaConnected,
-                        connecting: isMetaConnecting,
-                        onConnect: handleMetaConnectClick,
-                        onDisconnect: handleMetaDisconnect,
+                        connected: isInstagramConnected,
+                        connecting: metaConnectingService === "instagram",
+                        onConnect: () => handleMetaConnect("instagram"),
+                        onDisconnect: () => handleMetaDisconnect("instagram"),
                         connectLabel: "Conectar",
                       },
                       {
                         id: "facebook",
                         name: "Facebook",
                         icon: SiMeta,
-                        connected: isMetaConnected,
-                        connecting: isMetaConnecting,
-                        onConnect: handleMetaConnectClick,
-                        onDisconnect: handleMetaDisconnect,
+                        connected: isFacebookConnected,
+                        connecting: metaConnectingService === "facebook",
+                        onConnect: () => handleMetaConnect("facebook"),
+                        onDisconnect: () => handleMetaDisconnect("facebook"),
                         connectLabel: "Conectar",
                       },
                       {
                         id: "meta-ads",
                         name: "Meta Ads",
                         icon: SiMeta,
-                        connected: isMetaConnected,
-                        connecting: isMetaConnecting,
-                        onConnect: handleMetaConnectClick,
-                        onDisconnect: handleMetaDisconnect,
+                        connected: isMetaAdsConnected,
+                        connecting: metaConnectingService === "meta_ads",
+                        onConnect: () => handleMetaConnect("meta_ads"),
+                        onDisconnect: () => handleMetaDisconnect("meta_ads"),
                         connectLabel: "Conectar",
                       },
                       {
@@ -2997,7 +3000,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                     </div>
                   )}
 
-                  {isMetaConnected && metaAccounts.length === 0 && (
+                  {(isInstagramConnected || isFacebookConnected) && metaAccounts.length === 0 && (
                     <div className="mt-6 flex flex-col items-start gap-2">
                       <Button
                         size="sm"

@@ -65,7 +65,7 @@ export function MetaInstagramCallbackPage() {
         const raw = await res.text()
         const data = (() => {
           try {
-            return JSON.parse(raw) as { error?: string; hint?: string } | null
+            return JSON.parse(raw) as { error?: string; hint?: string; service?: string } | null
           } catch {
             return null
           }
@@ -77,19 +77,26 @@ export function MetaInstagramCallbackPage() {
 
         window.sessionStorage.removeItem("meta_oauth_state")
 
+        const serviceLabels: Record<string, string> = {
+          instagram: "Instagram",
+          facebook: "Facebook",
+          meta_ads: "Meta Ads",
+        }
+        const serviceName = serviceLabels[data?.service ?? ""] ?? "Meta"
+
         toast({
-          title: "Instagram conectado",
+          title: `${serviceName} conectado`,
           description: "A conta da Meta foi conectada com sucesso. Você já pode listar páginas e métricas.",
         })
 
-        navigate("/dashboard/configuracoes", { replace: true })
+        navigate("/dashboard/configuracoes/integracoes", { replace: true })
       } catch (err) {
         toast({
           variant: "destructive",
           title: "Erro ao finalizar conexão",
           description: getErrorMessage(err),
         })
-        navigate("/dashboard/configuracoes", { replace: true })
+        navigate("/dashboard/configuracoes/integracoes", { replace: true })
       }
     }
 
@@ -101,7 +108,7 @@ export function MetaInstagramCallbackPage() {
       <div className="flex flex-col items-center gap-3 rounded-lg border bg-card px-6 py-8 shadow-sm">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          Concluindo conexão com Instagram via Meta…
+          Concluindo conexão com a Meta…
         </p>
       </div>
     </div>
