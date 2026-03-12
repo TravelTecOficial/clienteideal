@@ -2,7 +2,7 @@
  * Edge Function: google-oauth
  *
  * Fluxos:
- * - action: "getLoginUrl"     -> retorna URL do OAuth Google (access_type=offline, prompt=consent)
+ * - action: "getLoginUrl"     -> retorna URL do OAuth Google (access_type=offline, prompt=select_account consent)
  * - action: "exchangeCode"    -> troca code por tokens, criptografa e salva em google_connections
  * - action: "getConnectionStatus" -> retorna se há conexão ativa (sem expor tokens)
  * - action: "disconnect"     -> remove conexão da empresa
@@ -303,7 +303,7 @@ async function handleGetLoginUrl(body: GetLoginUrlBody): Promise<Response> {
   params.set("response_type", "code")
   params.set("scope", scopes.join(" "))
   params.set("access_type", "offline")
-  params.set("prompt", "consent")
+  params.set("prompt", "select_account consent")
   params.set("state", state)
 
   const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`

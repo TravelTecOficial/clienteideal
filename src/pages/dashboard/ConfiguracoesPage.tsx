@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Link } from "react-router-dom";
-import { useAuth } from "@clerk/clerk-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth, useUser } from "@clerk/clerk-react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -39,9 +39,12 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase";
 import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
+import { isSaasAdmin } from "@/lib/use-saas-admin";
+import { setAdminPreviewCompanyId } from "@/lib/admin-preview-storage";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useEvolutionProxy } from "@/hooks/use-evolution-proxy";
@@ -220,11 +223,22 @@ interface ConfiguracoesPageProps {
   section: "empresa" | "integracoes" | "whatsapp";
 }
 
+interface CompanyOption {
+  id: string;
+  nome_fantasia: string | null;
+  name: string | null;
+}
+
 export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const { userId, getToken } = useAuth();
+  const { user } = useUser();
+  const navigate = useNavigate();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
   const companyId = useEffectiveCompanyId();
+  const isAdmin = isSaasAdmin(user?.publicMetadata as Record<string, unknown> | undefined);
+  const [companiesForAdmin, setCompaniesForAdmin] = useState<CompanyOption[]>([]);
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
   const [isFetchingEmpresa, setIsFetchingEmpresa] = useState(true);
   const [isSavingEmpresa, setIsSavingEmpresa] = useState(false);
   const [isFetchingDados, setIsFetchingDados] = useState(true);
@@ -662,6 +676,29 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       void loadMetaConnectionState();
     }
   }, [section, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState]);
+
+  // Carregar empresas para admin quando companyId é null (seletor de empresa)
+  useEffect(() => {
+    if (!isAdmin || companyId || section !== "integracoes") return;
+    let cancelled = false;
+    setIsLoadingCompanies(true);
+    supabase
+      .from("companies")
+      .select("id, nome_fantasia, name")
+      .order("nome_fantasia", { nullsFirst: false })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        setIsLoadingCompanies(false);
+        if (error) {
+          console.error("Erro ao carregar empresas:", error);
+          return;
+        }
+        setCompaniesForAdmin((data as CompanyOption[]) ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, companyId, section, supabase]);
 
   // Poll para SDK da Meta (carregado dinamicamente em main.tsx)
   useEffect(() => {
@@ -2133,6 +2170,46 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       )}
       {section === "integracoes" && (
         <>
+              {!companyId && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertTitle>Empresa não identificada</AlertTitle>
+                  <AlertDescription asChild>
+                    <div className="mt-2 space-y-3">
+                      <p>Selecione uma empresa antes de conectar integrações.</p>
+                      {isAdmin && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Select
+                            disabled={isLoadingCompanies || companiesForAdmin.length === 0}
+                            onValueChange={(id) => {
+                              if (id) {
+                                setAdminPreviewCompanyId(id);
+                                navigate(`/dashboard/configuracoes/integracoes?preview=${encodeURIComponent(id)}`, { replace: true });
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-[280px]">
+                              <SelectValue placeholder={isLoadingCompanies ? "Carregando empresas…" : "Selecione a empresa"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {companiesForAdmin.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.nome_fantasia || c.name || c.id}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <span className="text-sm text-muted-foreground">
+                            {companiesForAdmin.length === 0 && !isLoadingCompanies && "Nenhuma empresa encontrada."}
+                          </span>
+                        </div>
+                      )}
+                      {!isAdmin && (
+                        <p className="text-sm">Acesse o painel com uma empresa vinculada ao seu perfil ou entre em contato com o suporte.</p>
+                      )}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
               <Card>
                 <CardHeader>
                   <CardTitle>Integrações</CardTitle>
