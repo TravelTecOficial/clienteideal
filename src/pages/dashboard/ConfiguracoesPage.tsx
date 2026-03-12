@@ -319,6 +319,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [wordpressToken, setWordpressToken] = useState("");
   const [isWordpressConnected, setIsWordpressConnected] = useState(false);
   const [isSavingWordpress, setIsSavingWordpress] = useState(false);
+  const [isWordpressModalOpen, setIsWordpressModalOpen] = useState(false);
   const [whatsappPhoneNumbers, setWhatsappPhoneNumbers] = useState<WhatsappPhoneNumber[]>([]);
   const [selectedWhatsappPhoneId, setSelectedWhatsappPhoneId] = useState<string | null>(null);
   const [isWhatsappConnected, setIsWhatsappConnected] = useState(false);
@@ -595,6 +596,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         ga4SelectedPropertyName?: string | null;
         ga4SelectedPropertyDisplayName?: string | null;
         ga4SelectedAccountDisplayName?: string | null;
+        adsSelectedAccountId?: string | null;
         adsSelectedAccountDisplayName?: string | null;
         mybusinessSelectedPropertyName?: string | null;
         mybusinessSelectedPropertyDisplayName?: string | null;
@@ -604,7 +606,12 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         setIsGA4Connected(Boolean(data.ga4));
         setIsAdsConnected(Boolean(data.ads));
         setIsMyBusinessConnected(Boolean(data.mybusiness));
-        setAdsAccountDisplayName(data.adsSelectedAccountDisplayName ?? null);
+        const adsDisplay =
+          data.adsSelectedAccountDisplayName ??
+          (typeof data.adsSelectedAccountId === "string" && data.adsSelectedAccountId.startsWith("customers/")
+            ? data.adsSelectedAccountId.replace(/^customers\//, "").replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
+            : null);
+        setAdsAccountDisplayName(adsDisplay ?? null);
         setSelectedGoogleAnalyticsPropertyName(data.ga4SelectedPropertyName ?? null);
         setSelectedGoogleAnalyticsPropertyLabel(
           data.ga4SelectedPropertyDisplayName
@@ -731,14 +738,30 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         },
         body: JSON.stringify({ action: "getAdsAccountInfo", company_id: companyId, token }),
       });
-      const data = (await res.json().catch(() => null)) as { accountDisplayName?: string; error?: string } | null;
-      if (res.ok && data?.accountDisplayName) {
-        setAdsAccountDisplayName(data.accountDisplayName);
+      const data = (await res.json().catch(() => null)) as {
+        accountDisplayName?: string;
+        accountId?: string;
+        error?: string;
+        hint?: string;
+      } | null;
+      if (res.ok && data) {
+        const display =
+          data.accountDisplayName ??
+          (typeof data.accountId === "string" && data.accountId.startsWith("customers/")
+            ? data.accountId.replace(/^customers\//, "").replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
+            : null);
+        if (display) setAdsAccountDisplayName(display);
+      } else if (!res.ok && data?.error) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao carregar conta Google Ads",
+          description: data.hint ?? data.error,
+        });
       }
     } catch {
       // Silencioso - não bloqueia a UI
     }
-  }, [companyId, getToken]);
+  }, [companyId, getToken, toast]);
 
   const handleLoadGoogleAnalyticsProperties = useCallback(async () => {
     if (!companyId) {
@@ -1191,6 +1214,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         );
       if (error) throw error;
       setIsWordpressConnected(true);
+      setIsWordpressModalOpen(false);
       toast({ title: "WordPress conectado", description: "Credenciais salvas com sucesso." });
     } catch (err) {
       toast({
@@ -2857,8 +2881,24 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           <div className="flex flex-col items-center gap-2">
                             <Icon className="h-10 w-10 shrink-0 text-foreground" style={{ width: 40, height: 40 }} />
                             <p className="text-sm font-medium text-foreground">{int.name}</p>
-                            {int.id === "google-ads" && adsAccountDisplayName && (
-                              <p className="text-xs font-mono text-muted-foreground">Conta: {adsAccountDisplayName}</p>
+                            {int.id === "google-ads" && (
+                              <>
+                                {adsAccountDisplayName ? (
+                                  <p className="text-xs font-mono text-muted-foreground">Conta: {adsAccountDisplayName}</p>
+                                ) : (
+                                  <Button
+                                    variant="link"
+                                    size="sm"
+                                    className="h-auto p-0 text-xs text-muted-foreground"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void fetchAdsAccountInfo();
+                                    }}
+                                  >
+                                    Carregar número da conta
+                                  </Button>
+                                )}
+                              </>
                             )}
                           </div>
                           <div className="flex w-full flex-col gap-1">
@@ -2906,7 +2946,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                     <Card
                       key="wordpress"
                       className={cn(
-                        "flex flex-col gap-3 p-4 transition-colors",
+                        "flex flex-col items-center justify-between gap-3 p-4 transition-colors",
                         isWordpressConnected
                           ? "border-primary bg-primary/10"
                           : "border-border bg-muted/30"
@@ -2916,61 +2956,36 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                         <SiWordpress className="h-10 w-10 shrink-0 text-foreground" style={{ width: 40, height: 40 }} />
                         <p className="text-sm font-medium text-foreground">WordPress</p>
                       </div>
-                      <div className="flex w-full flex-col gap-2">
-                        <div className="space-y-1">
-                          <Label htmlFor="wordpress-url" className="text-xs">
-                            URL do site
-                          </Label>
-                          <Input
-                            id="wordpress-url"
-                            type="url"
-                            placeholder="https://seusite.com"
-                            value={wordpressSiteUrl}
-                            onChange={(e) => setWordpressSiteUrl(e.target.value)}
-                            disabled={!companyId}
-                            className="h-8 text-sm"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="wordpress-token" className="text-xs">
-                            Token
-                          </Label>
-                          <Input
-                            id="wordpress-token"
-                            type="password"
-                            placeholder="Token de API"
-                            value={wordpressToken}
-                            onChange={(e) => setWordpressToken(e.target.value)}
-                            disabled={!companyId}
-                            className="h-8 text-sm"
-                          />
-                        </div>
-                        {isWordpressConnected ? (
+                      <div className="flex w-full flex-col gap-1">
+                        <Button
+                          size="sm"
+                          variant={isWordpressConnected ? "outline" : "default"}
+                          disabled={isSavingWordpress || !companyId}
+                          className={cn(
+                            "w-full",
+                            isWordpressConnected && "border-primary text-primary hover:bg-primary/10"
+                          )}
+                          onClick={() => setIsWordpressModalOpen(true)}
+                        >
+                          {isWordpressConnected ? (
+                            <>
+                              <Check className="mr-1 h-4 w-4" />
+                              Conectado
+                            </>
+                          ) : (
+                            "Conectar"
+                          )}
+                        </Button>
+                        {isWordpressConnected && (
                           <>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="w-full border-primary text-primary hover:bg-primary/10"
-                              disabled
-                            >
-                              <Check className="mr-1 h-4 w-4" />
-                              Conectado
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
                               className="w-full"
-                              disabled={isSavingWordpress || !wordpressSiteUrl.trim() || !wordpressToken.trim()}
-                              onClick={handleSaveWordpress}
+                              disabled={isSavingWordpress || !companyId}
+                              onClick={() => setIsWordpressModalOpen(true)}
                             >
-                              {isSavingWordpress ? (
-                                <>
-                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                  Salvando…
-                                </>
-                              ) : (
-                                "Atualizar"
-                              )}
+                              Atualizar
                             </Button>
                             <Button
                               variant="ghost"
@@ -2982,25 +2997,68 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                               Desconectar
                             </Button>
                           </>
-                        ) : (
+                        )}
+                      </div>
+                    </Card>
+                    <Dialog open={isWordpressModalOpen} onOpenChange={setIsWordpressModalOpen}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Conectar WordPress</DialogTitle>
+                          <DialogDescription>
+                            Informe a URL do site e o token de API para vincular a integração.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="wordpress-modal-url">URL do site</Label>
+                            <Input
+                              id="wordpress-modal-url"
+                              type="url"
+                              placeholder="https://seusite.com"
+                              value={wordpressSiteUrl}
+                              onChange={(e) => setWordpressSiteUrl(e.target.value)}
+                              disabled={!companyId}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="wordpress-modal-token">Token</Label>
+                            <Input
+                              id="wordpress-modal-token"
+                              type="password"
+                              placeholder="Token de API"
+                              value={wordpressToken}
+                              onChange={(e) => setWordpressToken(e.target.value)}
+                              disabled={!companyId}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
                           <Button
-                            size="sm"
-                            className="w-full"
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsWordpressModalOpen(false)}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            type="button"
                             disabled={isSavingWordpress || !companyId || !wordpressSiteUrl.trim() || !wordpressToken.trim()}
                             onClick={handleSaveWordpress}
                           >
                             {isSavingWordpress ? (
                               <>
-                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 Salvando…
                               </>
+                            ) : isWordpressConnected ? (
+                              "Atualizar"
                             ) : (
-                              "Salvar"
+                              "Conectar"
                             )}
                           </Button>
-                        )}
-                      </div>
-                    </Card>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
 
                   {isGA4Connected && googleAnalyticsProperties.length === 0 && (
