@@ -1,0 +1,1713 @@
+{
+  "workspace_root_path": "C:\\Users\\User\\Documents\\clienteideal2",
+  "folder_map": {
+    "dashboard_base": "src/pages/dashboard",
+    "admin_base": "src/pages/admin",
+    "functions_base": "supabase/functions",
+    "migrations_base": "supabase/migrations",
+    "docs_base": "docs"
+  },
+  "modules": [
+    {
+      "slug": "agenda",
+      "moduleName": "Agenda",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\agenda\\index.tsx",
+      "sqlPaths": [
+        "20260212140000_create_agenda_table.sql",
+        "20260213000001_opportunities_lead_agenda_vendedor.sql",
+        "20260223150000_agenda_id_grupo.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301170000_drop_agenda_opportunity_trigger.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\security.md",
+        "docs\\SOCIAL_HUB_RLS.md"
+      ]
+    },
+    {
+      "slug": "agenda",
+      "moduleName": "Agenda",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\AgendaPage.tsx",
+      "sqlPaths": [
+        "20260212140000_create_agenda_table.sql",
+        "20260213000001_opportunities_lead_agenda_vendedor.sql",
+        "20260223150000_agenda_id_grupo.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301170000_drop_agenda_opportunity_trigger.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\security.md",
+        "docs\\SOCIAL_HUB_RLS.md"
+      ]
+    },
+    {
+      "slug": "atendimento",
+      "moduleName": "Atendimento",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\atendimento\\index.tsx",
+      "sqlPaths": [
+        "20260212160000_create_atendimentos_ia.sql",
+        "20260212170000_fix_atendimentos_ia_company_id_text.sql",
+        "20260213150000_add_prompt_atendimento.sql",
+        "20260221130000_prompt_atendimento_template_id.sql",
+        "20260221160000_prompt_atendimento_remove_temperatura_tokens.sql",
+        "20260226150000_prompt_atendimento_multi_per_company.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.5_DEPLOY.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "atendimentos",
+      "moduleName": "Atendimentos",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\AtendimentosPage.tsx",
+      "sqlPaths": [
+        "20260212160000_create_atendimentos_ia.sql",
+        "20260212170000_fix_atendimentos_ia_company_id_text.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "base-conhecimento",
+      "moduleName": "Base conhecimento",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\base-conhecimento\\index.tsx",
+      "docsPaths": [
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md"
+      ]
+    },
+    {
+      "slug": "baseconhecimento",
+      "moduleName": "BaseConhecimento",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": false,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\BaseConhecimentoPage.tsx"
+    },
+    {
+      "slug": "chat-conhecimento",
+      "moduleName": "Chat conhecimento",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\chat-conhecimento\\index.tsx",
+      "sqlPaths": [
+        "20260217140000_add_n8n_chat_webhook.sql",
+        "20260217170000_admin_webhook_chat_global.sql"
+      ],
+      "docsPaths": [
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "chatconhecimento",
+      "moduleName": "ChatConhecimento",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": false,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\ChatConhecimentoPage.tsx"
+    },
+    {
+      "slug": "cliente-ideal-context",
+      "moduleName": "Cliente ideal context",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": false,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\cliente-ideal-context\\CampanhaPlaceholder.tsx",
+      "sqlPaths": [
+        "20260212200000_ideal_customers_rls_policies.sql",
+        "20260213130000_fix_ideal_customers_rls_production.sql",
+        "20260218120000_ideal_customers_avatar_url.sql",
+        "20260218200000_repair_ideal_customers_avatar_url.sql",
+        "20260226120000_leads_status_cliente.sql",
+        "20260226130000_leads_flag_cliente.sql",
+        "20260226140000_ideal_customers_identifying_phrase.sql"
+      ]
+    },
+    {
+      "slug": "clienteideal",
+      "moduleName": "ClienteIdeal",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\ClienteIdealPage.tsx",
+      "docsPaths": [
+        "docs\\AMBIENTES-DEV-PROD.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md"
+      ]
+    },
+    {
+      "slug": "configuracoes",
+      "moduleName": "Configuracoes",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\ConfiguracoesPage.tsx",
+      "sqlPaths": [
+        "20260213000003_configuracoes_pagamentos.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.1.5_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "consorcio",
+      "moduleName": "Consorcio",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\consorcio\\index.tsx",
+      "sqlPaths": [
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md"
+      ]
+    },
+    {
+      "slug": "dashboard",
+      "moduleName": "Dashboard",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\DashboardPage.tsx",
+      "docsPaths": [
+        "docs\\AMBIENTES-DEV-PROD.md",
+        "docs\\architecture.md",
+        "docs\\CLERK-LOGIN-UM-CODIGO.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\SETUP-CLERK-SECRET.md",
+        "docs\\SETUP-CLERK-SUPABASE-AUTH.md",
+        "docs\\SOCIAL_HUB_RLS.md"
+      ]
+    },
+    {
+      "slug": "gmb-local",
+      "moduleName": "Gmb local",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": false,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\gmb-local\\index.tsx",
+      "sqlPaths": [
+        "20260301190000_gmb_tables.sql",
+        "20260301200000_companies_gmb_place_type.sql",
+        "20260301220000_companies_gmb_place_id.sql",
+        "20260301230000_gmb_accounts.sql",
+        "20260302100000_companies_gmb_place_type_secondary.sql"
+      ]
+    },
+    {
+      "slug": "gmblocal",
+      "moduleName": "GMBLocal",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": false,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\GMBLocalPage.tsx"
+    },
+    {
+      "slug": "ideal-customer",
+      "moduleName": "Ideal customer",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\ideal-customer\\ClienteIdealFormPage.tsx",
+      "sqlPaths": [
+        "20260212200000_ideal_customers_rls_policies.sql",
+        "20260213130000_fix_ideal_customers_rls_production.sql",
+        "20260218120000_ideal_customers_avatar_url.sql",
+        "20260218200000_repair_ideal_customers_avatar_url.sql",
+        "20260226140000_ideal_customers_identifying_phrase.sql"
+      ],
+      "docsPaths": [
+        "docs\\SOCIAL_HUB_RLS.md"
+      ]
+    },
+    {
+      "slug": "indicadores",
+      "moduleName": "Indicadores",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\indicadores\\index.tsx",
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "indicadores",
+      "moduleName": "Indicadores",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\IndicadoresPage.tsx",
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "items",
+      "moduleName": "Items",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\items\\index.tsx",
+      "sqlPaths": [
+        "20260212000000_items_rls_clerk.sql",
+        "20260212000001_items_rls_company_select.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\LEADS_API_PAYLOAD.md"
+      ]
+    },
+    {
+      "slug": "leads",
+      "moduleName": "Leads",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\leads\\index.tsx",
+      "sqlPaths": [
+        "20260213000000_leads_vendedores_rls.sql",
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260221170000_leads_classificacao.sql",
+        "20260223160000_leads_pontuacao_questionario.sql",
+        "20260223170000_leads_classificacao_case_insensitive.sql",
+        "20260224220000_leads_allow_minimum_insert.sql",
+        "20260226120000_leads_status_cliente.sql",
+        "20260226130000_leads_flag_cliente.sql",
+        "20260226170000_leads_utm_demografia.sql",
+        "20260227120000_leads_conversao.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\LEADS_API_PAYLOAD.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.5_DEPLOY.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "leads",
+      "moduleName": "Leads",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\LeadsPage.tsx",
+      "sqlPaths": [
+        "20260213000000_leads_vendedores_rls.sql",
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260221170000_leads_classificacao.sql",
+        "20260223160000_leads_pontuacao_questionario.sql",
+        "20260223170000_leads_classificacao_case_insensitive.sql",
+        "20260224220000_leads_allow_minimum_insert.sql",
+        "20260226120000_leads_status_cliente.sql",
+        "20260226130000_leads_flag_cliente.sql",
+        "20260226170000_leads_utm_demografia.sql",
+        "20260227120000_leads_conversao.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\LEADS_API_PAYLOAD.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.5_DEPLOY.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "oportunidades",
+      "moduleName": "Oportunidades",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\oportunidades\\index.tsx",
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "oportunidades",
+      "moduleName": "Oportunidades",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\OportunidadesPage.tsx",
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "produtosservicos",
+      "moduleName": "ProdutosServicos",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": false,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\ProdutosServicosPage.tsx"
+    },
+    {
+      "slug": "profile",
+      "moduleName": "Profile",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\ProfilePage.tsx",
+      "sqlPaths": [
+        "20260212120000_qualificacoes_rls_profiles.sql",
+        "20260212130000_opportunities_rls_profiles.sql",
+        "20260212150000_kb_files_control_rls_profiles.sql"
+      ],
+      "docsPaths": [
+        "docs\\AMBIENTES-DEV-PROD.md",
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\security.md",
+        "docs\\SETUP-CLERK-SECRET.md",
+        "docs\\SETUP-CLERK-SUPABASE-AUTH.md",
+        "docs\\SOCIAL_HUB_RLS.md"
+      ]
+    },
+    {
+      "slug": "prompt-atendimento",
+      "moduleName": "Prompt atendimento",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\prompt-atendimento\\index.tsx",
+      "sqlPaths": [
+        "20260212160000_create_atendimentos_ia.sql",
+        "20260212170000_fix_atendimentos_ia_company_id_text.sql",
+        "20260213150000_add_prompt_atendimento.sql",
+        "20260221120000_prompt_templates_master.sql",
+        "20260221130000_prompt_atendimento_template_id.sql",
+        "20260221140000_prompt_categoria_followup.sql",
+        "20260221150000_prompt_templates_temperatura_tokens_informacoes.sql",
+        "20260221155000_prompt_templates_nome_to_name.sql",
+        "20260221160000_prompt_atendimento_remove_temperatura_tokens.sql",
+        "20260222000000_prompt_templates_descricao.sql",
+        "20260222000001_prompt_template_stages_instrucoes_enabled_ordem.sql",
+        "20260222000002_prompt_template_stages_enabled_default_false.sql",
+        "20260222100000_prompt_template_stages_drop_is_active.sql",
+        "20260223120000_prompt_templates_add_updated_at.sql",
+        "20260223130000_prompt_template_stages_tools_comment.sql",
+        "20260226150000_prompt_atendimento_multi_per_company.sql",
+        "20260228120000_qualificador_prompt_persona_relacionamento.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\RELEASE_V1.1.5_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "qualificacao",
+      "moduleName": "Qualificacao",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\qualificacao\\index.tsx",
+      "sqlPaths": [
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260214200000_view_qualificacao_sdr.sql",
+        "20260214210000_pontuacao_limites_qualificacao.sql",
+        "20260218180000_qualificacao_templates.sql"
+      ],
+      "docsPaths": [
+        "docs\\database.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "qualificador",
+      "moduleName": "Qualificador",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\QualificadorPage.tsx",
+      "sqlPaths": [
+        "20260212210000_qualificadores_estrutura.sql",
+        "20260228120000_qualificador_prompt_persona_relacionamento.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "social-hub",
+      "moduleName": "Social hub",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\social-hub\\index.tsx",
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\integrations.md",
+        "docs\\security.md",
+        "docs\\SOCIAL_HUB_RLS.md"
+      ]
+    },
+    {
+      "slug": "socialhub",
+      "moduleName": "SocialHub",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": false,
+      "docs": false,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\SocialHubPage.tsx"
+    },
+    {
+      "slug": "vendedores",
+      "moduleName": "Vendedores",
+      "type": "dashboard",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\dashboard\\vendedores\\index.tsx",
+      "sqlPaths": [
+        "20260213000000_leads_vendedores_rls.sql",
+        "20260217130000_opportunities_seller_fk_vendedores.sql",
+        "20260221183000_vendedores_status_requires_clerk.sql",
+        "20260223143000_vendedores_id_text_clerk_alignment.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\security.md",
+        "docs\\SOCIAL_HUB_RLS.md"
+      ]
+    },
+    {
+      "slug": "briefing",
+      "moduleName": "Briefing",
+      "type": "admin",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\admin\\AdminBriefingPage.tsx",
+      "sqlPaths": [
+        "20260226190000_briefing_questions_responses.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md"
+      ]
+    },
+    {
+      "slug": "config",
+      "moduleName": "Config",
+      "type": "admin",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\admin\\AdminConfigPage.tsx",
+      "sqlPaths": [
+        "20260213000003_configuracoes_pagamentos.sql",
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260217150000_add_evolution_api_config.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260227130000_saas_costs_pricing_config_rls.sql"
+      ],
+      "docsPaths": [
+        "docs\\AMBIENTES-DEV-PROD.md",
+        "docs\\architecture.md",
+        "docs\\CLERK-LOGIN-UM-CODIGO.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.5_DEPLOY.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md",
+        "docs\\security.md",
+        "docs\\SETUP-CLERK-SECRET.md",
+        "docs\\SETUP-CLERK-SUPABASE-AUTH.md"
+      ]
+    },
+    {
+      "slug": "evolution",
+      "moduleName": "Evolution",
+      "type": "admin",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\admin\\AdminEvolutionPage.tsx",
+      "sqlPaths": [
+        "20260217150000_add_evolution_api_config.sql",
+        "20260217180000_admin_evolution_config.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "gtm",
+      "moduleName": "Gtm",
+      "type": "admin",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\admin\\AdminGtmPage.tsx",
+      "sqlPaths": [
+        "20260225120000_admin_gtm_config.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.1.5_DEPLOY.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "AdminPage.tsx",
+      "moduleName": "",
+      "type": "admin",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\admin\\AdminPage.tsx",
+      "docsPaths": [
+        "docs\\AMBIENTES-DEV-PROD.md",
+        "docs\\architecture.md",
+        "docs\\CLERK-LOGIN-UM-CODIGO.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\LEADS_API_PAYLOAD.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.5_DEPLOY.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md",
+        "docs\\security.md",
+        "docs\\SETUP-CLERK-SECRET.md",
+        "docs\\SETUP-CLERK-SUPABASE-AUTH.md",
+        "docs\\SOCIAL_HUB_RLS.md"
+      ]
+    },
+    {
+      "slug": "personas",
+      "moduleName": "Personas",
+      "type": "admin",
+      "tsx": true,
+      "sql": false,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\admin\\AdminPersonasPage.tsx",
+      "docsPaths": [
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "preview",
+      "moduleName": "Preview",
+      "type": "admin",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\admin\\AdminPreviewPage.tsx",
+      "sqlPaths": [
+        "20260226200000_saas_admin_preview_rls.sql"
+      ],
+      "docsPaths": [
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md",
+        "docs\\SOCIAL_HUB_RLS.md"
+      ]
+    },
+    {
+      "slug": "qualificacao",
+      "moduleName": "Qualificacao",
+      "type": "admin",
+      "tsx": true,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "tsxPath": "C:\\Users\\User\\Documents\\clienteideal2\\src\\pages\\admin\\AdminQualificacaoPage.tsx",
+      "sqlPaths": [
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260214200000_view_qualificacao_sdr.sql",
+        "20260214210000_pontuacao_limites_qualificacao.sql",
+        "20260218180000_qualificacao_templates.sql"
+      ],
+      "docsPaths": [
+        "docs\\database.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "admin-briefing-questions",
+      "moduleName": "Admin briefing questions",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260226190000_briefing_questions_responses.sql",
+        "20260226200000_saas_admin_preview_rls.sql",
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301160000_opportunities_insert_rls_saas_admin.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md"
+      ]
+    },
+    {
+      "slug": "admin-evolution-config",
+      "moduleName": "Admin evolution config",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260213000003_configuracoes_pagamentos.sql",
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260217150000_add_evolution_api_config.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260226200000_saas_admin_preview_rls.sql",
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+        "20260227130000_saas_costs_pricing_config_rls.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301160000_opportunities_insert_rls_saas_admin.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "admin-gtm-config",
+      "moduleName": "Admin gtm config",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260213000003_configuracoes_pagamentos.sql",
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260217150000_add_evolution_api_config.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260226200000_saas_admin_preview_rls.sql",
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+        "20260227130000_saas_costs_pricing_config_rls.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301160000_opportunities_insert_rls_saas_admin.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.1.5_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "admin-list-companies",
+      "moduleName": "Admin list companies",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260217160000_admin_webhook_config.sql",
+        "20260217160001_companies_whatsapp_image.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260218190000_companies_description_history.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260226180000_companies_cadastro_estruturado.sql",
+        "20260226200000_saas_admin_preview_rls.sql",
+        "20260227103000_companies_support_access.sql",
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228140100_companies_segment_type.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301160000_opportunities_insert_rls_saas_admin.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+        "20260301200000_companies_gmb_place_type.sql",
+        "20260301210000_companies_update_policy_fix.sql",
+        "20260301220000_companies_gmb_place_id.sql",
+        "20260302100000_companies_gmb_place_type_secondary.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "admin-list-users",
+      "moduleName": "Admin list users",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260226200000_saas_admin_preview_rls.sql",
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301160000_opportunities_insert_rls_saas_admin.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\SETUP-CLERK-SECRET.md"
+      ]
+    },
+    {
+      "slug": "admin-persona-templates",
+      "moduleName": "Admin persona templates",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260218170000_persona_templates.sql",
+        "20260218173000_persona_templates_segment.sql",
+        "20260218180000_qualificacao_templates.sql",
+        "20260221120000_prompt_templates_master.sql",
+        "20260221150000_prompt_templates_temperatura_tokens_informacoes.sql",
+        "20260221155000_prompt_templates_nome_to_name.sql",
+        "20260222000000_prompt_templates_descricao.sql",
+        "20260223120000_prompt_templates_add_updated_at.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260226200000_saas_admin_preview_rls.sql",
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+        "20260228120000_qualificador_prompt_persona_relacionamento.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301160000_opportunities_insert_rls_saas_admin.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "admin-qualificacao-templates",
+      "moduleName": "Admin qualificacao templates",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260214200000_view_qualificacao_sdr.sql",
+        "20260214210000_pontuacao_limites_qualificacao.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260218170000_persona_templates.sql",
+        "20260218173000_persona_templates_segment.sql",
+        "20260218180000_qualificacao_templates.sql",
+        "20260221120000_prompt_templates_master.sql",
+        "20260221150000_prompt_templates_temperatura_tokens_informacoes.sql",
+        "20260221155000_prompt_templates_nome_to_name.sql",
+        "20260222000000_prompt_templates_descricao.sql",
+        "20260223120000_prompt_templates_add_updated_at.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260226200000_saas_admin_preview_rls.sql",
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301160000_opportunities_insert_rls_saas_admin.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "admin-update-company",
+      "moduleName": "Admin update company",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260212000001_items_rls_company_select.sql",
+        "20260212170000_fix_atendimentos_ia_company_id_text.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217160002_storage_company_assets.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260218164000_increase_company_assets_limit.sql",
+        "20260223120000_prompt_templates_add_updated_at.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260226150000_prompt_atendimento_multi_per_company.sql",
+        "20260226200000_saas_admin_preview_rls.sql",
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+        "20260301120000_fix_opportunities_update_rls.sql",
+        "20260301130000_opportunities_update_rpc.sql",
+        "20260301130100_opportunities_update_rpc_grants.sql",
+        "20260301140000_opportunities_update_rpc_jsonb.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301160000_opportunities_insert_rls_saas_admin.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+        "20260301210000_companies_update_policy_fix.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "admin-webhook-config",
+      "moduleName": "Admin webhook config",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260213000003_configuracoes_pagamentos.sql",
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260217140000_add_n8n_chat_webhook.sql",
+        "20260217150000_add_evolution_api_config.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260222120000_crm_webhook_on_opportunity_stage.sql",
+        "20260223180000_crm_webhook_on_opportunity_insert.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260226200000_saas_admin_preview_rls.sql",
+        "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+        "20260227130000_saas_costs_pricing_config_rls.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+        "20260301150000_agenda_rls_saas_admin.sql",
+        "20260301160000_opportunities_insert_rls_saas_admin.sql",
+        "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "chat-conhecimento-proxy",
+      "moduleName": "Chat conhecimento proxy",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260217140000_add_n8n_chat_webhook.sql",
+        "20260217170000_admin_webhook_chat_global.sql"
+      ],
+      "docsPaths": [
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "clerk-invite-vendedor",
+      "moduleName": "Clerk invite vendedor",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260211000000_fix_rls_for_clerk_string_ids.sql",
+        "20260211120000_fix_clerk_string_ids_drop_bad_policies.sql",
+        "20260212000000_items_rls_clerk.sql",
+        "20260213000000_leads_vendedores_rls.sql",
+        "20260213000001_opportunities_lead_agenda_vendedor.sql",
+        "20260213000002_horarios_vendedor_unique_constraint.sql",
+        "20260217130000_opportunities_seller_fk_vendedores.sql",
+        "20260221183000_vendedores_status_requires_clerk.sql",
+        "20260223143000_vendedores_id_text_clerk_alignment.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql",
+        "20260306180000_vendedor_horarios_rpc.sql"
+      ],
+      "docsPaths": [
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "clerk-webhook",
+      "moduleName": "Clerk webhook",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260211000000_fix_rls_for_clerk_string_ids.sql",
+        "20260211120000_fix_clerk_string_ids_drop_bad_policies.sql",
+        "20260212000000_items_rls_clerk.sql",
+        "20260217140000_add_n8n_chat_webhook.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260221183000_vendedores_status_requires_clerk.sql",
+        "20260222120000_crm_webhook_on_opportunity_stage.sql",
+        "20260223143000_vendedores_id_text_clerk_alignment.sql",
+        "20260223180000_crm_webhook_on_opportunity_insert.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql"
+      ],
+      "docsPaths": [
+        "docs\\AMBIENTES-DEV-PROD.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "crm-webhook-stage-change",
+      "moduleName": "Crm webhook stage change",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260217140000_add_n8n_chat_webhook.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260222000001_prompt_template_stages_instrucoes_enabled_ordem.sql",
+        "20260222000002_prompt_template_stages_enabled_default_false.sql",
+        "20260222100000_prompt_template_stages_drop_is_active.sql",
+        "20260222120000_crm_webhook_on_opportunity_stage.sql",
+        "20260223130000_prompt_template_stages_tools_comment.sql",
+        "20260223180000_crm_webhook_on_opportunity_insert.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql"
+      ],
+      "docsPaths": [
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "evolution-proxy",
+      "moduleName": "Evolution proxy",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260217150000_add_evolution_api_config.sql",
+        "20260217180000_admin_evolution_config.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "evolution-webhook",
+      "moduleName": "Evolution webhook",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260217140000_add_n8n_chat_webhook.sql",
+        "20260217150000_add_evolution_api_config.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260222120000_crm_webhook_on_opportunity_stage.sql",
+        "20260223180000_crm_webhook_on_opportunity_insert.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "geocode-address",
+      "moduleName": "Geocode address",
+      "type": "function",
+      "tsx": false,
+      "sql": false,
+      "docs": false,
+      "prompts": false
+    },
+    {
+      "slug": "get-gtm-config",
+      "moduleName": "Get gtm config",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260213000003_configuracoes_pagamentos.sql",
+        "20260214113821_config_qualificacao_leads_sessao.sql",
+        "20260217150000_add_evolution_api_config.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217180000_admin_evolution_config.sql",
+        "20260225120000_admin_gtm_config.sql",
+        "20260227130000_saas_costs_pricing_config_rls.sql"
+      ],
+      "docsPaths": [
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.1.5_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "gmb-post-create",
+      "moduleName": "Gmb post create",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260212140000_create_agenda_table.sql",
+        "20260212160000_create_atendimentos_ia.sql",
+        "20260301190000_gmb_tables.sql",
+        "20260301200000_companies_gmb_place_type.sql",
+        "20260301220000_companies_gmb_place_id.sql",
+        "20260301230000_gmb_accounts.sql",
+        "20260302100000_companies_gmb_place_type_secondary.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\deploy.md",
+        "docs\\integrations.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "gmb-post-list",
+      "moduleName": "Gmb post list",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": false,
+      "prompts": false,
+      "sqlPaths": [
+        "20260301190000_gmb_tables.sql",
+        "20260301200000_companies_gmb_place_type.sql",
+        "20260301220000_companies_gmb_place_id.sql",
+        "20260301230000_gmb_accounts.sql",
+        "20260302100000_companies_gmb_place_type_secondary.sql"
+      ]
+    },
+    {
+      "slug": "meta-instagram",
+      "moduleName": "Meta instagram",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260303110000_meta_instagram_integrations.sql",
+        "20260304120000_meta_instagram_selection.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\integrations.md",
+        "docs\\security.md"
+      ]
+    },
+    {
+      "slug": "persona-generate-avatar",
+      "moduleName": "Persona generate avatar",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260218120000_ideal_customers_avatar_url.sql",
+        "20260218170000_persona_templates.sql",
+        "20260218173000_persona_templates_segment.sql",
+        "20260218200000_repair_ideal_customers_avatar_url.sql",
+        "20260228120000_qualificador_prompt_persona_relacionamento.sql"
+      ],
+      "docsPaths": [
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "persona-template-generate-avatar",
+      "moduleName": "Persona template generate avatar",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260218120000_ideal_customers_avatar_url.sql",
+        "20260218170000_persona_templates.sql",
+        "20260218173000_persona_templates_segment.sql",
+        "20260218180000_qualificacao_templates.sql",
+        "20260218200000_repair_ideal_customers_avatar_url.sql",
+        "20260221120000_prompt_templates_master.sql",
+        "20260221130000_prompt_atendimento_template_id.sql",
+        "20260221150000_prompt_templates_temperatura_tokens_informacoes.sql",
+        "20260221155000_prompt_templates_nome_to_name.sql",
+        "20260222000000_prompt_templates_descricao.sql",
+        "20260222000001_prompt_template_stages_instrucoes_enabled_ordem.sql",
+        "20260222000002_prompt_template_stages_enabled_default_false.sql",
+        "20260222100000_prompt_template_stages_drop_is_active.sql",
+        "20260223120000_prompt_templates_add_updated_at.sql",
+        "20260223130000_prompt_template_stages_tools_comment.sql",
+        "20260228120000_qualificador_prompt_persona_relacionamento.sql"
+      ],
+      "docsPaths": [
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\RELEASE_V1.1.7_DEPLOY.md"
+      ]
+    },
+    {
+      "slug": "place-from-name",
+      "moduleName": "Place from name",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": false,
+      "prompts": false,
+      "sqlPaths": [
+        "20260221155000_prompt_templates_nome_to_name.sql",
+        "20260228120000_qualificador_prompt_persona_relacionamento.sql",
+        "20260301200000_companies_gmb_place_type.sql",
+        "20260301220000_companies_gmb_place_id.sql",
+        "20260302100000_companies_gmb_place_type_secondary.sql"
+      ]
+    },
+    {
+      "slug": "place-from-url",
+      "moduleName": "Place from url",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": false,
+      "prompts": false,
+      "sqlPaths": [
+        "20260218120000_ideal_customers_avatar_url.sql",
+        "20260218200000_repair_ideal_customers_avatar_url.sql",
+        "20260301200000_companies_gmb_place_type.sql",
+        "20260301220000_companies_gmb_place_id.sql",
+        "20260302100000_companies_gmb_place_type_secondary.sql"
+      ]
+    },
+    {
+      "slug": "places-search-nearby",
+      "moduleName": "Places search nearby",
+      "type": "function",
+      "tsx": false,
+      "sql": false,
+      "docs": false,
+      "prompts": false
+    },
+    {
+      "slug": "sync-profile",
+      "moduleName": "Sync profile",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260212120000_qualificacoes_rls_profiles.sql",
+        "20260212130000_opportunities_rls_profiles.sql",
+        "20260212150000_kb_files_control_rls_profiles.sql"
+      ],
+      "docsPaths": [
+        "docs\\AMBIENTES-DEV-PROD.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\SETUP-CLERK-SECRET.md"
+      ]
+    },
+    {
+      "slug": "sync-profile-client",
+      "moduleName": "Sync profile client",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260212120000_qualificacoes_rls_profiles.sql",
+        "20260212130000_opportunities_rls_profiles.sql",
+        "20260212150000_kb_files_control_rls_profiles.sql",
+        "20260226120000_leads_status_cliente.sql",
+        "20260226130000_leads_flag_cliente.sql"
+      ],
+      "docsPaths": [
+        "docs\\AMBIENTES-DEV-PROD.md",
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md",
+        "docs\\SETUP-CLERK-SECRET.md"
+      ]
+    },
+    {
+      "slug": "update-opportunity",
+      "moduleName": "Update opportunity",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": false,
+      "prompts": false,
+      "sqlPaths": [
+        "20260222120000_crm_webhook_on_opportunity_stage.sql",
+        "20260223120000_prompt_templates_add_updated_at.sql",
+        "20260223180000_crm_webhook_on_opportunity_insert.sql",
+        "20260301120000_fix_opportunities_update_rls.sql",
+        "20260301130000_opportunities_update_rpc.sql",
+        "20260301130100_opportunities_update_rpc_grants.sql",
+        "20260301140000_opportunities_update_rpc_jsonb.sql",
+        "20260301170000_drop_agenda_opportunity_trigger.sql",
+        "20260301210000_companies_update_policy_fix.sql",
+        "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql"
+      ]
+    },
+    {
+      "slug": "upload-kb-to-webhook",
+      "moduleName": "Upload kb to webhook",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260212150000_kb_files_control_rls_profiles.sql",
+        "20260212160000_create_atendimentos_ia.sql",
+        "20260212170000_fix_atendimentos_ia_company_id_text.sql",
+        "20260212200000_ideal_customers_rls_policies.sql",
+        "20260213000003_configuracoes_pagamentos.sql",
+        "20260213130000_fix_ideal_customers_rls_production.sql",
+        "20260213150000_add_prompt_atendimento.sql",
+        "20260217140000_add_n8n_chat_webhook.sql",
+        "20260217160000_admin_webhook_config.sql",
+        "20260217160002_storage_company_assets.sql",
+        "20260217170000_admin_webhook_chat_global.sql",
+        "20260218120000_ideal_customers_avatar_url.sql",
+        "20260218190000_companies_description_history.sql",
+        "20260218200000_repair_ideal_customers_avatar_url.sql",
+        "20260221130000_prompt_atendimento_template_id.sql",
+        "20260221150000_prompt_templates_temperatura_tokens_informacoes.sql",
+        "20260221155000_prompt_templates_nome_to_name.sql",
+        "20260221160000_prompt_atendimento_remove_temperatura_tokens.sql",
+        "20260222120000_crm_webhook_on_opportunity_stage.sql",
+        "20260223130000_prompt_template_stages_tools_comment.sql",
+        "20260223180000_crm_webhook_on_opportunity_insert.sql",
+        "20260226140000_ideal_customers_identifying_phrase.sql",
+        "20260226150000_prompt_atendimento_multi_per_company.sql",
+        "20260228120000_qualificador_prompt_persona_relacionamento.sql",
+        "20260228140000_admin_webhook_segment_3campos.sql",
+        "20260228150000_prompt_atendimento_rls_saas_admin.sql"
+      ],
+      "docsPaths": [
+        "docs\\deploy.md",
+        "docs\\DOCUMENTACAO_SISTEMA_V1.md",
+        "docs\\integrations.md",
+        "docs\\RELEASE_V1.0.0_GITHUB.md"
+      ]
+    },
+    {
+      "slug": "whatsapp-integration",
+      "moduleName": "Whatsapp integration",
+      "type": "function",
+      "tsx": false,
+      "sql": true,
+      "docs": true,
+      "prompts": false,
+      "sqlPaths": [
+        "20260213140000_add_estancia_whatsapp.sql",
+        "20260217160001_companies_whatsapp_image.sql",
+        "20260303110000_meta_instagram_integrations.sql",
+        "20260305130000_integrations_whatsapp.sql"
+      ],
+      "docsPaths": [
+        "docs\\architecture.md",
+        "docs\\database.md",
+        "docs\\deploy.md",
+        "docs\\integrations.md",
+        "docs\\security.md"
+      ]
+    }
+  ],
+  "functions": [
+    "admin-briefing-questions",
+    "admin-evolution-config",
+    "admin-gtm-config",
+    "admin-list-companies",
+    "admin-list-users",
+    "admin-persona-templates",
+    "admin-qualificacao-templates",
+    "admin-update-company",
+    "admin-webhook-config",
+    "chat-conhecimento-proxy",
+    "clerk-invite-vendedor",
+    "clerk-webhook",
+    "crm-webhook-stage-change",
+    "evolution-proxy",
+    "evolution-webhook",
+    "geocode-address",
+    "get-gtm-config",
+    "gmb-post-create",
+    "gmb-post-list",
+    "meta-instagram",
+    "persona-generate-avatar",
+    "persona-template-generate-avatar",
+    "place-from-name",
+    "place-from-url",
+    "places-search-nearby",
+    "sync-profile",
+    "sync-profile-client",
+    "update-opportunity",
+    "upload-kb-to-webhook",
+    "whatsapp-integration"
+  ],
+  "migrations": [
+    "20260210000000_initial_schema.sql",
+    "20260211000000_fix_rls_for_clerk_string_ids.sql",
+    "20260211120000_fix_clerk_string_ids_drop_bad_policies.sql",
+    "20260212000000_items_rls_clerk.sql",
+    "20260212000001_items_rls_company_select.sql",
+    "20260212120000_qualificacoes_rls_profiles.sql",
+    "20260212120001_qualificacoes_user_id_text.sql",
+    "20260212130000_opportunities_rls_profiles.sql",
+    "20260212140000_create_agenda_table.sql",
+    "20260212150000_kb_files_control_rls_profiles.sql",
+    "20260212160000_create_atendimentos_ia.sql",
+    "20260212170000_fix_atendimentos_ia_company_id_text.sql",
+    "20260212200000_ideal_customers_rls_policies.sql",
+    "20260212210000_qualificadores_estrutura.sql",
+    "20260213000000_leads_vendedores_rls.sql",
+    "20260213000001_opportunities_lead_agenda_vendedor.sql",
+    "20260213000002_horarios_vendedor_unique_constraint.sql",
+    "20260213000003_configuracoes_pagamentos.sql",
+    "20260213130000_fix_ideal_customers_rls_production.sql",
+    "20260213140000_add_estancia_whatsapp.sql",
+    "20260213150000_add_prompt_atendimento.sql",
+    "20260214113821_config_qualificacao_leads_sessao.sql",
+    "20260214200000_view_qualificacao_sdr.sql",
+    "20260214210000_pontuacao_limites_qualificacao.sql",
+    "20260216120000_set_timezone_america_sao_paulo.sql",
+    "20260217120000_add_sinopse_opportunities.sql",
+    "20260217130000_opportunities_seller_fk_vendedores.sql",
+    "20260217140000_add_n8n_chat_webhook.sql",
+    "20260217150000_add_evolution_api_config.sql",
+    "20260217160000_admin_webhook_config.sql",
+    "20260217160001_companies_whatsapp_image.sql",
+    "20260217160002_storage_company_assets.sql",
+    "20260217170000_admin_webhook_chat_global.sql",
+    "20260217180000_admin_evolution_config.sql",
+    "20260218120000_ideal_customers_avatar_url.sql",
+    "20260218164000_increase_company_assets_limit.sql",
+    "20260218170000_persona_templates.sql",
+    "20260218173000_persona_templates_segment.sql",
+    "20260218180000_qualificacao_templates.sql",
+    "20260218190000_companies_description_history.sql",
+    "20260218200000_repair_ideal_customers_avatar_url.sql",
+    "20260221120000_prompt_templates_master.sql",
+    "20260221130000_prompt_atendimento_template_id.sql",
+    "20260221140000_prompt_categoria_followup.sql",
+    "20260221150000_prompt_templates_temperatura_tokens_informacoes.sql",
+    "20260221155000_prompt_templates_nome_to_name.sql",
+    "20260221160000_prompt_atendimento_remove_temperatura_tokens.sql",
+    "20260221170000_leads_classificacao.sql",
+    "20260221183000_vendedores_status_requires_clerk.sql",
+    "20260222000000_prompt_templates_descricao.sql",
+    "20260222000001_prompt_template_stages_instrucoes_enabled_ordem.sql",
+    "20260222000002_prompt_template_stages_enabled_default_false.sql",
+    "20260222100000_prompt_template_stages_drop_is_active.sql",
+    "20260222100001_drop_is_active_with_views.sql",
+    "20260222120000_crm_webhook_on_opportunity_stage.sql",
+    "20260223120000_prompt_templates_add_updated_at.sql",
+    "20260223130000_prompt_template_stages_tools_comment.sql",
+    "20260223143000_vendedores_id_text_clerk_alignment.sql",
+    "20260223150000_agenda_id_grupo.sql",
+    "20260223160000_leads_pontuacao_questionario.sql",
+    "20260223170000_leads_classificacao_case_insensitive.sql",
+    "20260223180000_crm_webhook_on_opportunity_insert.sql",
+    "20260224220000_leads_allow_minimum_insert.sql",
+    "20260225120000_admin_gtm_config.sql",
+    "20260226120000_leads_status_cliente.sql",
+    "20260226130000_leads_flag_cliente.sql",
+    "20260226140000_ideal_customers_identifying_phrase.sql",
+    "20260226150000_prompt_atendimento_multi_per_company.sql",
+    "20260226160000_campanhas_anuncios.sql",
+    "20260226170000_leads_utm_demografia.sql",
+    "20260226180000_companies_cadastro_estruturado.sql",
+    "20260226190000_briefing_questions_responses.sql",
+    "20260226200000_saas_admin_preview_rls.sql",
+    "20260227103000_companies_support_access.sql",
+    "20260227110000_cotas_consorcio_rls_saas_admin.sql",
+    "20260227120000_leads_conversao.sql",
+    "20260227130000_saas_costs_pricing_config_rls.sql",
+    "20260228120000_qualificador_prompt_persona_relacionamento.sql",
+    "20260228140000_admin_webhook_segment_3campos.sql",
+    "20260228140100_companies_segment_type.sql",
+    "20260228150000_prompt_atendimento_rls_saas_admin.sql",
+    "20260301120000_fix_opportunities_update_rls.sql",
+    "20260301130000_opportunities_update_rpc.sql",
+    "20260301130100_opportunities_update_rpc_grants.sql",
+    "20260301140000_opportunities_update_rpc_jsonb.sql",
+    "20260301150000_agenda_rls_saas_admin.sql",
+    "20260301160000_opportunities_insert_rls_saas_admin.sql",
+    "20260301170000_drop_agenda_opportunity_trigger.sql",
+    "20260301180000_agenda_select_rls_saas_admin_ensure.sql",
+    "20260301190000_gmb_tables.sql",
+    "20260301200000_companies_gmb_place_type.sql",
+    "20260301210000_companies_update_policy_fix.sql",
+    "20260301220000_companies_gmb_place_id.sql",
+    "20260301230000_gmb_accounts.sql",
+    "20260302100000_companies_gmb_place_type_secondary.sql",
+    "20260303110000_meta_instagram_integrations.sql",
+    "20260304120000_meta_instagram_selection.sql",
+    "20260305130000_integrations_whatsapp.sql",
+    "20260306120000_vendedores_rls_insert_update_delete_saas_admin.sql",
+    "20260306180000_vendedor_horarios_rpc.sql"
+  ],
+  "scannedAt": "2026-03-07T20:51:10.059Z"
+}

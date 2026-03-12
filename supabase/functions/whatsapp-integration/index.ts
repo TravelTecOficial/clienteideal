@@ -15,7 +15,13 @@ const WHATSAPP_SCOPES = [
   "business_management",
 ]
 
-type WhatsappAction = "getLoginUrl" | "exchangeCode" | "getPhoneNumbers" | "selectPhoneNumber"
+type WhatsappAction =
+  | "getLoginUrl"
+  | "exchangeCode"
+  | "getPhoneNumbers"
+  | "selectPhoneNumber"
+  | "connectEmbedded"
+  | "getWhatsappConnection"
 
 interface BaseBody {
   action?: WhatsappAction
@@ -42,7 +48,24 @@ interface SelectPhoneNumberBody extends BaseBody {
   phone_number_id?: string
 }
 
-type WhatsappRequestBody = GetLoginUrlBody | ExchangeCodeBody | GetPhoneNumbersBody | SelectPhoneNumberBody
+interface ConnectEmbeddedBody extends BaseBody {
+  action: "connectEmbedded"
+  short_lived_token: string
+  company_id: string
+}
+
+interface GetWhatsappConnectionBody extends BaseBody {
+  action: "getWhatsappConnection"
+  company_id: string
+}
+
+type WhatsappRequestBody =
+  | GetLoginUrlBody
+  | ExchangeCodeBody
+  | GetPhoneNumbersBody
+  | SelectPhoneNumberBody
+  | ConnectEmbeddedBody
+  | GetWhatsappConnectionBody
 
 interface MetaOAuthTokenResponse {
   access_token: string
@@ -181,24 +204,98 @@ function getSupabaseClient() {
   return createSupabaseClient(supabaseUrl, supabaseServiceKey)
 }
 
-const META_GRAPH_VERSION = "v19.0"
+function getMetaGraphVersion(): string {
+  return Deno.env.get("META_GRAPH_VERSION")?.trim() || "v21.0"
+}
 
 function getWhatsappConfig(): { appId: string; appSecret: string; redirectUri: string } | { error: Response } {
   const appId = Deno.env.get("META_APP_ID")?.trim()
   const appSecret = Deno.env.get("META_APP_SECRET")?.trim()
-  const redirectUri = Deno.env.get("META_WHATSAPP_REDIRECT_URI")?.trim()
+  const redirectUri =
+    Deno.env.get("META_REDIRECT_URI")?.trim() ||
+    Deno.env.get("META_WHATSAPP_REDIRECT_URI")?.trim()
   if (!appId || !appSecret || !redirectUri) {
     return {
       error: jsonResponse(
         {
           error: "Configuração da Meta/WhatsApp incompleta.",
-          hint: "Configure META_APP_ID, META_APP_SECRET e META_WHATSAPP_REDIRECT_URI nas secrets do Supabase.",
+          hint: "Configure META_APP_ID, META_APP_SECRET e META_REDIRECT_URI (ou META_WHATSAPP_REDIRECT_URI) nas secrets do Supabase.",
         } satisfies ErrorResponse,
         500,
       ),
     }
   }
   return { appId, appSecret, redirectUri }
+}
+
+function getConnectEmbeddedConfig(): {
+  appId: string
+  appSecret: string
+  encryptionKey: string
+  graphVersion: string
+} | { error: Response } {
+  const appId = Deno.env.get("META_APP_ID")?.trim()
+  const appSecret = Deno.env.get("META_APP_SECRET")?.trim()
+  const encryptionKey = Deno.env.get("META_TOKEN_ENCRYPTION_KEY")?.trim()
+  if (!appId || !appSecret || !encryptionKey) {
+    return {
+      error: jsonResponse(
+        {
+          error: "Configuração da Meta/WhatsApp incompleta para Embedded Signup.",
+          hint: "Configure META_APP_ID, META_APP_SECRET e META_TOKEN_ENCRYPTION_KEY nas secrets do Supabase.",
+        } satisfies ErrorResponse,
+        500,
+      ),
+    }
+  }
+  return {
+    appId,
+    appSecret,
+    encryptionKey,
+    graphVersion: getMetaGraphVersion(),
+  }
+}
+
+function toBase64Url(bytes: Uint8Array): string {
+  const bin = String.fromCharCode(...bytes)
+  const b64 = btoa(bin)
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
+}
+
+async function getAesKey(encryptionKey: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder()
+  const keyBytes = encoder.encode(encryptionKey.padEnd(32).slice(0, 32))
+  return crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["encrypt", "decrypt"])
+}
+
+async function encryptToken(plain: string, encryptionKey: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const key = await getAesKey(encryptionKey)
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const cipherBuf = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoder.encode(plain),
+  )
+  const cipherBytes = new Uint8Array(cipherBuf)
+  const ivB64 = toBase64Url(iv)
+  const cipherB64 = toBase64Url(cipherBytes)
+  return `${ivB64}:${cipherB64}`
+}
+
+async function validateCompanyAccess(
+  sub: string,
+  companyId: string,
+  supabase: ReturnType<typeof createSupabaseClient>,
+): Promise<boolean> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("company_id, saas_admin")
+    .eq("id", sub)
+    .maybeSingle()
+  if (!profile) return false
+  if ((profile as { saas_admin?: boolean }).saas_admin) return true
+  return (profile as { company_id: string | null }).company_id === companyId
 }
 
 async function handleGetLoginUrl(body: GetLoginUrlBody): Promise<Response> {
@@ -218,7 +315,7 @@ async function handleGetLoginUrl(body: GetLoginUrlBody): Promise<Response> {
   params.set("scope", WHATSAPP_SCOPES.join(","))
   params.set("state", providedState)
 
-  const url = `https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth?${params.toString()}`
+  const url = `https://www.facebook.com/${getMetaGraphVersion()}/dialog/oauth?${params.toString()}`
   return jsonResponse({ url })
 }
 
@@ -239,7 +336,7 @@ async function handleExchangeCode(
   }
 
   const tokenUrl = new URL(
-    `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token`,
+    `https://graph.facebook.com/${getMetaGraphVersion()}/oauth/access_token`,
   )
   tokenUrl.searchParams.set("client_id", appId)
   tokenUrl.searchParams.set("client_secret", appSecret)
@@ -291,7 +388,7 @@ async function handleExchangeCode(
   let wabaId: string
   try {
     const meRes = await axios.get<MetaMeResponse>(
-      `https://graph.facebook.com/${META_GRAPH_VERSION}/me`,
+      `https://graph.facebook.com/${getMetaGraphVersion()}/me`,
       {
         params: {
           fields: "id,name,whatsapp_business_accounts",
@@ -329,7 +426,7 @@ async function handleExchangeCode(
   let phoneNumbers: PhoneNumberDTO[] = []
   try {
     const phonesRes = await axios.get<MetaPhoneNumbersResponse>(
-      `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(wabaId)}/phone_numbers`,
+      `https://graph.facebook.com/${getMetaGraphVersion()}/${encodeURIComponent(wabaId)}/phone_numbers`,
       {
         params: {
           fields: "id,display_phone_number,verified_name",
@@ -415,7 +512,7 @@ async function handleGetPhoneNumbers(_body: GetPhoneNumbersBody, sub: string): P
 
   try {
     const phonesRes = await axios.get<MetaPhoneNumbersResponse>(
-      `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(row.waba_id)}/phone_numbers`,
+      `https://graph.facebook.com/${getMetaGraphVersion()}/${encodeURIComponent(row.waba_id)}/phone_numbers`,
       {
         params: {
           fields: "id,display_phone_number,verified_name",
@@ -518,6 +615,272 @@ async function handleSelectPhoneNumber(
   return jsonResponse({ success: true }, 200)
 }
 
+async function handleConnectEmbedded(
+  body: ConnectEmbeddedBody,
+  sub: string,
+): Promise<Response> {
+  const config = getConnectEmbeddedConfig()
+  if ("error" in config) return config.error
+
+  const { appId, appSecret, encryptionKey, graphVersion } = config
+  const shortLivedToken =
+    typeof body.short_lived_token === "string" ? body.short_lived_token.trim() : ""
+  const companyId = typeof body.company_id === "string" ? body.company_id.trim() : ""
+
+  if (!shortLivedToken || !companyId) {
+    return jsonResponse(
+      {
+        error: "Parâmetros 'short_lived_token' e 'company_id' são obrigatórios.",
+        code: "MISSING_PARAMS",
+      } satisfies ErrorResponse,
+      400,
+    )
+  }
+
+  const supabase = getSupabaseClient()
+  const hasAccess = await validateCompanyAccess(sub, companyId, supabase)
+  if (!hasAccess) {
+    return jsonResponse(
+      {
+        error: "Sem permissão para conectar WhatsApp a esta empresa.",
+        code: "FORBIDDEN_COMPANY",
+      } satisfies ErrorResponse,
+      403,
+    )
+  }
+
+  // Troca short-lived por Long-Lived (60 dias)
+  const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`)
+  tokenUrl.searchParams.set("grant_type", "fb_exchange_token")
+  tokenUrl.searchParams.set("client_id", appId)
+  tokenUrl.searchParams.set("client_secret", appSecret)
+  tokenUrl.searchParams.set("fb_exchange_token", shortLivedToken)
+
+  let tokenData: Record<string, unknown> = {}
+  try {
+    const res = await fetch(tokenUrl.toString(), { method: "GET" })
+    tokenData = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok) {
+      console.error("[whatsapp-integration] Erro ao trocar short-lived por long-lived:", res.status, tokenData)
+      const msg =
+        (tokenData.error as { message?: string } | undefined)?.message ??
+        `Erro ao obter Long-Lived token (${res.status}).`
+      return jsonResponse({ error: msg, code: "META_TOKEN_ERROR" } satisfies ErrorResponse, 502)
+    }
+  } catch (err) {
+    console.error("[whatsapp-integration] Falha na requisição de token:", err)
+    return jsonResponse(
+      { error: "Erro ao comunicar com a API do Facebook.", code: "META_REQUEST_ERROR" } satisfies ErrorResponse,
+      502,
+    )
+  }
+
+  const accessToken =
+    typeof tokenData.access_token === "string" ? tokenData.access_token.trim() : ""
+  if (!accessToken) {
+    return jsonResponse(
+      {
+        error: "Resposta da Meta não retornou access_token.",
+        code: "META_TOKEN_ERROR",
+      } satisfies ErrorResponse,
+      502,
+    )
+  }
+
+  let wabaId: string
+  try {
+    const meRes = await axios.get<MetaMeResponse>(
+      `https://graph.facebook.com/${graphVersion}/me`,
+      {
+        params: {
+          fields: "id,name,whatsapp_business_accounts",
+          access_token: accessToken,
+        },
+      },
+    )
+    const me = meRes.data
+    const wabas = me.whatsapp_business_accounts?.data ?? []
+    const firstWaba = wabas.find((w) => typeof w.id === "string" && w.id.trim().length > 0)
+    if (!firstWaba?.id) {
+      return jsonResponse(
+        {
+          error: "Nenhuma conta WhatsApp Business (WABA) encontrada para este usuário.",
+          code: "NO_WABA_FOUND",
+        } satisfies ErrorResponse,
+        404,
+      )
+    }
+    wabaId = firstWaba.id.trim()
+  } catch (err) {
+    const axiosErr = err as { response?: { status: number; data?: unknown }; message?: string }
+    console.error("[whatsapp-integration] Erro ao buscar WABA (connectEmbedded):", axiosErr)
+    const metaError = (axiosErr.response?.data as { error?: { message?: string } } | undefined)?.error
+    const message =
+      metaError?.message ?? axiosErr.message ?? "Erro ao comunicar com a API da Meta (WABA)."
+    return jsonResponse(
+      { error: message, code: "META_WABA_ERROR" } satisfies ErrorResponse,
+      (axiosErr.response?.status && axiosErr.response.status >= 400 && axiosErr.response.status < 600)
+        ? axiosErr.response.status
+        : 502,
+    )
+  }
+
+  let phoneNumberId = ""
+  let displayPhoneNumber = ""
+  try {
+    const phonesRes = await axios.get<MetaPhoneNumbersResponse>(
+      `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(wabaId)}/phone_numbers`,
+      {
+        params: {
+          fields: "id,display_phone_number,verified_name",
+          access_token: accessToken,
+        },
+      },
+    )
+    const data = phonesRes.data
+    const rawPhones = Array.isArray(data.data) ? data.data : []
+    const firstPhone = rawPhones.find(
+      (p) => typeof p.id === "string" && typeof p.display_phone_number === "string",
+    )
+    if (firstPhone?.id && firstPhone?.display_phone_number) {
+      phoneNumberId = String(firstPhone.id).trim()
+      displayPhoneNumber = String(firstPhone.display_phone_number).trim()
+    }
+  } catch (err) {
+    const axiosErr = err as { response?: { status: number; data?: unknown }; message?: string }
+    console.error("[whatsapp-integration] Erro ao listar phone_numbers (connectEmbedded):", axiosErr)
+    const metaError = (axiosErr.response?.data as { error?: { message?: string } } | undefined)?.error
+    const message =
+      metaError?.message ?? axiosErr.message ?? "Erro ao listar números da Meta."
+    return jsonResponse(
+      { error: message, code: "META_PHONE_NUMBERS_ERROR" } satisfies ErrorResponse,
+      (axiosErr.response?.status && axiosErr.response.status >= 400 && axiosErr.response.status < 600)
+        ? axiosErr.response.status
+        : 502,
+    )
+  }
+
+  if (!phoneNumberId || !displayPhoneNumber) {
+    return jsonResponse(
+      {
+        error: "Nenhum número de telefone WhatsApp encontrado na conta.",
+        code: "NO_PHONE_NUMBER",
+      } satisfies ErrorResponse,
+      404,
+    )
+  }
+
+  let accessTokenEncrypted: string
+  try {
+    accessTokenEncrypted = await encryptToken(accessToken, encryptionKey)
+  } catch (err) {
+    console.error("[whatsapp-integration] Erro ao criptografar token:", err)
+    return jsonResponse(
+      {
+        error: "Erro ao criptografar token.",
+        code: "ENCRYPTION_ERROR",
+      } satisfies ErrorResponse,
+      500,
+    )
+  }
+
+  const { error: upsertError } = await supabase.from("meta_connections").upsert(
+    {
+      company_id: companyId,
+      clerk_user_id: sub,
+      provider_type: "whatsapp",
+      external_account_id: wabaId,
+      external_phone_id: phoneNumberId,
+      display_phone_number: displayPhoneNumber,
+      access_token: accessTokenEncrypted,
+      status: "active",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "company_id,provider_type" },
+  )
+
+  if (upsertError) {
+    console.error("[whatsapp-integration] Erro ao salvar meta_connections:", upsertError)
+    return jsonResponse(
+      {
+        error: "Erro ao salvar conexão WhatsApp no banco de dados.",
+        code: "SUPABASE_ERROR",
+      } satisfies ErrorResponse,
+      500,
+    )
+  }
+
+  const { error: updateCompanyError } = await supabase
+    .from("companies")
+    .update({ celular_atendimento: displayPhoneNumber })
+    .eq("id", companyId)
+
+  if (updateCompanyError) {
+    console.error("[whatsapp-integration] Erro ao atualizar companies.celular_atendimento:", updateCompanyError)
+    // Não falha a operação; a conexão já foi salva
+  }
+
+  return jsonResponse({
+    success: true,
+    display_phone_number: displayPhoneNumber,
+    waba_id: wabaId,
+    phone_number_id: phoneNumberId,
+  })
+}
+
+async function handleGetWhatsappConnection(
+  body: GetWhatsappConnectionBody,
+  sub: string,
+): Promise<Response> {
+  const companyId = typeof body.company_id === "string" ? body.company_id.trim() : ""
+  if (!companyId) {
+    return jsonResponse(
+      { error: "Parâmetro 'company_id' é obrigatório.", code: "MISSING_COMPANY_ID" } satisfies ErrorResponse,
+      400,
+    )
+  }
+
+  const supabase = getSupabaseClient()
+  const hasAccess = await validateCompanyAccess(sub, companyId, supabase)
+  if (!hasAccess) {
+    return jsonResponse(
+      { error: "Sem permissão para acessar esta empresa.", code: "FORBIDDEN_COMPANY" } satisfies ErrorResponse,
+      403,
+    )
+  }
+
+  const { data: row, error } = await supabase
+    .from("meta_connections")
+    .select("display_phone_number, external_account_id, external_phone_id, status")
+    .eq("company_id", companyId)
+    .eq("provider_type", "whatsapp")
+    .maybeSingle()
+
+  if (error) {
+    console.error("[whatsapp-integration] Erro ao buscar meta_connections:", error)
+    return jsonResponse(
+      { error: "Erro ao buscar conexão WhatsApp.", code: "SUPABASE_ERROR" } satisfies ErrorResponse,
+      500,
+    )
+  }
+
+  if (!row) {
+    return jsonResponse({
+      connected: false,
+      display_phone_number: null,
+      waba_id: null,
+      phone_number_id: null,
+    })
+  }
+
+  return jsonResponse({
+    connected: true,
+    display_phone_number: (row as { display_phone_number: string | null }).display_phone_number,
+    waba_id: (row as { external_account_id: string | null }).external_account_id,
+    phone_number_id: (row as { external_phone_id: string | null }).external_phone_id,
+  })
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
@@ -551,12 +914,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     action !== "getLoginUrl" &&
     action !== "exchangeCode" &&
     action !== "getPhoneNumbers" &&
-    action !== "selectPhoneNumber"
+    action !== "selectPhoneNumber" &&
+    action !== "connectEmbedded" &&
+    action !== "getWhatsappConnection"
   ) {
     return jsonResponse(
       {
         error:
-          "Parâmetro 'action' inválido. Use 'getLoginUrl', 'exchangeCode', 'getPhoneNumbers' ou 'selectPhoneNumber'.",
+          "Parâmetro 'action' inválido. Use 'getLoginUrl', 'exchangeCode', 'getPhoneNumbers', 'selectPhoneNumber', 'connectEmbedded' ou 'getWhatsappConnection'.",
         code: "INVALID_ACTION",
       } satisfies ErrorResponse,
       400,
@@ -568,7 +933,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return handleGetLoginUrl(body as GetLoginUrlBody)
   }
 
-  // exchangeCode, getPhoneNumbers e selectPhoneNumber exigem auth
+  // Demais actions exigem auth
   const { sub, error } = await getAuthSub(req, body)
   if (error || !sub) {
     return error ?? jsonResponse({ error: "Erro de autenticação." }, 401)
@@ -580,6 +945,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (action === "getPhoneNumbers") {
     return handleGetPhoneNumbers(body as GetPhoneNumbersBody, sub)
   }
-  return handleSelectPhoneNumber(req, body as SelectPhoneNumberBody, sub)
+  if (action === "selectPhoneNumber") {
+    return handleSelectPhoneNumber(req, body as SelectPhoneNumberBody, sub)
+  }
+  if (action === "connectEmbedded") {
+    return handleConnectEmbedded(body as ConnectEmbeddedBody, sub)
+  }
+  return handleGetWhatsappConnection(body as GetWhatsappConnectionBody, sub)
 })
 

@@ -51,7 +51,6 @@ import { TermosUsoPage } from "@/pages/TermosUsoPage"
 import { GtmInjector } from "@/components/GtmInjector"
 import { MetaInstagramCallbackPage } from "@/pages/auth/MetaInstagramCallbackPage"
 import { SSOCallbackPage } from "@/pages/auth/SSOCallbackPage"
-import { WhatsappCallbackPage } from "@/pages/auth/WhatsappCallbackPage"
 
 function ShowcaseFallback() {
   return <div className="flex min-h-[200px] items-center justify-center p-8 text-muted-foreground">Carregando…</div>
@@ -96,16 +95,6 @@ function App() {
             <SupabaseProvider>
               <ProtectedRoute>
                 <MetaInstagramCallbackPage />
-              </ProtectedRoute>
-            </SupabaseProvider>
-          }
-        />
-        <Route
-          path="/auth/whatsapp/callback"
-          element={
-            <SupabaseProvider>
-              <ProtectedRoute>
-                <WhatsappCallbackPage />
               </ProtectedRoute>
             </SupabaseProvider>
           }

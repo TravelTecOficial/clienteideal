@@ -482,45 +482,59 @@ export function ConfiguracoesPage() {
     loadDados();
   }, [loadDados]);
 
-  // Após retorno do OAuth WhatsApp: buscar números para seleção (fluxo direto Meta, sem Clerk).
-  const whatsappFlowSelectRef = useRef(false);
-  useEffect(() => {
-    const flow = searchParams.get("whatsapp_flow");
-    if (flow !== "select" || whatsappFlowSelectRef.current) return;
-    whatsappFlowSelectRef.current = true;
-
-    const run = async () => {
+  // Carregar estado da conexão WhatsApp (meta_connections) ao abrir aba Integrações
+  const loadWhatsappConnectionState = useCallback(async () => {
+    if (!companyId) {
+      setIsWhatsappConnected(false);
+      setWhatsappSelectedDisplay(null);
+      return;
+    }
+    try {
       const token = await getToken();
       if (!token) return;
-      try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ action: "getPhoneNumbers", token }),
-        });
-        const raw = await res.text();
-        const data = (() => {
-          try {
-            return JSON.parse(raw) as { phoneNumbers?: WhatsappPhoneNumber[]; error?: string } | null;
-          } catch {
-            return null;
-          }
-        })();
-        if (res.ok && data?.phoneNumbers) {
-          setWhatsappPhoneNumbers(data.phoneNumbers);
-          if (data.phoneNumbers.length > 0) {
-            setSelectedWhatsappPhoneId(data.phoneNumbers[0].id);
-          }
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "getWhatsappConnection",
+          company_id: companyId,
+          token,
+        }),
+      });
+      const raw = await res.text();
+      const data = (() => {
+        try {
+          return JSON.parse(raw) as {
+            connected?: boolean;
+            display_phone_number?: string | null;
+            error?: string;
+          } | null;
+        } catch {
+          return null;
         }
-      } catch {
-        // silencioso; usuário pode reconectar
+      })();
+      if (res.ok && data && !data.error) {
+        setIsWhatsappConnected(Boolean(data.connected));
+        setWhatsappSelectedDisplay(data.display_phone_number ?? null);
+      } else {
+        setIsWhatsappConnected(false);
+        setWhatsappSelectedDisplay(null);
       }
-    };
-    void run();
-  }, [searchParams, getToken]);
+    } catch {
+      setIsWhatsappConnected(false);
+      setWhatsappSelectedDisplay(null);
+    }
+  }, [companyId, getToken]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "integracoes") {
+      void loadWhatsappConnectionState();
+    }
+  }, [searchParams, loadWhatsappConnectionState]);
 
   // Carregar pagamentos
   const loadPagamentos = useCallback(async () => {
@@ -794,59 +808,99 @@ export function ConfiguracoesPage() {
       return;
     }
 
+    const FB = (window as unknown as { FB?: { login: (cb: (r: { authResponse?: { accessToken?: string } }) => void, opts: { scope?: string; extras?: { setup?: { feature?: string } } }) => void } }).FB;
+    if (!FB) {
+      toast({
+        variant: "destructive",
+        title: "SDK não carregado",
+        description: "O SDK da Meta ainda não está carregado. Aguarde o carregamento e tente novamente.",
+      });
+      return;
+    }
+
     setIsWhatsappConnecting(true);
     try {
-      const state =
-        window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      window.sessionStorage.setItem("whatsapp_oauth_state", state);
+      FB.login(
+        async (response) => {
+          const accessToken = response.authResponse?.accessToken;
+          if (!accessToken) {
+            setIsWhatsappConnecting(false);
+            if (response.status !== "unknown") {
+              toast({
+                variant: "destructive",
+                title: "Conexão cancelada",
+                description: "O login com a Meta foi cancelado ou não foi concluído.",
+              });
+            }
+            return;
+          }
 
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          try {
+            const token = await getToken();
+            if (!token) {
+              throw new Error("Token de autenticação indisponível. Faça login novamente.");
+            }
+
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                action: "connectEmbedded",
+                short_lived_token: accessToken,
+                company_id: companyId,
+                token,
+              }),
+            });
+
+            const raw = await res.text();
+            const data = (() => {
+              try {
+                return JSON.parse(raw) as {
+                  success?: boolean;
+                  display_phone_number?: string;
+                  error?: string;
+                  code?: string;
+                } | null;
+              } catch {
+                return null;
+              }
+            })();
+
+            if (!res.ok || data?.error) {
+              const msg = data?.error ?? `Erro ${res.status}`;
+              throw new Error(msg);
+            }
+
+            if (data?.success && data?.display_phone_number) {
+              setIsWhatsappConnected(true);
+              setWhatsappSelectedDisplay(data.display_phone_number);
+              toast({
+                title: "WhatsApp conectado",
+                description: `Número vinculado: ${data.display_phone_number}`,
+              });
+            }
+          } catch (err) {
+            toast({
+              variant: "destructive",
+              title: "Erro ao completar conexão",
+              description: getErrorMessage(err),
+            });
+          } finally {
+            setIsWhatsappConnecting(false);
+          }
         },
-        body: JSON.stringify({
-          action: "getLoginUrl",
-          state,
-        }),
-      });
-
-      const raw = await res.text();
-      const data = (() => {
-        try {
-          return JSON.parse(raw) as { url?: string } & WhatsappErrorResponse | null;
-        } catch {
-          return null;
-        }
-      })();
-
-      if (!res.ok || data?.error) {
-        const parts = [data?.error ?? `Erro ${res.status}`];
-        if (data?.code) parts.push(`[${data.code}]`);
-        if (data?.hint) parts.push(data.hint ?? "");
-        toast({
-          variant: "destructive",
-          title: "Erro ao iniciar conexão WhatsApp",
-          description: parts.filter(Boolean).join(" — "),
-        });
-        return;
-      }
-
-      if (!data?.url) {
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: "A função não retornou a URL de login da Meta.",
-        });
-        return;
-      }
-
-      window.location.href = data.url;
+        {
+          scope: "whatsapp_business_management,whatsapp_business_messaging",
+          extras: { setup: { feature: "whatsapp_embedded_signup" } },
+        },
+      );
     } catch (err) {
       toast({
         variant: "destructive",
-        title: "Erro ao conectar o WhatsApp",
+        title: "Erro ao iniciar conexão WhatsApp",
         description: getErrorMessage(err),
       });
       setIsWhatsappConnecting(false);

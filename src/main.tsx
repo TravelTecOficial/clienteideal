@@ -25,6 +25,15 @@ const clerkProxyUrl =
     ? `${window.location.origin}/clerk-fapi`
     : undefined
 
+// Meta SDK: inicializa FB para WhatsApp Embedded Signup (appId é público, seguro no client)
+const metaAppId = import.meta.env.VITE_META_APP_ID as string | undefined
+if (metaAppId) {
+  ;(window as unknown as { fbAsyncInit?: () => void }).fbAsyncInit = function () {
+    const FB = (window as unknown as { FB?: { init: (opts: { appId: string; cookie: boolean; xfbml: boolean; version: string }) => void } }).FB
+    if (FB) FB.init({ appId: metaAppId, cookie: true, xfbml: true, version: "v21.0" })
+  }
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ClerkProvider

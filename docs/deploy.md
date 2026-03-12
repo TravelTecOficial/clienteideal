@@ -176,12 +176,13 @@ Acesse `http://localhost:4173` e valide:
   - Conexão da instância.
   - Recebimento de mensagens via `evolution-webhook`.
 
-#### WhatsApp Cloud API (Meta)
+#### WhatsApp Cloud API (Embedded Signup)
 
-- Certifique-se de que as secrets `META_APP_ID`, `META_APP_SECRET`, `META_WHATSAPP_REDIRECT_URI` e `META_GRAPH_VERSION` estão configuradas.
+- Certifique-se de que as secrets `META_APP_ID`, `META_APP_SECRET`, `META_TOKEN_ENCRYPTION_KEY` e `META_GRAPH_VERSION` estão configuradas no Supabase.
+- No frontend, configure `VITE_META_APP_ID` (mesmo valor de `META_APP_ID`) para o SDK da Meta.
 - No dashboard:
-  - Inicie o fluxo de conexão do WhatsApp via Meta.
-  - Complete o OAuth e escolha o número na aba de integrações (`/dashboard/configuracoes?tab=integracoes`).
+  - Clique em "Conectar WhatsApp" na aba Integrações (`/dashboard/configuracoes?tab=integracoes`).
+  - O popup Embedded Signup da Meta será exibido; após autorizar, o número será vinculado automaticamente.
 
 ### 5.4 Meta / Instagram
 
