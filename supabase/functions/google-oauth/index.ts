@@ -35,6 +35,8 @@ interface GoogleConnectionRow {
   company_id: string
   service: GoogleService
   access_token_encrypted: string
+  refresh_token_encrypted?: string | null
+  token_expires_at?: string | null
   selected_account_name?: string | null
   selected_account_display_name?: string | null
   selected_property_name?: string | null
@@ -636,7 +638,7 @@ async function getGoogleConnectionForService(
   const { data, error } = await supabase
     .from("google_connections")
     .select(
-      "company_id, service, access_token_encrypted, selected_account_name, selected_account_display_name, selected_property_name, selected_property_display_name",
+      "company_id, service, access_token_encrypted, refresh_token_encrypted, token_expires_at, selected_account_name, selected_account_display_name, selected_property_name, selected_property_display_name",
     )
     .eq("company_id", ctx.companyId)
     .eq("service", service)
@@ -662,6 +664,123 @@ async function getGoogleConnectionForService(
   }
 
   return { row: data as GoogleConnectionRow }
+}
+
+/** Obtém access_token válido, renovando com refresh_token se expirado. */
+async function getValidAccessToken(
+  row: GoogleConnectionRow,
+  config: { clientId: string; clientSecret: string; encryptionKey: string },
+  supabase: ReturnType<typeof createClient>,
+  ctx: AuthContext,
+  service: GoogleService,
+): Promise<{ error?: Response; accessToken?: string }> {
+  const BUFFER_SECONDS = 5 * 60 // 5 minutos de margem
+  const now = Date.now()
+  const expiresAt = row.token_expires_at ? new Date(row.token_expires_at).getTime() : 0
+  const isExpired =
+    !row.token_expires_at || (expiresAt > 0 && now >= expiresAt - BUFFER_SECONDS * 1000)
+
+  if (!isExpired) {
+    try {
+      const token = await decryptToken(row.access_token_encrypted, config.encryptionKey)
+      return { accessToken: token }
+    } catch (err) {
+      console.error("[google-oauth] Falha ao descriptografar token Google:", err)
+      return { error: jsonResponse({ error: "Erro ao acessar credenciais do Google." }, 500) }
+    }
+  }
+
+  const refreshEncrypted = row.refresh_token_encrypted?.trim()
+  if (!refreshEncrypted) {
+    return {
+      error: jsonResponse(
+        {
+          error: "Token expirado. Reconecte o Google para renovar o acesso.",
+          hint: "Desconecte e conecte novamente em Configurações > Integrações.",
+        },
+        401,
+      ),
+    }
+  }
+
+  let refreshToken: string
+  try {
+    refreshToken = await decryptToken(refreshEncrypted, config.encryptionKey)
+  } catch (err) {
+    console.error("[google-oauth] Falha ao descriptografar refresh_token:", err)
+    return { error: jsonResponse({ error: "Erro ao acessar credenciais do Google." }, 500) }
+  }
+
+  const tokenUrl = "https://oauth2.googleapis.com/token"
+  const tokenParams = new URLSearchParams()
+  tokenParams.set("client_id", config.clientId)
+  tokenParams.set("client_secret", config.clientSecret)
+  tokenParams.set("refresh_token", refreshToken)
+  tokenParams.set("grant_type", "refresh_token")
+
+  const res = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: tokenParams.toString(),
+  })
+
+  const tokenData = (await res.json().catch(() => ({}))) as GoogleTokenResponse
+  if (!res.ok) {
+    console.error("[google-oauth] Erro ao renovar token:", res.status, tokenData)
+    const msg =
+      tokenData.error_description ?? tokenData.error ?? `Erro ao renovar token (${res.status}).`
+    return { error: jsonResponse({ error: "Erro ao renovar acesso ao Google.", hint: msg }, 502) }
+  }
+
+  const newAccessToken =
+    typeof tokenData.access_token === "string" ? tokenData.access_token.trim() : ""
+  if (!newAccessToken) {
+    return {
+      error: jsonResponse(
+        { error: "Google não retornou novo access_token ao renovar.", hint: String(tokenData) },
+        502,
+      ),
+    }
+  }
+
+  const expiresIn =
+    typeof tokenData.expires_in === "number"
+      ? tokenData.expires_in
+      : typeof tokenData.expires_in === "string"
+        ? Number(tokenData.expires_in)
+        : 3600
+  const tokenExpiresAt =
+    new Date(Date.now() + Math.max(expiresIn, 60) * 1000).toISOString()
+
+  let newAccessEncrypted: string
+  try {
+    newAccessEncrypted = await encryptToken(newAccessToken, config.encryptionKey)
+  } catch (err) {
+    console.error("[google-oauth] Falha ao criptografar novo token:", err)
+    return { error: jsonResponse({ error: "Erro ao proteger credenciais." }, 500) }
+  }
+
+  const { error } = await supabase
+    .from("google_connections")
+    .update({
+      access_token_encrypted: newAccessEncrypted,
+      token_expires_at: tokenExpiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("company_id", ctx.companyId)
+    .eq("service", service)
+
+  if (error) {
+    console.error("[google-oauth] Erro ao salvar token renovado:", error)
+    return {
+      error: jsonResponse(
+        { error: "Erro ao salvar token renovado.", hint: error.message },
+        500,
+      ),
+    }
+  }
+
+  return { accessToken: newAccessToken }
 }
 
 async function handleGetConnectionStatus(
@@ -723,12 +842,11 @@ async function handleListAnalyticsProperties(
     return jsonResponse({ error: "Conexão Google Analytics não encontrada." }, 404)
   }
 
-  let accessToken: string
-  try {
-    accessToken = await decryptToken(row.access_token_encrypted, config.encryptionKey)
-  } catch (err) {
-    console.error("[google-oauth] Falha ao descriptografar token Google:", err)
-    return jsonResponse({ error: "Erro ao acessar credenciais do Google." }, 500)
+  const tokenResult = await getValidAccessToken(row, config, supabase, ctx, "ga4")
+  if (tokenResult.error) return tokenResult.error
+  const accessToken = tokenResult.accessToken!
+  if (!accessToken) {
+    return jsonResponse({ error: "Erro ao obter token de acesso." }, 500)
   }
 
   const propertyOptions: GoogleAnalyticsPropertyOption[] = []
@@ -877,12 +995,11 @@ async function handleListMyBusinessLocations(
     return jsonResponse({ error: "Conexão Google Meu Negócio não encontrada." }, 404)
   }
 
-  let accessToken: string
-  try {
-    accessToken = await decryptToken(row.access_token_encrypted, config.encryptionKey)
-  } catch (err) {
-    console.error("[google-oauth] Falha ao descriptografar token Google:", err)
-    return jsonResponse({ error: "Erro ao acessar credenciais do Google." }, 500)
+  const tokenResult = await getValidAccessToken(row, config, supabase, ctx, "mybusiness")
+  if (tokenResult.error) return tokenResult.error
+  const accessToken = tokenResult.accessToken!
+  if (!accessToken) {
+    return jsonResponse({ error: "Erro ao obter token de acesso." }, 500)
   }
 
   const locationOptions: MyBusinessLocationOption[] = []
@@ -1091,12 +1208,11 @@ async function handleGetAdsAccountInfo(
     return jsonResponse({ error: "Conexão Google Ads não encontrada." }, 404)
   }
 
-  let accessToken: string
-  try {
-    accessToken = await decryptToken(row.access_token_encrypted, config.encryptionKey)
-  } catch (err) {
-    console.error("[google-oauth] Falha ao descriptografar token Google:", err)
-    return jsonResponse({ error: "Erro ao acessar credenciais do Google." }, 500)
+  const tokenResult = await getValidAccessToken(row, config, supabase, ctx, "ads")
+  if (tokenResult.error) return tokenResult.error
+  const accessToken = tokenResult.accessToken!
+  if (!accessToken) {
+    return jsonResponse({ error: "Erro ao obter token de acesso." }, 500)
   }
 
   const adsDeveloperToken = Deno.env.get("GOOGLE_ADS_DEVELOPER_TOKEN")?.trim()
