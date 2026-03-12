@@ -555,11 +555,16 @@ async function handleExchangeCode(
   let selectedAccountDisplayName: string | null = null
 
   if (service === "ads") {
-    try {
-      const adsRes = await fetch("https://googleads.googleapis.com/v20/customers:listAccessibleCustomers", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
+    const adsDeveloperToken = Deno.env.get("GOOGLE_ADS_DEVELOPER_TOKEN")?.trim()
+    if (adsDeveloperToken) {
+      try {
+        const adsRes = await fetch("https://googleads.googleapis.com/v20/customers:listAccessibleCustomers", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "developer-token": adsDeveloperToken,
+          },
+        })
       const adsRaw = await adsRes.text()
       const adsData = (() => {
         try {
@@ -576,8 +581,9 @@ async function handleExchangeCode(
           selectedAccountDisplayName = id.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
         }
       }
-    } catch (err) {
-      console.error("[google-oauth] Falha ao listar contas Ads:", err)
+      } catch (err) {
+        console.error("[google-oauth] Falha ao listar contas Ads:", err)
+      }
     }
   }
 
@@ -1093,10 +1099,24 @@ async function handleGetAdsAccountInfo(
     return jsonResponse({ error: "Erro ao acessar credenciais do Google." }, 500)
   }
 
+  const adsDeveloperToken = Deno.env.get("GOOGLE_ADS_DEVELOPER_TOKEN")?.trim()
+  if (!adsDeveloperToken) {
+    return jsonResponse(
+      {
+        error: "Erro ao obter conta Google Ads.",
+        hint: "GOOGLE_ADS_DEVELOPER_TOKEN não configurado. Configure nas Secrets do Supabase.",
+      },
+      503,
+    )
+  }
+
   try {
     const adsRes = await fetch("https://googleads.googleapis.com/v20/customers:listAccessibleCustomers", {
       method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "developer-token": adsDeveloperToken,
+      },
     })
     const adsRaw = await adsRes.text()
     const adsData = (() => {
