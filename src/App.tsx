@@ -50,6 +50,7 @@ import { PoliticaPrivacidadePage } from "@/pages/PoliticaPrivacidadePage"
 import { TermosUsoPage } from "@/pages/TermosUsoPage"
 import { GtmInjector } from "@/components/GtmInjector"
 import { MetaInstagramCallbackPage } from "@/pages/auth/MetaInstagramCallbackPage"
+import { WhatsappFacebookCallbackPage } from "@/pages/auth/WhatsappFacebookCallbackPage"
 import { SSOCallbackPage } from "@/pages/auth/SSOCallbackPage"
 
 function ShowcaseFallback() {
@@ -95,6 +96,16 @@ function App() {
             <SupabaseProvider>
               <ProtectedRoute>
                 <MetaInstagramCallbackPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/auth/facebook/callback"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <WhatsappFacebookCallbackPage />
               </ProtectedRoute>
             </SupabaseProvider>
           }

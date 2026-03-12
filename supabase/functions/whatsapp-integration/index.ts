@@ -37,6 +37,7 @@ interface ExchangeCodeBody extends BaseBody {
   action: "exchangeCode"
   code: string
   state?: string
+  company_id?: string
 }
 
 interface GetPhoneNumbersBody extends BaseBody {
@@ -459,6 +460,89 @@ async function handleExchangeCode(
         ? axiosErr.response.status
         : 502,
     )
+  }
+
+  const companyId = typeof body.company_id === "string" ? body.company_id.trim() : ""
+
+  if (companyId) {
+    const supabase = getSupabaseClient()
+    const hasAccess = await validateCompanyAccess(sub, companyId, supabase)
+    if (!hasAccess) {
+      return jsonResponse(
+        {
+          error: "Sem permissão para conectar WhatsApp a esta empresa.",
+          code: "FORBIDDEN_COMPANY",
+        } satisfies ErrorResponse,
+        403,
+      )
+    }
+
+    const firstPhone = phoneNumbers[0]
+    if (!firstPhone) {
+      return jsonResponse(
+        {
+          error: "Nenhum número de telefone WhatsApp encontrado na conta.",
+          code: "NO_PHONE_NUMBER",
+        } satisfies ErrorResponse,
+        404,
+      )
+    }
+
+    const encConfig = getConnectEmbeddedConfig()
+    if ("error" in encConfig) return encConfig.error
+
+    let accessTokenEncrypted: string
+    try {
+      accessTokenEncrypted = await encryptToken(accessToken, encConfig.encryptionKey)
+    } catch (err) {
+      console.error("[whatsapp-integration] Erro ao criptografar token (exchangeCode):", err)
+      return jsonResponse(
+        {
+          error: "Erro ao criptografar token.",
+          code: "ENCRYPTION_ERROR",
+        } satisfies ErrorResponse,
+        500,
+      )
+    }
+
+    const { error: upsertError } = await supabase.from("meta_connections").upsert(
+      {
+        company_id: companyId,
+        clerk_user_id: sub,
+        provider_type: "whatsapp",
+        external_account_id: wabaId,
+        external_phone_id: firstPhone.id,
+        display_phone_number: firstPhone.display_phone_number,
+        access_token: accessTokenEncrypted,
+        status: "active",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "company_id,provider_type" },
+    )
+
+    if (upsertError) {
+      console.error("[whatsapp-integration] Erro ao salvar meta_connections (exchangeCode):", upsertError)
+      return jsonResponse(
+        {
+          error: "Erro ao salvar conexão WhatsApp no banco de dados.",
+          code: "SUPABASE_ERROR",
+        } satisfies ErrorResponse,
+        500,
+      )
+    }
+
+    await supabase
+      .from("companies")
+      .update({ celular_atendimento: firstPhone.display_phone_number })
+      .eq("id", companyId)
+
+    return jsonResponse({
+      success: true,
+      display_phone_number: firstPhone.display_phone_number,
+      waba_id: wabaId,
+      phone_number_id: firstPhone.id,
+      phoneNumbers,
+    })
   }
 
   const supabase = getSupabaseClient()
