@@ -753,13 +753,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         accountId?: string;
         error?: string;
         hint?: string;
-        debug?: { hadAccessToken?: boolean; hadDeveloperToken?: boolean; googleStatus?: number };
       } | null;
-      // #region agent log
-      if (!res.ok && data?.debug) {
-        fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf487b'},body:JSON.stringify({sessionId:'bf487b',runId:'ads-502',hypothesisId:'H1',location:'ConfiguracoesPage.tsx:fetchAdsAccountInfo',message:'502 getAdsAccountInfo debug',data:{status:res.status,hadAccessToken:data.debug.hadAccessToken,hadDeveloperToken:data.debug.hadDeveloperToken,googleStatus:data.debug.googleStatus,hint:data.hint},timestamp:Date.now()})}).catch(()=>{});
-      }
-      // #endregion
       if (res.ok && data) {
         const display =
           data.accountDisplayName ??

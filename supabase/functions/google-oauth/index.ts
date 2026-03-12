@@ -1226,15 +1226,6 @@ async function handleGetAdsAccountInfo(
     )
   }
 
-  // #region agent log
-  console.log("[google-oauth] getAdsAccountInfo pre-fetch:", {
-    hasAccessToken: !!accessToken,
-    accessTokenPrefix: accessToken ? `${accessToken.slice(0, 10)}...` : "undefined",
-    hasDeveloperToken: !!adsDeveloperToken,
-    developerTokenPrefix: adsDeveloperToken ? `${adsDeveloperToken.slice(0, 4)}...` : "undefined",
-  })
-  // #endregion
-
   try {
     const adsRes = await fetch("https://googleads.googleapis.com/v20/customers:listAccessibleCustomers", {
       method: "GET",
@@ -1258,20 +1249,10 @@ async function handleGetAdsAccountInfo(
       const hint = isAuthError
         ? `${errMsg} Desconecte e reconecte o Google Ads em Configurações > Integrações para renovar as permissões.`
         : errMsg
-      // #region agent log - debug para diagnóstico 502
       return jsonResponse(
-        {
-          error: "Erro ao obter conta Google Ads.",
-          hint,
-          debug: {
-            hadAccessToken: !!accessToken,
-            hadDeveloperToken: !!adsDeveloperToken,
-            googleStatus: adsRes.status,
-          },
-        },
+        { error: "Erro ao obter conta Google Ads.", hint },
         502,
       )
-      // #endregion
     }
     const first = adsData.resourceNames[0]
     if (typeof first !== "string" || !first.startsWith("customers/")) {
