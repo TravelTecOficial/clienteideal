@@ -248,7 +248,17 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const navigate = useNavigate();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
-  const companyId = useEffectiveCompanyId();
+  const effectiveFromHook = useEffectiveCompanyId();
+  const [storedOAuthCompanyId, setStoredOAuthCompanyId] = useState<string | null>(null);
+  useEffect(() => {
+    if (effectiveFromHook) return;
+    const stored =
+      typeof window !== "undefined"
+        ? window.sessionStorage?.getItem(GOOGLE_OAUTH_COMPANY_KEY)?.trim() || null
+        : null;
+    if (stored) setStoredOAuthCompanyId(stored);
+  }, [effectiveFromHook]);
+  const companyId = effectiveFromHook ?? storedOAuthCompanyId;
   const isAdmin = isSaasAdmin(user?.publicMetadata as Record<string, unknown> | undefined);
   const [companiesForAdmin, setCompaniesForAdmin] = useState<CompanyOption[]>([]);
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
