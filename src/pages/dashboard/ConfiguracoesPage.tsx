@@ -288,6 +288,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [googleAnalyticsProperties, setGoogleAnalyticsProperties] = useState<GoogleAnalyticsPropertyOption[]>([]);
   const [selectedGoogleAnalyticsPropertyName, setSelectedGoogleAnalyticsPropertyName] = useState<string | null>(null);
   const [selectedGoogleAnalyticsPropertyLabel, setSelectedGoogleAnalyticsPropertyLabel] = useState<string | null>(null);
+  const [isLoadingMyBusinessLocations, setIsLoadingMyBusinessLocations] = useState(false);
+  const [isSavingMyBusinessLocation, setIsSavingMyBusinessLocation] = useState(false);
+  const [myBusinessLocations, setMyBusinessLocations] = useState<GoogleAnalyticsPropertyOption[]>([]);
+  const [selectedMyBusinessPropertyName, setSelectedMyBusinessPropertyName] = useState<string | null>(null);
+  const [selectedMyBusinessPropertyLabel, setSelectedMyBusinessPropertyLabel] = useState<string | null>(null);
   const [isMetaConnected, setIsMetaConnected] = useState(false);
   const [isCreatingInstance, setIsCreatingInstance] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -580,6 +585,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         ga4SelectedPropertyName?: string | null;
         ga4SelectedPropertyDisplayName?: string | null;
         ga4SelectedAccountDisplayName?: string | null;
+        mybusinessSelectedPropertyName?: string | null;
+        mybusinessSelectedPropertyDisplayName?: string | null;
+        mybusinessSelectedAccountDisplayName?: string | null;
       } | null;
       if (res.ok && data) {
         setIsGA4Connected(Boolean(data.ga4));
@@ -593,12 +601,22 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
               : data.ga4SelectedPropertyDisplayName
             : null,
         );
+        setSelectedMyBusinessPropertyName(data.mybusinessSelectedPropertyName ?? null);
+        setSelectedMyBusinessPropertyLabel(
+          data.mybusinessSelectedPropertyDisplayName
+            ? data.mybusinessSelectedAccountDisplayName
+              ? `${data.mybusinessSelectedAccountDisplayName} — ${data.mybusinessSelectedPropertyDisplayName}`
+              : data.mybusinessSelectedPropertyDisplayName
+            : null,
+        );
       } else {
         setIsGA4Connected(false);
         setIsAdsConnected(false);
         setIsMyBusinessConnected(false);
         setSelectedGoogleAnalyticsPropertyName(null);
         setSelectedGoogleAnalyticsPropertyLabel(null);
+        setSelectedMyBusinessPropertyName(null);
+        setSelectedMyBusinessPropertyLabel(null);
       }
     } catch {
       setIsGA4Connected(false);
@@ -606,6 +624,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       setIsMyBusinessConnected(false);
       setSelectedGoogleAnalyticsPropertyName(null);
       setSelectedGoogleAnalyticsPropertyLabel(null);
+      setSelectedMyBusinessPropertyName(null);
+      setSelectedMyBusinessPropertyLabel(null);
     }
   }, [companyId, getToken]);
 
@@ -666,9 +686,12 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           setGoogleAnalyticsProperties([]);
           setSelectedGoogleAnalyticsPropertyName(null);
           setSelectedGoogleAnalyticsPropertyLabel(null);
-        }
-        else if (service === "ads") setIsAdsConnected(false);
-        else setIsMyBusinessConnected(false);
+        } else if (service === "mybusiness") {
+          setIsMyBusinessConnected(false);
+          setMyBusinessLocations([]);
+          setSelectedMyBusinessPropertyName(null);
+          setSelectedMyBusinessPropertyLabel(null);
+        } else if (service === "ads") setIsAdsConnected(false);
         toast({ title: "Google desconectado" });
       } catch (err) {
         toast({ variant: "destructive", title: "Erro ao desconectar", description: getErrorMessage(err) });
@@ -829,6 +852,158 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
   }, [companyId, getToken, googleAnalyticsProperties, selectedGoogleAnalyticsPropertyName, toast]);
 
+  const handleLoadMyBusinessLocations = useCallback(async () => {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description: "Acesse o painel com uma empresa selecionada antes de listar perfis do Meu Negócio.",
+      });
+      return;
+    }
+
+    setIsLoadingMyBusinessLocations(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      }
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          action: "listMyBusinessLocations",
+          company_id: companyId,
+          token,
+        }),
+      });
+
+      const data = (await res.json().catch(() => null)) as {
+        locations?: GoogleAnalyticsPropertyOption[];
+        error?: string;
+        hint?: string;
+      } | null;
+
+      if (!res.ok || data?.error) {
+        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        throw new Error(msg);
+      }
+
+      const locations = data?.locations ?? [];
+      setMyBusinessLocations(locations);
+
+      const selectedLocation = locations.find((loc) => loc.isSelected) ?? null;
+      setSelectedMyBusinessPropertyName(selectedLocation?.propertyName ?? null);
+      setSelectedMyBusinessPropertyLabel(
+        selectedLocation
+          ? `${selectedLocation.accountDisplayName} — ${selectedLocation.propertyDisplayName}`
+          : null,
+      );
+
+      if (!locations.length) {
+        toast({
+          title: "Nenhum perfil encontrado",
+          description: "A conta conectada não retornou perfis do Google Meu Negócio acessíveis.",
+        });
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao listar perfis do Meu Negócio",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsLoadingMyBusinessLocations(false);
+    }
+  }, [companyId, getToken, toast]);
+
+  const handleSelectMyBusinessLocation = useCallback(async () => {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description: "Acesse o painel com uma empresa selecionada antes de salvar o perfil do Meu Negócio.",
+      });
+      return;
+    }
+
+    const selectedLocation =
+      myBusinessLocations.find((loc) => loc.propertyName === selectedMyBusinessPropertyName) ?? null;
+
+    if (!selectedLocation) {
+      toast({
+        variant: "destructive",
+        title: "Selecione um perfil",
+        description: "Escolha qual perfil do Meu Negócio será vinculado a esta empresa antes de confirmar.",
+      });
+      return;
+    }
+
+    setIsSavingMyBusinessLocation(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      }
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          action: "selectMyBusinessLocation",
+          company_id: companyId,
+          accountName: selectedLocation.accountName,
+          accountDisplayName: selectedLocation.accountDisplayName,
+          propertyName: selectedLocation.propertyName,
+          propertyDisplayName: selectedLocation.propertyDisplayName,
+          token,
+        }),
+      });
+
+      const data = (await res.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        hint?: string;
+      } | null;
+
+      if (!res.ok || data?.error || !data?.success) {
+        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        throw new Error(msg);
+      }
+
+      setMyBusinessLocations((current) =>
+        current.map((loc) => ({
+          ...loc,
+          isSelected: loc.propertyName === selectedLocation.propertyName,
+        })),
+      );
+      setSelectedMyBusinessPropertyLabel(
+        `${selectedLocation.accountDisplayName} — ${selectedLocation.propertyDisplayName}`,
+      );
+      toast({
+        title: "Perfil Meu Negócio vinculado",
+        description: "O perfil selecionado será usada como padrão para esta empresa.",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar perfil Meu Negócio",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSavingMyBusinessLocation(false);
+    }
+  }, [companyId, getToken, myBusinessLocations, selectedMyBusinessPropertyName, toast]);
+
   const handleMetaDisconnect = useCallback(async () => {
     const ok = window.confirm("Desconectar Meta desta empresa?");
     if (!ok) return;
@@ -912,12 +1087,16 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   }, [isAdmin, companyId, section, supabase]);
 
   useEffect(() => {
-    if (section !== "integracoes" || !companyId || !isGA4Connected) return;
+    if (section !== "integracoes" || !companyId) return;
     const pendingService = window.sessionStorage.getItem(GOOGLE_OAUTH_POST_CONNECT_KEY);
-    if (pendingService !== "ga4") return;
-    window.sessionStorage.removeItem(GOOGLE_OAUTH_POST_CONNECT_KEY);
-    void handleLoadGoogleAnalyticsProperties();
-  }, [section, companyId, isGA4Connected, handleLoadGoogleAnalyticsProperties]);
+    if (pendingService === "ga4" && isGA4Connected) {
+      window.sessionStorage.removeItem(GOOGLE_OAUTH_POST_CONNECT_KEY);
+      void handleLoadGoogleAnalyticsProperties();
+    } else if (pendingService === "mybusiness" && isMyBusinessConnected) {
+      window.sessionStorage.removeItem(GOOGLE_OAUTH_POST_CONNECT_KEY);
+      void handleLoadMyBusinessLocations();
+    }
+  }, [section, companyId, isGA4Connected, isMyBusinessConnected, handleLoadGoogleAnalyticsProperties, handleLoadMyBusinessLocations]);
 
   // Poll para SDK da Meta (carregado dinamicamente em main.tsx)
   useEffect(() => {
@@ -2644,6 +2823,82 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                               </>
                             ) : (
                               <>Confirmar propriedade</>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {isMyBusinessConnected && myBusinessLocations.length === 0 && (
+                    <div className="mt-6 flex flex-col items-start gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isLoadingMyBusinessLocations}
+                        onClick={handleLoadMyBusinessLocations}
+                      >
+                        {isLoadingMyBusinessLocations ? (
+                          <>
+                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                            Buscando perfis…
+                          </>
+                        ) : (
+                          <>Ver perfis do Meu Negócio</>
+                        )}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedMyBusinessPropertyLabel
+                          ? `Perfil atual: ${selectedMyBusinessPropertyLabel}`
+                          : "Carregue os perfis da conta Google conectada para escolher qual será vinculado a esta empresa."}
+                      </p>
+                    </div>
+                  )}
+
+                  {(myBusinessLocations.length > 0 || selectedMyBusinessPropertyLabel) && (
+                    <div className="mt-6 space-y-3">
+                      <h3 className="text-sm font-medium">Selecionar perfil do Google Meu Negócio</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Escolha qual perfil da conta conectada será usado como padrão nesta empresa.
+                      </p>
+                      {selectedMyBusinessPropertyLabel && (
+                        <p className="text-xs text-muted-foreground">
+                          Seleção atual: {selectedMyBusinessPropertyLabel}
+                        </p>
+                      )}
+                      {myBusinessLocations.length > 0 && (
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                          <div className="w-full space-y-1 sm:max-w-xl">
+                            <Label htmlFor="mybusiness-location">Perfil Meu Negócio</Label>
+                            <Select
+                              value={selectedMyBusinessPropertyName ?? ""}
+                              onValueChange={(value) => setSelectedMyBusinessPropertyName(value)}
+                            >
+                              <SelectTrigger id="mybusiness-location">
+                                <SelectValue placeholder="Selecione um perfil" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {myBusinessLocations.map((loc) => (
+                                  <SelectItem key={loc.propertyName} value={loc.propertyName}>
+                                    {loc.accountDisplayName} — {loc.propertyDisplayName}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button
+                            type="button"
+                            className="sm:ml-2"
+                            disabled={!selectedMyBusinessPropertyName || isSavingMyBusinessLocation}
+                            onClick={handleSelectMyBusinessLocation}
+                          >
+                            {isSavingMyBusinessLocation ? (
+                              <>
+                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                Salvando…
+                              </>
+                            ) : (
+                              <>Confirmar perfil</>
                             )}
                           </Button>
                         </div>

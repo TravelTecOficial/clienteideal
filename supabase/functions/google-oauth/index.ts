@@ -58,6 +58,8 @@ type GoogleAction =
   | "getConnectionStatus"
   | "listAnalyticsProperties"
   | "selectAnalyticsProperty"
+  | "listMyBusinessLocations"
+  | "selectMyBusinessLocation"
   | "disconnect"
 
 interface BaseRequestBody {
@@ -98,6 +100,20 @@ interface SelectAnalyticsPropertyBody extends BaseRequestBody {
   propertyDisplayName?: string
 }
 
+interface ListMyBusinessLocationsBody extends BaseRequestBody {
+  action: "listMyBusinessLocations"
+  company_id?: string
+}
+
+interface SelectMyBusinessLocationBody extends BaseRequestBody {
+  action: "selectMyBusinessLocation"
+  company_id?: string
+  accountName?: string
+  accountDisplayName?: string
+  propertyName?: string
+  propertyDisplayName?: string
+}
+
 interface DisconnectBody extends BaseRequestBody {
   action: "disconnect"
   company_id?: string
@@ -110,6 +126,8 @@ type RequestBody =
   | GetConnectionStatusBody
   | ListAnalyticsPropertiesBody
   | SelectAnalyticsPropertyBody
+  | ListMyBusinessLocationsBody
+  | SelectMyBusinessLocationBody
   | DisconnectBody
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -218,6 +236,35 @@ interface GoogleAccountSummariesResponse extends GoogleApiErrorResponse {
 }
 
 interface GoogleAnalyticsPropertyOption {
+  accountName: string
+  accountDisplayName: string
+  propertyName: string
+  propertyDisplayName: string
+  propertyId: string
+  isSelected: boolean
+}
+
+interface MyBusinessAccount {
+  name?: string | null
+  accountName?: string | null
+}
+
+interface MyBusinessLocation {
+  name?: string | null
+  locationName?: string | null
+}
+
+interface MyBusinessAccountsListResponse extends GoogleApiErrorResponse {
+  accounts?: MyBusinessAccount[] | null
+  nextPageToken?: string | null
+}
+
+interface MyBusinessLocationsListResponse extends GoogleApiErrorResponse {
+  locations?: MyBusinessLocation[] | null
+  nextPageToken?: string | null
+}
+
+interface MyBusinessLocationOption {
   accountName: string
   accountDisplayName: string
   propertyName: string
@@ -598,7 +645,8 @@ async function handleGetConnectionStatus(
     selected_property_display_name?: string | null
   }>
   const active = new Set(rows.filter((r) => r.status === "active").map((r) => r.service))
-  const ga4Row = rows.find((row) => row.service === "ga4" && row.status === "active") ?? null
+  const ga4Row = rows.find((r) => r.service === "ga4" && r.status === "active") ?? null
+  const mybusinessRow = rows.find((r) => r.service === "mybusiness" && r.status === "active") ?? null
 
   return jsonResponse({
     ga4: active.has("ga4"),
@@ -607,6 +655,9 @@ async function handleGetConnectionStatus(
     ga4SelectedPropertyName: ga4Row?.selected_property_name ?? null,
     ga4SelectedPropertyDisplayName: ga4Row?.selected_property_display_name ?? null,
     ga4SelectedAccountDisplayName: ga4Row?.selected_account_display_name ?? null,
+    mybusinessSelectedPropertyName: mybusinessRow?.selected_property_name ?? null,
+    mybusinessSelectedPropertyDisplayName: mybusinessRow?.selected_property_display_name ?? null,
+    mybusinessSelectedAccountDisplayName: mybusinessRow?.selected_account_display_name ?? null,
   })
 }
 
@@ -764,6 +815,207 @@ async function handleSelectAnalyticsProperty(
   })
 }
 
+async function handleListMyBusinessLocations(
+  ctx: AuthContext,
+  supabase: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const config = getGoogleConfig()
+  if ("error" in config) return config.error
+
+  const connectionResult = await getGoogleConnectionForService(ctx, supabase, "mybusiness")
+  if (connectionResult.error) return connectionResult.error
+  const row = connectionResult.row
+  if (!row) {
+    return jsonResponse({ error: "Conexão Google Meu Negócio não encontrada." }, 404)
+  }
+
+  let accessToken: string
+  try {
+    accessToken = await decryptToken(row.access_token_encrypted, config.encryptionKey)
+  } catch (err) {
+    console.error("[google-oauth] Falha ao descriptografar token Google:", err)
+    return jsonResponse({ error: "Erro ao acessar credenciais do Google." }, 500)
+  }
+
+  const locationOptions: MyBusinessLocationOption[] = []
+  let accountsNextPageToken: string | null = null
+  let accountsPageCount = 0
+
+  do {
+    const accountsUrl = new URL("https://mybusiness.googleapis.com/v4/accounts")
+    accountsUrl.searchParams.set("pageSize", "20")
+    if (accountsNextPageToken) {
+      accountsUrl.searchParams.set("pageToken", accountsNextPageToken)
+    }
+
+    const accountsRes = await fetch(accountsUrl.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    const accountsRaw = await accountsRes.text()
+    const accountsData = (() => {
+      try {
+        return JSON.parse(accountsRaw) as MyBusinessAccountsListResponse
+      } catch {
+        return null
+      }
+    })()
+
+    if (!accountsRes.ok) {
+      const errorMessage =
+        accountsData?.error?.message ??
+        (accountsRaw && accountsRaw.length < 400 ? accountsRaw : null) ??
+        `Erro ao listar contas do Google Meu Negócio (${accountsRes.status}).`
+      return jsonResponse(
+        {
+          error: "Erro ao listar perfis do Google Meu Negócio.",
+          hint: errorMessage,
+          code: "GOOGLE_MYBUSINESS_LIST_FAILED",
+        },
+        502,
+      )
+    }
+
+    for (const account of accountsData?.accounts ?? []) {
+      const accountName = account.name?.trim() ?? ""
+      const accountDisplayName = account.accountName?.trim() || accountName
+      if (!accountName) continue
+
+      let locationsNextPageToken: string | null = null
+      let locationsPageCount = 0
+
+      do {
+        const locationsUrl = new URL(
+          `https://mybusiness.googleapis.com/v4/${accountName}/locations`,
+        )
+        locationsUrl.searchParams.set("pageSize", "100")
+        if (locationsNextPageToken) {
+          locationsUrl.searchParams.set("pageToken", locationsNextPageToken)
+        }
+
+        const locationsRes = await fetch(locationsUrl.toString(), {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        })
+
+        const locationsRaw = await locationsRes.text()
+        const locationsData = (() => {
+          try {
+            return JSON.parse(locationsRaw) as MyBusinessLocationsListResponse
+          } catch {
+            return null
+          }
+        })()
+
+        if (!locationsRes.ok) {
+          const errMsg =
+            locationsData?.error?.message ??
+            (locationsRaw && locationsRaw.length < 300 ? locationsRaw : null) ??
+            `Erro ao listar locais (${locationsRes.status})`
+          return jsonResponse(
+            {
+              error: "Erro ao listar perfis do Google Meu Negócio.",
+              hint: errMsg,
+              code: "GOOGLE_MYBUSINESS_LOCATIONS_FAILED",
+            },
+            502,
+          )
+        }
+
+        for (const loc of locationsData?.locations ?? []) {
+          const propertyName = loc.name?.trim() ?? ""
+          if (!propertyName) continue
+          locationOptions.push({
+            accountName,
+            accountDisplayName,
+            propertyName,
+            propertyDisplayName: loc.locationName?.trim() || propertyName,
+            propertyId: propertyName.split("/").pop() ?? propertyName,
+            isSelected: propertyName === (row.selected_property_name ?? null),
+          })
+        }
+
+        locationsNextPageToken = locationsData?.nextPageToken?.trim() || null
+        locationsPageCount += 1
+      } while (locationsNextPageToken && locationsPageCount < 10)
+    }
+
+    accountsNextPageToken = accountsData?.nextPageToken?.trim() || null
+    accountsPageCount += 1
+  } while (accountsNextPageToken && accountsPageCount < 10)
+
+  locationOptions.sort((a, b) =>
+    `${a.accountDisplayName} ${a.propertyDisplayName}`.localeCompare(
+      `${b.accountDisplayName} ${b.propertyDisplayName}`,
+      "pt-BR",
+    ),
+  )
+
+  return jsonResponse({ locations: locationOptions })
+}
+
+async function handleSelectMyBusinessLocation(
+  body: SelectMyBusinessLocationBody,
+  ctx: AuthContext,
+  supabase: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const accountName = typeof body.accountName === "string" ? body.accountName.trim() : ""
+  const propertyName = typeof body.propertyName === "string" ? body.propertyName.trim() : ""
+
+  if (!accountName || !propertyName) {
+    return jsonResponse(
+      {
+        error: "Selecione uma conta e um perfil do Meu Negócio antes de confirmar.",
+        code: "MISSING_MYBUSINESS_LOCATION",
+      },
+      400,
+    )
+  }
+
+  const accountDisplayName =
+    typeof body.accountDisplayName === "string" ? body.accountDisplayName.trim() : accountName
+  const propertyDisplayName =
+    typeof body.propertyDisplayName === "string" ? body.propertyDisplayName.trim() : propertyName
+
+  const { error } = await supabase
+    .from("google_connections")
+    .update({
+      selected_account_name: accountName,
+      selected_account_display_name: accountDisplayName,
+      selected_property_name: propertyName,
+      selected_property_display_name: propertyDisplayName,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("company_id", ctx.companyId)
+    .eq("service", "mybusiness")
+
+  if (error) {
+    console.error("[google-oauth] Erro ao salvar perfil Meu Negócio:", error)
+    return jsonResponse(
+      {
+        error: "Erro ao salvar o perfil selecionado do Google Meu Negócio.",
+        hint: error.message,
+      },
+      500,
+    )
+  }
+
+  return jsonResponse({
+    success: true,
+    selected: {
+      accountName,
+      accountDisplayName,
+      propertyName,
+      propertyDisplayName,
+    },
+  })
+}
+
 async function handleDisconnect(
   body: DisconnectBody,
   ctx: AuthContext,
@@ -841,6 +1093,10 @@ Deno.serve(async (req: Request) => {
       return handleListAnalyticsProperties(ctx, supabase)
     case "selectAnalyticsProperty":
       return handleSelectAnalyticsProperty(body as SelectAnalyticsPropertyBody, ctx, supabase)
+    case "listMyBusinessLocations":
+      return handleListMyBusinessLocations(ctx, supabase)
+    case "selectMyBusinessLocation":
+      return handleSelectMyBusinessLocation(body as SelectMyBusinessLocationBody, ctx, supabase)
     case "disconnect":
       return handleDisconnect(body as DisconnectBody, ctx, supabase)
     default:

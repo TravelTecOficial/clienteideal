@@ -136,8 +136,8 @@ export function GoogleOAuthCallbackPage() {
           description: "A conta do Google foi conectada com sucesso para este serviço.",
         })
 
-        if (data?.service === "ga4") {
-          window.sessionStorage.setItem(POST_CONNECT_STORAGE_KEY, "ga4")
+        if (data?.service === "ga4" || data?.service === "mybusiness") {
+          window.sessionStorage.setItem(POST_CONNECT_STORAGE_KEY, data.service)
         }
 
         navigate("/dashboard/configuracoes/integracoes", { replace: true })
