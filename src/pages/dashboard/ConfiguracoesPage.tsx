@@ -266,12 +266,9 @@ export function ConfiguracoesPage() {
   const whatsappImageInputRef = useRef<HTMLInputElement>(null);
   const [briefingCompleted, setBriefingCompleted] = useState(false);
   const [isBriefingModalOpen, setIsBriefingModalOpen] = useState(false);
-  const [googleAdsOAuthOpen, setGoogleAdsOAuthOpen] = useState(false);
   const [isGmbManagerOpen, setIsGmbManagerOpen] = useState(false);
-  const [googleAdsOAuthStep, setGoogleAdsOAuthStep] = useState<"login" | "account" | "success">("login");
-  const [googleAdsOAuthEmail, setGoogleAdsOAuthEmail] = useState("");
-  const [googleAdsSelectedAccount, setGoogleAdsSelectedAccount] = useState<string | null>(null);
-  const [isGoogleAdsConnecting, setIsGoogleAdsConnecting] = useState(false);
+  const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [isCreatingInstance, setIsCreatingInstance] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
@@ -531,12 +528,44 @@ export function ConfiguracoesPage() {
     }
   }, [companyId, getToken]);
 
+  const loadGoogleConnectionState = useCallback(async () => {
+    if (!companyId) {
+      setIsGoogleConnected(false);
+      return;
+    }
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "getConnectionStatus",
+          company_id: companyId,
+          token,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as { connected?: boolean } | null;
+      if (res.ok && data) {
+        setIsGoogleConnected(Boolean(data.connected));
+      } else {
+        setIsGoogleConnected(false);
+      }
+    } catch {
+      setIsGoogleConnected(false);
+    }
+  }, [companyId, getToken]);
+
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (tab === "integracoes") {
       void loadWhatsappConnectionState();
+      void loadGoogleConnectionState();
     }
-  }, [searchParams, loadWhatsappConnectionState]);
+  }, [searchParams, loadWhatsappConnectionState, loadGoogleConnectionState]);
 
   // Poll para SDK da Meta (carregado dinamicamente em main.tsx)
   useEffect(() => {
@@ -2080,28 +2109,134 @@ export function ConfiguracoesPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {/* Google Ads - Simulado OAuth */}
+                    {/* Google (GA4, Ads, My Business) - OAuth real */}
                     <Card>
                       <CardHeader className="flex flex-row items-center gap-4 pb-2">
                         <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-2xl">
                           🔍
                         </div>
                         <div className="flex-1 space-y-1">
-                          <CardTitle className="text-base">Google Ads</CardTitle>
-                          <CardDescription>Google Ads</CardDescription>
+                          <CardTitle className="text-base">Google (GA4, Ads, My Business)</CardTitle>
+                          <CardDescription>
+                            GA4, Google Ads e Google Meu Negócio. refresh_token armazenado para atualização automática.
+                          </CardDescription>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col items-end gap-1">
                           <Button
                             size="sm"
-                            onClick={() => {
-                              setGoogleAdsOAuthStep("login");
-                              setGoogleAdsOAuthEmail("");
-                              setGoogleAdsSelectedAccount(null);
-                              setGoogleAdsOAuthOpen(true);
+                            variant={isGoogleConnected ? "outline" : "default"}
+                            disabled={isGoogleConnecting || !companyId}
+                            className={cn(
+                              isGoogleConnected && "border-emerald-500 bg-emerald-50 text-emerald-700"
+                            )}
+                            onClick={async () => {
+                              if (!companyId) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Empresa não identificada",
+                                  description: "Acesse o painel com uma empresa selecionada antes de conectar.",
+                                });
+                                return;
+                              }
+                              setIsGoogleConnecting(true);
+                              try {
+                                const token = await getToken();
+                                if (!token) {
+                                  throw new Error("Token de autenticação indisponível. Faça login novamente.");
+                                }
+                                const state = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+                                window.sessionStorage.setItem("google_oauth_state", state);
+                                const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                                  },
+                                  body: JSON.stringify({
+                                    action: "getLoginUrl",
+                                    state,
+                                    company_id: companyId,
+                                    token,
+                                  }),
+                                });
+                                const data = (await res.json().catch(() => null)) as { url?: string; error?: string } | null;
+                                if (!res.ok || data?.error || !data?.url) {
+                                  throw new Error(data?.error ?? "Erro ao obter URL de autorização.");
+                                }
+                                window.location.href = data.url;
+                              } catch (err) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Erro ao conectar Google",
+                                  description: getErrorMessage(err),
+                                });
+                                setIsGoogleConnecting(false);
+                              }
                             }}
                           >
-                            Conectar Google Ads
+                            {isGoogleConnecting ? (
+                              <>
+                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                Conectando…
+                              </>
+                            ) : isGoogleConnected ? (
+                              <>
+                                <Check className="mr-1 h-4 w-4" />
+                                Conectado
+                              </>
+                            ) : (
+                              "Conectar Google"
+                            )}
                           </Button>
+                          {isGoogleConnected && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={isGoogleConnecting}
+                              onClick={async () => {
+                                const confirmDisconnect = window.confirm(
+                                  "Tem certeza que deseja desconectar o Google desta empresa? O refresh_token será removido e você precisará autorizar novamente."
+                                );
+                                if (!confirmDisconnect) return;
+                                try {
+                                  const token = await getToken();
+                                  if (!token) throw new Error("Token de autenticação indisponível.");
+                                  const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                                    },
+                                    body: JSON.stringify({
+                                      action: "disconnect",
+                                      company_id: companyId,
+                                      token,
+                                    }),
+                                  });
+                                  const data = (await res.json().catch(() => null)) as { error?: string } | null;
+                                  if (!res.ok || data?.error) {
+                                    throw new Error(data?.error ?? "Erro ao desconectar.");
+                                  }
+                                  setIsGoogleConnected(false);
+                                  toast({
+                                    title: "Google desconectado",
+                                    description: "A conexão foi removida. O refresh_token não está mais disponível.",
+                                  });
+                                } catch (err) {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Erro ao desconectar Google",
+                                    description: getErrorMessage(err),
+                                  });
+                                }
+                              }}
+                            >
+                              Desconectar
+                            </Button>
+                          )}
+                          <p className="text-[11px] text-muted-foreground">
+                            OAuth offline. refresh_token criptografado em repouso.
+                          </p>
                         </div>
                       </CardHeader>
                     </Card>
@@ -2496,162 +2631,6 @@ export function ConfiguracoesPage() {
                 </CardContent>
               </Card>
 
-              {/* Modal simulado OAuth Google Ads */}
-              <Dialog
-                open={googleAdsOAuthOpen}
-                onOpenChange={(open) => {
-                  setGoogleAdsOAuthOpen(open);
-                  if (!open) {
-                    setGoogleAdsOAuthStep("login");
-                    setGoogleAdsOAuthEmail("");
-                    setGoogleAdsSelectedAccount(null);
-                  }
-                }}
-              >
-                <DialogContent className="max-w-md">
-                  {googleAdsOAuthStep === "login" && (
-                    <>
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <span className="flex h-8 w-8 items-center justify-center rounded bg-[#4285F4] text-white text-sm font-bold">
-                            G
-                          </span>
-                          Conectar Google Ads
-                        </DialogTitle>
-                        <DialogDescription>
-                          Faça login com sua conta Google para conectar o Google Ads.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="google-oauth-email">E-mail ou telefone</Label>
-                          <Input
-                            id="google-oauth-email"
-                            type="email"
-                            placeholder="seu@email.com"
-                            value={googleAdsOAuthEmail}
-                            onChange={(e) => setGoogleAdsOAuthEmail(e.target.value)}
-                            className="border-2"
-                          />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Simulado: digite qualquer e-mail para continuar.
-                        </p>
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          onClick={() => {
-                            if (googleAdsOAuthEmail.trim()) {
-                              setGoogleAdsOAuthStep("account");
-                            } else {
-                              toast({
-                                title: "Informe o e-mail",
-                                description: "Digite um e-mail para continuar o login.",
-                                variant: "destructive",
-                              });
-                            }
-                          }}
-                          className="w-full sm:w-auto"
-                        >
-                          Próximo
-                        </Button>
-                      </DialogFooter>
-                    </>
-                  )}
-                  {googleAdsOAuthStep === "account" && (
-                    <>
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <span className="flex h-8 w-8 items-center justify-center rounded bg-[#4285F4] text-white text-sm font-bold">
-                            G
-                          </span>
-                          Escolher conta
-                        </DialogTitle>
-                        <DialogDescription>
-                          Selecione a conta do Google Ads que deseja conectar.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-2 py-4">
-                        {[
-                          { id: "acc-1", name: "Empresa XYZ", customerId: "123-456-7890" },
-                          { id: "acc-2", name: "Minha Conta Ads", customerId: "987-654-3210" },
-                          { id: "acc-3", name: "Agência Digital", customerId: "555-123-4567" },
-                        ].map((acc) => (
-                          <button
-                            key={acc.id}
-                            type="button"
-                            onClick={() => setGoogleAdsSelectedAccount(acc.id)}
-                            className={cn(
-                              "flex w-full items-center justify-between rounded-lg border-2 p-4 text-left transition-colors",
-                              googleAdsSelectedAccount === acc.id
-                                ? "border-[#4285F4] bg-[#4285F4]/5"
-                                : "border-border hover:border-muted-foreground/30"
-                            )}
-                          >
-                            <div>
-                              <p className="font-medium">{acc.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                ID: {acc.customerId}
-                              </p>
-                            </div>
-                            {googleAdsSelectedAccount === acc.id && (
-                              <Check className="h-5 w-5 text-[#4285F4]" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          variant="outline"
-                          onClick={() => setGoogleAdsOAuthStep("login")}
-                        >
-                          Voltar
-                        </Button>
-                        <Button
-                          disabled={!googleAdsSelectedAccount || isGoogleAdsConnecting}
-                          onClick={async () => {
-                            setIsGoogleAdsConnecting(true);
-                            await new Promise((r) => setTimeout(r, 1500));
-                            setIsGoogleAdsConnecting(false);
-                            setGoogleAdsOAuthStep("success");
-                            toast({
-                              title: "Google Ads conectado",
-                              description: "A integração foi configurada com sucesso (simulado).",
-                            });
-                          }}
-                        >
-                          {isGoogleAdsConnecting ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Conectando…
-                            </>
-                          ) : (
-                            "Conectar"
-                          )}
-                        </Button>
-                      </DialogFooter>
-                    </>
-                  )}
-                  {googleAdsOAuthStep === "success" && (
-                    <>
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <Check className="h-8 w-8 text-success" />
-                          Conectado com sucesso
-                        </DialogTitle>
-                        <DialogDescription>
-                          Sua conta Google Ads foi conectada. Esta é uma simulação — em produção, os dados seriam sincronizados via API.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <Button onClick={() => setGoogleAdsOAuthOpen(false)}>
-                          Fechar
-                        </Button>
-                      </DialogFooter>
-                    </>
-                  )}
-                </DialogContent>
-              </Dialog>
             </TabsContent>
 
             <TabsContent value="evolution" className="space-y-4 pt-4">

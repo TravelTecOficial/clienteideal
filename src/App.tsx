@@ -51,6 +51,7 @@ import { TermosUsoPage } from "@/pages/TermosUsoPage"
 import { GtmInjector } from "@/components/GtmInjector"
 import { MetaInstagramCallbackPage } from "@/pages/auth/MetaInstagramCallbackPage"
 import { WhatsappFacebookCallbackPage } from "@/pages/auth/WhatsappFacebookCallbackPage"
+import { GoogleOAuthCallbackPage } from "@/pages/auth/GoogleOAuthCallbackPage"
 import { SSOCallbackPage } from "@/pages/auth/SSOCallbackPage"
 
 function ShowcaseFallback() {
@@ -106,6 +107,16 @@ function App() {
             <SupabaseProvider>
               <ProtectedRoute>
                 <WhatsappFacebookCallbackPage />
+              </ProtectedRoute>
+            </SupabaseProvider>
+          }
+        />
+        <Route
+          path="/auth/google/callback"
+          element={
+            <SupabaseProvider>
+              <ProtectedRoute>
+                <GoogleOAuthCallbackPage />
               </ProtectedRoute>
             </SupabaseProvider>
           }
