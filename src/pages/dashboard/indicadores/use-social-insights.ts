@@ -77,6 +77,7 @@ export function useInstagramOverview(options?: { enabled?: boolean }): HookState
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
             action: "getInstagramOverview",
@@ -246,6 +247,7 @@ export function useFacebookOverview(options?: { enabled?: boolean }): HookState<
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
             action: "getFacebookOverview",

@@ -545,6 +545,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           action: "getConnectionStatus",
@@ -581,7 +582,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         if (!token) throw new Error("Token de autenticação indisponível. Faça login novamente.");
         const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
           body: JSON.stringify({ action: "getLoginUrl", service, company_id: companyId, token }),
         });
         const data = (await res.json().catch(() => null)) as { url?: string; state?: string; error?: string } | null;
@@ -607,7 +612,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         if (!token) throw new Error("Token indisponível.");
         const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
           body: JSON.stringify({ action: "disconnect", service, company_id: companyId, token }),
         });
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -631,7 +640,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       if (!token) throw new Error("Token indisponível.");
       const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
         body: JSON.stringify({ action: "disconnect", token }),
       });
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -659,6 +672,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ action: "listAccounts", token }),
       });
@@ -921,6 +935,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           action: "getLoginUrl",
@@ -1150,6 +1165,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           action: "listAccounts",
@@ -1227,6 +1243,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           action: "selectAccount",
@@ -1288,6 +1305,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           action: "getInsights",
