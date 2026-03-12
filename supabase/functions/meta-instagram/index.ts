@@ -508,11 +508,13 @@ async function handleExchangeCode(body: ExchangeCodeBody, ctx: AuthContext, supa
     )
 
   if (error) {
+    const errMsg = typeof error?.message === "string" ? error.message : String(error)
+    const errCode = (error as { code?: string })?.code
     console.error("[meta-instagram] Erro ao salvar integração em meta_connections:", error)
     return jsonResponse(
       {
         error: "Erro ao salvar credenciais de integração da Meta.",
-        hint: "Verifique se a migration meta_connections foi aplicada.",
+        hint: errCode ? `[${errCode}] ${errMsg}` : errMsg || "Verifique se a migration meta_connections foi aplicada.",
       },
       500,
     )

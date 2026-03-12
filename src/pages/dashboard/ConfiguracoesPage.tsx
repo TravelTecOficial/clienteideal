@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
 import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2, Trash2, Pencil, Plug2, MapPin, MessageSquare, Sparkles, Search } from "lucide-react";
-import { SiWhatsapp, SiGoogleads, SiMeta, SiInstagram, SiGoogleanalytics, SiGoogle } from "react-icons/si";
+import { SiWhatsapp, SiGoogleads, SiMeta, SiInstagram, SiGoogleanalytics, SiGoogle, SiFacebook, SiWordpress } from "react-icons/si";
 
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -315,6 +315,10 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [isWhatsappConnecting, setIsWhatsappConnecting] = useState(false);
   const [isMetaSdkReady, setIsMetaSdkReady] = useState(false);
   const [metaSdkLoadFailed, setMetaSdkLoadFailed] = useState(false);
+  const [wordpressSiteUrl, setWordpressSiteUrl] = useState("");
+  const [wordpressToken, setWordpressToken] = useState("");
+  const [isWordpressConnected, setIsWordpressConnected] = useState(false);
+  const [isSavingWordpress, setIsSavingWordpress] = useState(false);
   const [whatsappPhoneNumbers, setWhatsappPhoneNumbers] = useState<WhatsappPhoneNumber[]>([]);
   const [selectedWhatsappPhoneId, setSelectedWhatsappPhoneId] = useState<string | null>(null);
   const [isWhatsappConnected, setIsWhatsappConnected] = useState(false);
@@ -1124,13 +1128,112 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
   }, [companyId, getToken]);
 
+  const loadWordpressConnection = useCallback(async () => {
+    if (!companyId) {
+      setIsWordpressConnected(false);
+      setWordpressSiteUrl("");
+      setWordpressToken("");
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("wordpress_connections")
+        .select("site_url, token")
+        .eq("company_id", companyId)
+        .maybeSingle();
+      if (!error && data) {
+        setIsWordpressConnected(true);
+        setWordpressSiteUrl(data.site_url ?? "");
+        setWordpressToken(data.token ?? "");
+      } else {
+        setIsWordpressConnected(false);
+        setWordpressSiteUrl("");
+        setWordpressToken("");
+      }
+    } catch {
+      setIsWordpressConnected(false);
+      setWordpressSiteUrl("");
+      setWordpressToken("");
+    }
+  }, [companyId, supabase]);
+
+  const handleSaveWordpress = useCallback(async () => {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description: "Acesse o painel com uma empresa selecionada.",
+      });
+      return;
+    }
+    const url = wordpressSiteUrl.trim();
+    const token = wordpressToken.trim();
+    if (!url || !token) {
+      toast({
+        variant: "destructive",
+        title: "Campos obrigatórios",
+        description: "Informe a URL do site e o token.",
+      });
+      return;
+    }
+    setIsSavingWordpress(true);
+    try {
+      const { error } = await supabase
+        .from("wordpress_connections")
+        .upsert(
+          {
+            company_id: companyId,
+            site_url: url,
+            token,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "company_id" },
+        );
+      if (error) throw error;
+      setIsWordpressConnected(true);
+      toast({ title: "WordPress conectado", description: "Credenciais salvas com sucesso." });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSavingWordpress(false);
+    }
+  }, [companyId, wordpressSiteUrl, wordpressToken, supabase, toast]);
+
+  const handleWordpressDisconnect = useCallback(async () => {
+    const ok = window.confirm("Desconectar WordPress desta empresa?");
+    if (!ok) return;
+    if (!companyId) return;
+    try {
+      const { error } = await supabase
+        .from("wordpress_connections")
+        .delete()
+        .eq("company_id", companyId);
+      if (error) throw error;
+      setIsWordpressConnected(false);
+      setWordpressSiteUrl("");
+      setWordpressToken("");
+      toast({ title: "WordPress desconectado" });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao desconectar",
+        description: getErrorMessage(err),
+      });
+    }
+  }, [companyId, supabase, toast]);
+
   useEffect(() => {
     if (section === "integracoes") {
       void loadWhatsappConnectionState();
       void loadGoogleConnectionState();
       void loadMetaConnectionState();
+      void loadWordpressConnection();
     }
-  }, [section, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState]);
+  }, [section, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState, loadWordpressConnection]);
 
   useEffect(() => {
     if (section === "integracoes" && companyId && isAdsConnected && !adsAccountDisplayName) {
@@ -2692,7 +2795,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                       {
                         id: "facebook",
                         name: "Facebook",
-                        icon: SiMeta,
+                        icon: SiFacebook,
                         connected: isFacebookConnected,
                         connecting: metaConnectingService === "facebook",
                         onConnect: () => handleMetaConnect("facebook"),
@@ -2800,6 +2903,104 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                         </Card>
                       );
                     })}
+                    <Card
+                      key="wordpress"
+                      className={cn(
+                        "flex flex-col gap-3 p-4 transition-colors",
+                        isWordpressConnected
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-muted/30"
+                      )}
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <SiWordpress className="h-10 w-10 shrink-0 text-foreground" style={{ width: 40, height: 40 }} />
+                        <p className="text-sm font-medium text-foreground">WordPress</p>
+                      </div>
+                      <div className="flex w-full flex-col gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="wordpress-url" className="text-xs">
+                            URL do site
+                          </Label>
+                          <Input
+                            id="wordpress-url"
+                            type="url"
+                            placeholder="https://seusite.com"
+                            value={wordpressSiteUrl}
+                            onChange={(e) => setWordpressSiteUrl(e.target.value)}
+                            disabled={!companyId}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="wordpress-token" className="text-xs">
+                            Token
+                          </Label>
+                          <Input
+                            id="wordpress-token"
+                            type="password"
+                            placeholder="Token de API"
+                            value={wordpressToken}
+                            onChange={(e) => setWordpressToken(e.target.value)}
+                            disabled={!companyId}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        {isWordpressConnected ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full border-primary text-primary hover:bg-primary/10"
+                              disabled
+                            >
+                              <Check className="mr-1 h-4 w-4" />
+                              Conectado
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              disabled={isSavingWordpress || !wordpressSiteUrl.trim() || !wordpressToken.trim()}
+                              onClick={handleSaveWordpress}
+                            >
+                              {isSavingWordpress ? (
+                                <>
+                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                  Salvando…
+                                </>
+                              ) : (
+                                "Atualizar"
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full text-muted-foreground hover:text-foreground"
+                              disabled={isSavingWordpress}
+                              onClick={handleWordpressDisconnect}
+                            >
+                              Desconectar
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            disabled={isSavingWordpress || !companyId || !wordpressSiteUrl.trim() || !wordpressToken.trim()}
+                            onClick={handleSaveWordpress}
+                          >
+                            {isSavingWordpress ? (
+                              <>
+                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                Salvando…
+                              </>
+                            ) : (
+                              "Salvar"
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
                   </div>
 
                   {isGA4Connected && googleAnalyticsProperties.length === 0 && (
