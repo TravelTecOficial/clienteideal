@@ -1253,10 +1253,20 @@ async function handleGetAdsAccountInfo(
     })()
     if (!adsRes.ok || !Array.isArray(adsData?.resourceNames) || adsData.resourceNames.length === 0) {
       const errMsg = adsData?.error?.message ?? (adsRaw?.slice(0, 200) ?? `Erro ${adsRes.status}`)
+      // #region agent log - debug para diagnóstico 502
       return jsonResponse(
-        { error: "Erro ao obter conta Google Ads.", hint: errMsg },
+        {
+          error: "Erro ao obter conta Google Ads.",
+          hint: errMsg,
+          debug: {
+            hadAccessToken: !!accessToken,
+            hadDeveloperToken: !!adsDeveloperToken,
+            googleStatus: adsRes.status,
+          },
+        },
         502,
       )
+      // #endregion
     }
     const first = adsData.resourceNames[0]
     if (typeof first !== "string" || !first.startsWith("customers/")) {
