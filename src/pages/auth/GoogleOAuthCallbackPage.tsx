@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast"
 import { getErrorMessage } from "@/lib/utils"
 
 const STORAGE_KEY = "google_oauth_state"
+const COMPANY_STORAGE_KEY = "google_oauth_company_id"
+const POST_CONNECT_STORAGE_KEY = "google_oauth_post_connect_service"
 
 export function GoogleOAuthCallbackPage() {
   const { getToken } = useAuth()
@@ -22,6 +24,8 @@ export function GoogleOAuthCallbackPage() {
         const url = new URL(window.location.href)
         const code = url.searchParams.get("code")
         const stateFromUrl = url.searchParams.get("state")
+        const storedCompanyId = window.sessionStorage.getItem(COMPANY_STORAGE_KEY)?.trim() || null
+        const effectiveCompanyId = companyId ?? storedCompanyId
 
         if (!code) {
           toast({
@@ -44,7 +48,7 @@ export function GoogleOAuthCallbackPage() {
           return
         }
 
-        if (!companyId) {
+        if (!effectiveCompanyId) {
           toast({
             variant: "destructive",
             title: "Empresa não identificada",
@@ -73,7 +77,7 @@ export function GoogleOAuthCallbackPage() {
             action: "exchangeCode",
             code,
             state: stateFromUrl,
-            company_id: companyId,
+            company_id: effectiveCompanyId,
             token,
           }),
         })
@@ -118,6 +122,7 @@ export function GoogleOAuthCallbackPage() {
         }
 
         window.sessionStorage.removeItem(STORAGE_KEY)
+        window.sessionStorage.removeItem(COMPANY_STORAGE_KEY)
 
         const serviceLabels: Record<string, string> = {
           ga4: "Google Analytics",
@@ -131,8 +136,13 @@ export function GoogleOAuthCallbackPage() {
           description: "A conta do Google foi conectada com sucesso para este serviço.",
         })
 
+        if (data?.service === "ga4") {
+          window.sessionStorage.setItem(POST_CONNECT_STORAGE_KEY, "ga4")
+        }
+
         navigate("/dashboard/configuracoes/integracoes", { replace: true })
       } catch (err) {
+        window.sessionStorage.removeItem(COMPANY_STORAGE_KEY)
         toast({
           variant: "destructive",
           title: "Erro ao finalizar conexão",

@@ -229,6 +229,19 @@ interface CompanyOption {
   name: string | null;
 }
 
+interface GoogleAnalyticsPropertyOption {
+  accountName: string;
+  accountDisplayName: string;
+  propertyName: string;
+  propertyDisplayName: string;
+  propertyId: string;
+  isSelected: boolean;
+}
+
+const GOOGLE_OAUTH_STATE_KEY = "google_oauth_state";
+const GOOGLE_OAUTH_COMPANY_KEY = "google_oauth_company_id";
+const GOOGLE_OAUTH_POST_CONNECT_KEY = "google_oauth_post_connect_service";
+
 export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const { userId, getToken } = useAuth();
   const { user } = useUser();
@@ -270,6 +283,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [isGA4Connected, setIsGA4Connected] = useState(false);
   const [isAdsConnected, setIsAdsConnected] = useState(false);
   const [isMyBusinessConnected, setIsMyBusinessConnected] = useState(false);
+  const [isLoadingGoogleAnalyticsProperties, setIsLoadingGoogleAnalyticsProperties] = useState(false);
+  const [isSavingGoogleAnalyticsProperty, setIsSavingGoogleAnalyticsProperty] = useState(false);
+  const [googleAnalyticsProperties, setGoogleAnalyticsProperties] = useState<GoogleAnalyticsPropertyOption[]>([]);
+  const [selectedGoogleAnalyticsPropertyName, setSelectedGoogleAnalyticsPropertyName] = useState<string | null>(null);
+  const [selectedGoogleAnalyticsPropertyLabel, setSelectedGoogleAnalyticsPropertyLabel] = useState<string | null>(null);
   const [isMetaConnected, setIsMetaConnected] = useState(false);
   const [isCreatingInstance, setIsCreatingInstance] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -535,6 +553,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       setIsGA4Connected(false);
       setIsAdsConnected(false);
       setIsMyBusinessConnected(false);
+      setSelectedGoogleAnalyticsPropertyName(null);
+      setSelectedGoogleAnalyticsPropertyLabel(null);
       return;
     }
     try {
@@ -553,20 +573,39 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           token,
         }),
       });
-      const data = (await res.json().catch(() => null)) as { ga4?: boolean; ads?: boolean; mybusiness?: boolean } | null;
+      const data = (await res.json().catch(() => null)) as {
+        ga4?: boolean;
+        ads?: boolean;
+        mybusiness?: boolean;
+        ga4SelectedPropertyName?: string | null;
+        ga4SelectedPropertyDisplayName?: string | null;
+        ga4SelectedAccountDisplayName?: string | null;
+      } | null;
       if (res.ok && data) {
         setIsGA4Connected(Boolean(data.ga4));
         setIsAdsConnected(Boolean(data.ads));
         setIsMyBusinessConnected(Boolean(data.mybusiness));
+        setSelectedGoogleAnalyticsPropertyName(data.ga4SelectedPropertyName ?? null);
+        setSelectedGoogleAnalyticsPropertyLabel(
+          data.ga4SelectedPropertyDisplayName
+            ? data.ga4SelectedAccountDisplayName
+              ? `${data.ga4SelectedAccountDisplayName} — ${data.ga4SelectedPropertyDisplayName}`
+              : data.ga4SelectedPropertyDisplayName
+            : null,
+        );
       } else {
         setIsGA4Connected(false);
         setIsAdsConnected(false);
         setIsMyBusinessConnected(false);
+        setSelectedGoogleAnalyticsPropertyName(null);
+        setSelectedGoogleAnalyticsPropertyLabel(null);
       }
     } catch {
       setIsGA4Connected(false);
       setIsAdsConnected(false);
       setIsMyBusinessConnected(false);
+      setSelectedGoogleAnalyticsPropertyName(null);
+      setSelectedGoogleAnalyticsPropertyLabel(null);
     }
   }, [companyId, getToken]);
 
@@ -580,6 +619,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       try {
         const token = await getToken();
         if (!token) throw new Error("Token de autenticação indisponível. Faça login novamente.");
+        window.sessionStorage.setItem(GOOGLE_OAUTH_COMPANY_KEY, companyId);
         const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
           method: "POST",
           headers: {
@@ -592,7 +632,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         const data = (await res.json().catch(() => null)) as { url?: string; state?: string; error?: string } | null;
         if (!res.ok || data?.error || !data?.url) throw new Error(data?.error ?? "Erro ao obter URL de autorização.");
         if (data.state) {
-          window.sessionStorage.setItem("google_oauth_state", data.state);
+          window.sessionStorage.setItem(GOOGLE_OAUTH_STATE_KEY, data.state);
         }
         window.location.href = data.url;
       } catch (err) {
@@ -621,7 +661,12 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         });
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
         if (!res.ok || data?.error) throw new Error(data?.error ?? "Erro");
-        if (service === "ga4") setIsGA4Connected(false);
+        if (service === "ga4") {
+          setIsGA4Connected(false);
+          setGoogleAnalyticsProperties([]);
+          setSelectedGoogleAnalyticsPropertyName(null);
+          setSelectedGoogleAnalyticsPropertyLabel(null);
+        }
         else if (service === "ads") setIsAdsConnected(false);
         else setIsMyBusinessConnected(false);
         toast({ title: "Google desconectado" });
@@ -631,6 +676,158 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     },
     [companyId, getToken, toast],
   );
+
+  const handleLoadGoogleAnalyticsProperties = useCallback(async () => {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description: "Acesse o painel com uma empresa selecionada antes de listar propriedades do GA4.",
+      });
+      return;
+    }
+
+    setIsLoadingGoogleAnalyticsProperties(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      }
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          action: "listAnalyticsProperties",
+          company_id: companyId,
+          token,
+        }),
+      });
+
+      const data = (await res.json().catch(() => null)) as {
+        properties?: GoogleAnalyticsPropertyOption[];
+        error?: string;
+        hint?: string;
+      } | null;
+
+      if (!res.ok || data?.error) {
+        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        throw new Error(msg);
+      }
+
+      const properties = data?.properties ?? [];
+      setGoogleAnalyticsProperties(properties);
+
+      const selectedProperty = properties.find((property) => property.isSelected) ?? null;
+      setSelectedGoogleAnalyticsPropertyName(selectedProperty?.propertyName ?? null);
+      setSelectedGoogleAnalyticsPropertyLabel(
+        selectedProperty
+          ? `${selectedProperty.accountDisplayName} — ${selectedProperty.propertyDisplayName}`
+          : null,
+      );
+
+      if (!properties.length) {
+        toast({
+          title: "Nenhuma propriedade encontrada",
+          description: "A conta conectada não retornou propriedades do Google Analytics acessíveis.",
+        });
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao listar propriedades do GA4",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsLoadingGoogleAnalyticsProperties(false);
+    }
+  }, [companyId, getToken, toast]);
+
+  const handleSelectGoogleAnalyticsProperty = useCallback(async () => {
+    if (!companyId) {
+      toast({
+        variant: "destructive",
+        title: "Empresa não identificada",
+        description: "Acesse o painel com uma empresa selecionada antes de salvar a propriedade do GA4.",
+      });
+      return;
+    }
+
+    const selectedProperty =
+      googleAnalyticsProperties.find((property) => property.propertyName === selectedGoogleAnalyticsPropertyName) ?? null;
+
+    if (!selectedProperty) {
+      toast({
+        variant: "destructive",
+        title: "Selecione uma propriedade",
+        description: "Escolha qual propriedade GA4 será vinculada a esta empresa antes de confirmar.",
+      });
+      return;
+    }
+
+    setIsSavingGoogleAnalyticsProperty(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      }
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          action: "selectAnalyticsProperty",
+          company_id: companyId,
+          accountName: selectedProperty.accountName,
+          accountDisplayName: selectedProperty.accountDisplayName,
+          propertyName: selectedProperty.propertyName,
+          propertyDisplayName: selectedProperty.propertyDisplayName,
+          token,
+        }),
+      });
+
+      const data = (await res.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        hint?: string;
+      } | null;
+
+      if (!res.ok || data?.error || !data?.success) {
+        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        throw new Error(msg);
+      }
+
+      setGoogleAnalyticsProperties((current) =>
+        current.map((property) => ({
+          ...property,
+          isSelected: property.propertyName === selectedProperty.propertyName,
+        })),
+      );
+      setSelectedGoogleAnalyticsPropertyLabel(
+        `${selectedProperty.accountDisplayName} — ${selectedProperty.propertyDisplayName}`,
+      );
+      toast({
+        title: "Propriedade GA4 vinculada",
+        description: "A propriedade selecionada será usada como padrão para esta empresa.",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar propriedade GA4",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsSavingGoogleAnalyticsProperty(false);
+    }
+  }, [companyId, getToken, googleAnalyticsProperties, selectedGoogleAnalyticsPropertyName, toast]);
 
   const handleMetaDisconnect = useCallback(async () => {
     const ok = window.confirm("Desconectar Meta desta empresa?");
@@ -713,6 +910,14 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       cancelled = true;
     };
   }, [isAdmin, companyId, section, supabase]);
+
+  useEffect(() => {
+    if (section !== "integracoes" || !companyId || !isGA4Connected) return;
+    const pendingService = window.sessionStorage.getItem(GOOGLE_OAUTH_POST_CONNECT_KEY);
+    if (pendingService !== "ga4") return;
+    window.sessionStorage.removeItem(GOOGLE_OAUTH_POST_CONNECT_KEY);
+    void handleLoadGoogleAnalyticsProperties();
+  }, [section, companyId, isGA4Connected, handleLoadGoogleAnalyticsProperties]);
 
   // Poll para SDK da Meta (carregado dinamicamente em main.tsx)
   useEffect(() => {
@@ -2369,6 +2574,82 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                       );
                     })}
                   </div>
+
+                  {isGA4Connected && googleAnalyticsProperties.length === 0 && (
+                    <div className="mt-6 flex flex-col items-start gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isLoadingGoogleAnalyticsProperties}
+                        onClick={handleLoadGoogleAnalyticsProperties}
+                      >
+                        {isLoadingGoogleAnalyticsProperties ? (
+                          <>
+                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                            Buscando propriedades…
+                          </>
+                        ) : (
+                          <>Ver propriedades do GA4</>
+                        )}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedGoogleAnalyticsPropertyLabel
+                          ? `Propriedade atual: ${selectedGoogleAnalyticsPropertyLabel}`
+                          : "Carregue as propriedades da conta Google conectada para escolher qual será vinculada a esta empresa."}
+                      </p>
+                    </div>
+                  )}
+
+                  {(googleAnalyticsProperties.length > 0 || selectedGoogleAnalyticsPropertyLabel) && (
+                    <div className="mt-6 space-y-3">
+                      <h3 className="text-sm font-medium">Selecionar propriedade do Google Analytics</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Escolha qual propriedade GA4 da conta conectada será usada como padrão nesta empresa.
+                      </p>
+                      {selectedGoogleAnalyticsPropertyLabel && (
+                        <p className="text-xs text-muted-foreground">
+                          Seleção atual: {selectedGoogleAnalyticsPropertyLabel}
+                        </p>
+                      )}
+                      {googleAnalyticsProperties.length > 0 && (
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                          <div className="w-full space-y-1 sm:max-w-xl">
+                            <Label htmlFor="google-analytics-property">Propriedade GA4</Label>
+                            <Select
+                              value={selectedGoogleAnalyticsPropertyName ?? ""}
+                              onValueChange={(value) => setSelectedGoogleAnalyticsPropertyName(value)}
+                            >
+                              <SelectTrigger id="google-analytics-property">
+                                <SelectValue placeholder="Selecione uma propriedade" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {googleAnalyticsProperties.map((property) => (
+                                  <SelectItem key={property.propertyName} value={property.propertyName}>
+                                    {property.accountDisplayName} — {property.propertyDisplayName}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button
+                            type="button"
+                            className="sm:ml-2"
+                            disabled={!selectedGoogleAnalyticsPropertyName || isSavingGoogleAnalyticsProperty}
+                            onClick={handleSelectGoogleAnalyticsProperty}
+                          >
+                            {isSavingGoogleAnalyticsProperty ? (
+                              <>
+                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                Salvando…
+                              </>
+                            ) : (
+                              <>Confirmar propriedade</>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {whatsappPhoneNumbers.length > 0 && (
                     <div className="mt-6 space-y-3">

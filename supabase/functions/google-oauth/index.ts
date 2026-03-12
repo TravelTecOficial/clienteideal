@@ -31,6 +31,16 @@ const SCOPES_BY_SERVICE: Record<string, string[]> = {
 const VALID_SERVICES = ["ga4", "ads", "mybusiness"] as const
 type GoogleService = (typeof VALID_SERVICES)[number]
 
+interface GoogleConnectionRow {
+  company_id: string
+  service: GoogleService
+  access_token_encrypted: string
+  selected_account_name?: string | null
+  selected_account_display_name?: string | null
+  selected_property_name?: string | null
+  selected_property_display_name?: string | null
+}
+
 interface ProfilesRow {
   company_id: string | null
   saas_admin?: boolean | null
@@ -42,7 +52,13 @@ interface AuthContext {
   isSaasAdmin: boolean
 }
 
-type GoogleAction = "getLoginUrl" | "exchangeCode" | "getConnectionStatus" | "disconnect"
+type GoogleAction =
+  | "getLoginUrl"
+  | "exchangeCode"
+  | "getConnectionStatus"
+  | "listAnalyticsProperties"
+  | "selectAnalyticsProperty"
+  | "disconnect"
 
 interface BaseRequestBody {
   action?: GoogleAction
@@ -68,13 +84,33 @@ interface GetConnectionStatusBody extends BaseRequestBody {
   company_id?: string
 }
 
+interface ListAnalyticsPropertiesBody extends BaseRequestBody {
+  action: "listAnalyticsProperties"
+  company_id?: string
+}
+
+interface SelectAnalyticsPropertyBody extends BaseRequestBody {
+  action: "selectAnalyticsProperty"
+  company_id?: string
+  accountName?: string
+  accountDisplayName?: string
+  propertyName?: string
+  propertyDisplayName?: string
+}
+
 interface DisconnectBody extends BaseRequestBody {
   action: "disconnect"
   company_id?: string
   service?: GoogleService
 }
 
-type RequestBody = GetLoginUrlBody | ExchangeCodeBody | GetConnectionStatusBody | DisconnectBody
+type RequestBody =
+  | GetLoginUrlBody
+  | ExchangeCodeBody
+  | GetConnectionStatusBody
+  | ListAnalyticsPropertiesBody
+  | SelectAnalyticsPropertyBody
+  | DisconnectBody
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -140,6 +176,54 @@ async function encryptToken(plain: string, encryptionKey: string): Promise<strin
   const ivB64 = toBase64Url(iv)
   const cipherB64 = toBase64Url(cipherBytes)
   return `${ivB64}:${cipherB64}`
+}
+
+async function decryptToken(payload: string, encryptionKey: string): Promise<string> {
+  const [ivPart, cipherPart] = payload.split(":")
+  if (!ivPart || !cipherPart) {
+    throw new Error("Token criptografado em formato inválido.")
+  }
+  const key = await getAesKey(encryptionKey)
+  const iv = fromBase64Url(ivPart)
+  const cipherBytes = fromBase64Url(cipherPart)
+  const plainBuf = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: iv as BufferSource },
+    key,
+    cipherBytes as BufferSource,
+  )
+  const decoder = new TextDecoder()
+  return decoder.decode(plainBuf)
+}
+
+interface GoogleApiErrorResponse {
+  error?: {
+    code?: number
+    message?: string
+    status?: string
+  } | null
+}
+
+interface GoogleAccountSummary {
+  name?: string | null
+  displayName?: string | null
+  propertySummaries?: Array<{
+    property?: string | null
+    displayName?: string | null
+  }> | null
+}
+
+interface GoogleAccountSummariesResponse extends GoogleApiErrorResponse {
+  accountSummaries?: GoogleAccountSummary[] | null
+  nextPageToken?: string | null
+}
+
+interface GoogleAnalyticsPropertyOption {
+  accountName: string
+  accountDisplayName: string
+  propertyName: string
+  propertyDisplayName: string
+  propertyId: string
+  isSelected: boolean
 }
 
 function getGoogleConfig(): {
@@ -420,6 +504,10 @@ async function handleExchangeCode(
     token_expires_at: tokenExpiresAt,
     scopes,
     status: "active",
+    selected_account_name: null,
+    selected_account_display_name: null,
+    selected_property_name: null,
+    selected_property_display_name: null,
     updated_at: new Date().toISOString(),
   }
 
@@ -449,13 +537,49 @@ async function handleExchangeCode(
   return jsonResponse({ success: true, service })
 }
 
+async function getGoogleConnectionForService(
+  ctx: AuthContext,
+  supabase: ReturnType<typeof createClient>,
+  service: GoogleService,
+): Promise<{ error?: Response; row?: GoogleConnectionRow }> {
+  const { data, error } = await supabase
+    .from("google_connections")
+    .select(
+      "company_id, service, access_token_encrypted, selected_account_name, selected_account_display_name, selected_property_name, selected_property_display_name",
+    )
+    .eq("company_id", ctx.companyId)
+    .eq("service", service)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[google-oauth] Erro ao buscar conexão Google:", error)
+    return {
+      error: jsonResponse(
+        { error: "Erro ao buscar conexão Google.", hint: error.message },
+        500,
+      ),
+    }
+  }
+
+  if (!data) {
+    return {
+      error: jsonResponse(
+        { error: "Conexão Google não encontrada para esta empresa.", code: "NOT_CONNECTED" },
+        404,
+      ),
+    }
+  }
+
+  return { row: data as GoogleConnectionRow }
+}
+
 async function handleGetConnectionStatus(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ): Promise<Response> {
   const { data, error } = await supabase
     .from("google_connections")
-    .select("service, status")
+    .select("service, status, selected_account_display_name, selected_property_name, selected_property_display_name")
     .eq("company_id", ctx.companyId)
 
   if (error) {
@@ -466,13 +590,177 @@ async function handleGetConnectionStatus(
     )
   }
 
-  const rows = (data ?? []) as { service?: string; status?: string }[]
+  const rows = (data ?? []) as Array<{
+    service?: string
+    status?: string
+    selected_account_display_name?: string | null
+    selected_property_name?: string | null
+    selected_property_display_name?: string | null
+  }>
   const active = new Set(rows.filter((r) => r.status === "active").map((r) => r.service))
+  const ga4Row = rows.find((row) => row.service === "ga4" && row.status === "active") ?? null
 
   return jsonResponse({
     ga4: active.has("ga4"),
     ads: active.has("ads"),
     mybusiness: active.has("mybusiness"),
+    ga4SelectedPropertyName: ga4Row?.selected_property_name ?? null,
+    ga4SelectedPropertyDisplayName: ga4Row?.selected_property_display_name ?? null,
+    ga4SelectedAccountDisplayName: ga4Row?.selected_account_display_name ?? null,
+  })
+}
+
+async function handleListAnalyticsProperties(
+  ctx: AuthContext,
+  supabase: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const config = getGoogleConfig()
+  if ("error" in config) return config.error
+
+  const connectionResult = await getGoogleConnectionForService(ctx, supabase, "ga4")
+  if (connectionResult.error) return connectionResult.error
+  const row = connectionResult.row
+  if (!row) {
+    return jsonResponse({ error: "Conexão Google Analytics não encontrada." }, 404)
+  }
+
+  let accessToken: string
+  try {
+    accessToken = await decryptToken(row.access_token_encrypted, config.encryptionKey)
+  } catch (err) {
+    console.error("[google-oauth] Falha ao descriptografar token Google:", err)
+    return jsonResponse({ error: "Erro ao acessar credenciais do Google." }, 500)
+  }
+
+  const propertyOptions: GoogleAnalyticsPropertyOption[] = []
+  let nextPageToken: string | null = null
+  let pageCount = 0
+
+  do {
+    const url = new URL("https://analyticsadmin.googleapis.com/v1beta/accountSummaries")
+    url.searchParams.set("pageSize", "200")
+    if (nextPageToken) {
+      url.searchParams.set("pageToken", nextPageToken)
+    }
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    const raw = await res.text()
+    const data = (() => {
+      try {
+        return JSON.parse(raw) as GoogleAccountSummariesResponse
+      } catch {
+        return null
+      }
+    })()
+
+    if (!res.ok) {
+      const errorMessage =
+        data?.error?.message ??
+        (raw && raw.length < 400 ? raw : null) ??
+        `Erro ao listar propriedades do Google Analytics (${res.status}).`
+      return jsonResponse(
+        {
+          error: "Erro ao listar propriedades do Google Analytics.",
+          hint: errorMessage,
+          code: "GOOGLE_ANALYTICS_LIST_FAILED",
+        },
+        502,
+      )
+    }
+
+    for (const account of data?.accountSummaries ?? []) {
+      const accountName = account.name?.trim() ?? ""
+      const accountDisplayName = account.displayName?.trim() || accountName
+      if (!accountName) continue
+
+      for (const property of account.propertySummaries ?? []) {
+        const propertyName = property.property?.trim() ?? ""
+        if (!propertyName) continue
+        propertyOptions.push({
+          accountName,
+          accountDisplayName,
+          propertyName,
+          propertyDisplayName: property.displayName?.trim() || propertyName,
+          propertyId: propertyName.split("/").pop() ?? propertyName,
+          isSelected: propertyName === (row.selected_property_name ?? null),
+        })
+      }
+    }
+
+    nextPageToken = data?.nextPageToken?.trim() || null
+    pageCount += 1
+  } while (nextPageToken && pageCount < 10)
+
+  propertyOptions.sort((a, b) =>
+    `${a.accountDisplayName} ${a.propertyDisplayName}`.localeCompare(
+      `${b.accountDisplayName} ${b.propertyDisplayName}`,
+      "pt-BR",
+    ),
+  )
+
+  return jsonResponse({ properties: propertyOptions })
+}
+
+async function handleSelectAnalyticsProperty(
+  body: SelectAnalyticsPropertyBody,
+  ctx: AuthContext,
+  supabase: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const accountName = typeof body.accountName === "string" ? body.accountName.trim() : ""
+  const propertyName = typeof body.propertyName === "string" ? body.propertyName.trim() : ""
+
+  if (!accountName || !propertyName) {
+    return jsonResponse(
+      {
+        error: "Selecione uma conta e uma propriedade do GA4 antes de confirmar.",
+        code: "MISSING_ANALYTICS_PROPERTY",
+      },
+      400,
+    )
+  }
+
+  const accountDisplayName =
+    typeof body.accountDisplayName === "string" ? body.accountDisplayName.trim() : accountName
+  const propertyDisplayName =
+    typeof body.propertyDisplayName === "string" ? body.propertyDisplayName.trim() : propertyName
+
+  const { error } = await supabase
+    .from("google_connections")
+    .update({
+      selected_account_name: accountName,
+      selected_account_display_name: accountDisplayName,
+      selected_property_name: propertyName,
+      selected_property_display_name: propertyDisplayName,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("company_id", ctx.companyId)
+    .eq("service", "ga4")
+
+  if (error) {
+    console.error("[google-oauth] Erro ao salvar propriedade GA4:", error)
+    return jsonResponse(
+      {
+        error: "Erro ao salvar a propriedade selecionada do Google Analytics.",
+        hint: error.message,
+      },
+      500,
+    )
+  }
+
+  return jsonResponse({
+    success: true,
+    selected: {
+      accountName,
+      accountDisplayName,
+      propertyName,
+      propertyDisplayName,
+    },
   })
 }
 
@@ -549,6 +837,10 @@ Deno.serve(async (req: Request) => {
       return handleExchangeCode(body as ExchangeCodeBody, ctx, supabase)
     case "getConnectionStatus":
       return handleGetConnectionStatus(ctx, supabase)
+    case "listAnalyticsProperties":
+      return handleListAnalyticsProperties(ctx, supabase)
+    case "selectAnalyticsProperty":
+      return handleSelectAnalyticsProperty(body as SelectAnalyticsPropertyBody, ctx, supabase)
     case "disconnect":
       return handleDisconnect(body as DisconnectBody, ctx, supabase)
     default:

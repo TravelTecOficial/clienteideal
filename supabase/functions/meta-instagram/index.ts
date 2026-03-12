@@ -661,8 +661,8 @@ async function handleFacebookOverview(
   supabase: ReturnType<typeof createClient>,
 ) {
   // Se a Meta não estiver configurada (secrets), retorna 200 com dados vazios para o dashboard não quebrar.
-  const metaConfig = getMetaConfig()
-  if ("error" in metaConfig) {
+  const metaConfigCheck = getMetaConfig()
+  if ("error" in metaConfigCheck) {
     return jsonResponse({ pageId: "", metrics: [] })
   }
   const result = await getActiveIntegrationForCompany(ctx.companyId, supabase)
