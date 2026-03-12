@@ -10,6 +10,7 @@ const corsHeaders = {
 }
 
 const WHATSAPP_SCOPES = [
+  "public_profile",
   "whatsapp_business_management",
   "whatsapp_business_messaging",
   "business_management",
@@ -315,6 +316,7 @@ async function handleGetLoginUrl(body: GetLoginUrlBody): Promise<Response> {
   params.set("response_type", "code")
   params.set("scope", WHATSAPP_SCOPES.join(","))
   params.set("state", providedState)
+  params.set("auth_type", "rerequest")
 
   const url = `https://www.facebook.com/${getMetaGraphVersion()}/dialog/oauth?${params.toString()}`
   return jsonResponse({ url })
@@ -388,17 +390,13 @@ async function handleExchangeCode(
 
   let wabaId: string
   try {
-    const meRes = await axios.get<MetaMeResponse>(
-      `https://graph.facebook.com/${getMetaGraphVersion()}/me`,
+    const wabaRes = await axios.get<{ data?: MetaWaba[] }>(
+      `https://graph.facebook.com/${getMetaGraphVersion()}/me/assigned_whatsapp_business_accounts`,
       {
-        params: {
-          fields: "id,name,whatsapp_business_accounts",
-          access_token: accessToken,
-        },
+        params: { access_token: accessToken },
       },
     )
-    const me = meRes.data
-    const wabas = me.whatsapp_business_accounts?.data ?? []
+    const wabas = Array.isArray(wabaRes.data?.data) ? wabaRes.data.data : []
     const firstWaba = wabas.find((w) => typeof w.id === "string" && w.id.trim().length > 0)
     if (!firstWaba?.id) {
       return jsonResponse(
@@ -773,17 +771,13 @@ async function handleConnectEmbedded(
 
   let wabaId: string
   try {
-    const meRes = await axios.get<MetaMeResponse>(
-      `https://graph.facebook.com/${graphVersion}/me`,
+    const wabaRes = await axios.get<{ data?: MetaWaba[] }>(
+      `https://graph.facebook.com/${graphVersion}/me/assigned_whatsapp_business_accounts`,
       {
-        params: {
-          fields: "id,name,whatsapp_business_accounts",
-          access_token: accessToken,
-        },
+        params: { access_token: accessToken },
       },
     )
-    const me = meRes.data
-    const wabas = me.whatsapp_business_accounts?.data ?? []
+    const wabas = Array.isArray(wabaRes.data?.data) ? wabaRes.data.data : []
     const firstWaba = wabas.find((w) => typeof w.id === "string" && w.id.trim().length > 0)
     if (!firstWaba?.id) {
       return jsonResponse(
