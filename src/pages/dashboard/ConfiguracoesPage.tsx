@@ -1379,7 +1379,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           },
           body: JSON.stringify({
             action: "getLoginUrl",
-            state,
             service,
             token,
           }),
