@@ -498,7 +498,7 @@ export function ConfiguracoesPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
           action: "getWhatsappConnection",
@@ -870,19 +870,19 @@ export function ConfiguracoesPage() {
                 throw new Error("Token de autenticação indisponível. Faça login novamente.");
               }
 
-              const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                  action: "connectEmbedded",
-                  short_lived_token: accessToken,
-                  company_id: companyId,
-                  token,
-                }),
-              });
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              },
+              body: JSON.stringify({
+                action: "connectEmbedded",
+                short_lived_token: accessToken,
+                company_id: companyId,
+                token,
+              }),
+            });
 
               const raw = await res.text();
               const data = (() => {

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { useAuth } from "@clerk/clerk-react"
-import { SUPABASE_URL } from "@/lib/supabase"
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { getErrorMessage } from "@/lib/utils"
 
@@ -53,7 +53,7 @@ export function WhatsappFacebookCallbackPage() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           },
           body: JSON.stringify({
             action: "exchangeCode",
