@@ -21,11 +21,14 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 }
 
-const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/analytics.readonly",
-  "https://www.googleapis.com/auth/adwords",
-  "https://www.googleapis.com/auth/business.manage",
-]
+const SCOPES_BY_SERVICE: Record<string, string[]> = {
+  ga4: ["https://www.googleapis.com/auth/analytics.readonly"],
+  ads: ["https://www.googleapis.com/auth/adwords"],
+  mybusiness: ["https://www.googleapis.com/auth/business.manage"],
+}
+
+const VALID_SERVICES = ["ga4", "ads", "mybusiness"] as const
+type GoogleService = (typeof VALID_SERVICES)[number]
 
 interface ProfilesRow {
   company_id: string | null
@@ -49,6 +52,7 @@ interface GetLoginUrlBody extends BaseRequestBody {
   action: "getLoginUrl"
   state?: string
   company_id?: string
+  service?: GoogleService
 }
 
 interface ExchangeCodeBody extends BaseRequestBody {
@@ -66,6 +70,7 @@ interface GetConnectionStatusBody extends BaseRequestBody {
 interface DisconnectBody extends BaseRequestBody {
   action: "disconnect"
   company_id?: string
+  service?: GoogleService
 }
 
 type RequestBody = GetLoginUrlBody | ExchangeCodeBody | GetConnectionStatusBody | DisconnectBody
@@ -91,6 +96,28 @@ function fromBase64Url(value: string): Uint8Array {
     bytes[i] = bin.charCodeAt(i)
   }
   return bytes
+}
+
+function encodeState(service: GoogleService): string {
+  const nonce = crypto.randomUUID()
+  const json = JSON.stringify({ nonce, service })
+  const bytes = new TextEncoder().encode(json)
+  return toBase64Url(bytes)
+}
+
+function decodeState(state: string): { service: GoogleService } {
+  try {
+    const bytes = fromBase64Url(state)
+    const json = new TextDecoder().decode(bytes)
+    const parsed = JSON.parse(json) as { service?: string }
+    const service = parsed?.service
+    if (VALID_SERVICES.includes(service as GoogleService)) {
+      return { service: service as GoogleService }
+    }
+  } catch {
+    /* fallback */
+  }
+  return { service: "ga4" }
 }
 
 async function getAesKey(encryptionKey: string): Promise<CryptoKey> {
@@ -251,24 +278,36 @@ async function handleGetLoginUrl(body: GetLoginUrlBody): Promise<Response> {
   const config = getGoogleConfig()
   if ("error" in config) return config.error
 
-  const { clientId, redirectUri } = config
+  const service =
+    typeof body.service === "string" && VALID_SERVICES.includes(body.service as GoogleService)
+      ? (body.service as GoogleService)
+      : null
 
-  const providedState =
-    typeof body.state === "string" && body.state.trim().length > 0
-      ? body.state.trim()
-      : crypto.randomUUID()
+  if (!service) {
+    return jsonResponse(
+      {
+        error: "Parâmetro 'service' é obrigatório.",
+        hint: "Valores válidos: ga4, ads, mybusiness",
+      },
+      400,
+    )
+  }
+
+  const { clientId, redirectUri } = config
+  const scopes = SCOPES_BY_SERVICE[service] ?? SCOPES_BY_SERVICE.ga4
+  const state = encodeState(service)
 
   const params = new URLSearchParams()
   params.set("client_id", clientId)
   params.set("redirect_uri", redirectUri)
   params.set("response_type", "code")
-  params.set("scope", GOOGLE_SCOPES.join(" "))
+  params.set("scope", scopes.join(" "))
   params.set("access_type", "offline")
   params.set("prompt", "consent")
-  params.set("state", providedState)
+  params.set("state", state)
 
   const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
-  return jsonResponse({ url })
+  return jsonResponse({ url, state })
 }
 
 interface GoogleTokenResponse {
@@ -368,32 +407,45 @@ async function handleExchangeCode(
     return jsonResponse({ error: "Erro ao proteger credenciais de acesso." }, 500)
   }
 
+  const stateStr = typeof body.state === "string" ? body.state.trim() : ""
+  const { service } = stateStr ? decodeState(stateStr) : { service: "ga4" as GoogleService }
+  const scopes = SCOPES_BY_SERVICE[service] ?? SCOPES_BY_SERVICE.ga4
+
   const payload = {
     company_id: ctx.companyId,
+    service,
     access_token_encrypted: accessEncrypted,
     refresh_token_encrypted: refreshEncrypted,
     token_expires_at: tokenExpiresAt,
-    scopes: GOOGLE_SCOPES,
+    scopes,
     status: "active",
     updated_at: new Date().toISOString(),
   }
 
   const { error } = await supabase.from("google_connections").upsert(payload, {
-    onConflict: "company_id",
+    onConflict: "company_id,service",
   })
 
   if (error) {
     console.error("[google-oauth] Erro ao salvar conexão:", error)
+    // #region agent log - incluir erro Supabase para debug
+    const supabaseErrorMsg = typeof error?.message === "string" ? error.message : String(error?.message ?? error)
+    const supabaseErrorCode = (error as { code?: string })?.code
+    const supabaseErrorDetails = (error as { details?: string })?.details
     return jsonResponse(
       {
         error: "Erro ao salvar credenciais do Google.",
         hint: "Verifique se a tabela google_connections existe e a migration foi aplicada.",
+        supabaseError: supabaseErrorMsg,
+        supabaseErrorCode,
+        supabaseErrorDetails,
       },
       500,
     )
+    // #endregion
   }
 
-  return jsonResponse({ success: true })
+  return jsonResponse({ success: true, service })
 }
 
 async function handleGetConnectionStatus(
@@ -402,9 +454,8 @@ async function handleGetConnectionStatus(
 ): Promise<Response> {
   const { data, error } = await supabase
     .from("google_connections")
-    .select("id, status, connected_at")
+    .select("service, status")
     .eq("company_id", ctx.companyId)
-    .maybeSingle()
 
   if (error) {
     console.error("[google-oauth] Erro ao buscar conexão:", error)
@@ -414,21 +465,41 @@ async function handleGetConnectionStatus(
     )
   }
 
-  const connected = Boolean(data && data.status === "active")
+  const rows = (data ?? []) as { service?: string; status?: string }[]
+  const active = new Set(rows.filter((r) => r.status === "active").map((r) => r.service))
+
   return jsonResponse({
-    connected,
-    connected_at: data?.connected_at ?? null,
+    ga4: active.has("ga4"),
+    ads: active.has("ads"),
+    mybusiness: active.has("mybusiness"),
   })
 }
 
 async function handleDisconnect(
+  body: DisconnectBody,
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ): Promise<Response> {
+  const service =
+    typeof body.service === "string" && VALID_SERVICES.includes(body.service as GoogleService)
+      ? (body.service as GoogleService)
+      : null
+
+  if (!service) {
+    return jsonResponse(
+      {
+        error: "Parâmetro 'service' é obrigatório para desconectar.",
+        hint: "Valores válidos: ga4, ads, mybusiness",
+      },
+      400,
+    )
+  }
+
   const { error } = await supabase
     .from("google_connections")
     .delete()
     .eq("company_id", ctx.companyId)
+    .eq("service", service)
 
   if (error) {
     console.error("[google-oauth] Erro ao desconectar:", error)
@@ -462,6 +533,8 @@ Deno.serve(async (req: Request) => {
   if (action === "getLoginUrl") {
     const config = getGoogleConfig()
     if ("error" in config) return config.error
+    const authResult = await requireAuthAndCompany(req, body)
+    if (authResult.error) return authResult.error
     return handleGetLoginUrl(body as GetLoginUrlBody)
   }
 
@@ -476,7 +549,7 @@ Deno.serve(async (req: Request) => {
     case "getConnectionStatus":
       return handleGetConnectionStatus(ctx, supabase)
     case "disconnect":
-      return handleDisconnect(ctx, supabase)
+      return handleDisconnect(body as DisconnectBody, ctx, supabase)
     default:
       return jsonResponse({ error: `Action desconhecida: ${action}` }, 400)
   }

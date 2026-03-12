@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
 import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2, Trash2, Pencil, Plug2, MapPin, MessageSquare, Sparkles, Search } from "lucide-react";
+import { SiWhatsapp, SiGoogleads, SiMeta, SiInstagram, SiGoogleanalytics, SiGoogle } from "react-icons/si";
 
 import {
   Breadcrumb,
@@ -62,7 +63,6 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useEvolutionProxy } from "@/hooks/use-evolution-proxy";
 import { ChatBriefingModal } from "@/components/chat-briefing/ChatBriefingModal";
-import { GmbProfileManager } from "@/components/gmb/GmbProfileManager";
 
 // --- Interfaces ---
 interface CompanyRow {
@@ -266,9 +266,11 @@ export function ConfiguracoesPage() {
   const whatsappImageInputRef = useRef<HTMLInputElement>(null);
   const [briefingCompleted, setBriefingCompleted] = useState(false);
   const [isBriefingModalOpen, setIsBriefingModalOpen] = useState(false);
-  const [isGmbManagerOpen, setIsGmbManagerOpen] = useState(false);
   const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  const [isGA4Connected, setIsGA4Connected] = useState(false);
+  const [isAdsConnected, setIsAdsConnected] = useState(false);
+  const [isMyBusinessConnected, setIsMyBusinessConnected] = useState(false);
+  const [isMetaConnected, setIsMetaConnected] = useState(false);
   const [isCreatingInstance, setIsCreatingInstance] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
@@ -530,7 +532,9 @@ export function ConfiguracoesPage() {
 
   const loadGoogleConnectionState = useCallback(async () => {
     if (!companyId) {
-      setIsGoogleConnected(false);
+      setIsGA4Connected(false);
+      setIsAdsConnected(false);
+      setIsMyBusinessConnected(false);
       return;
     }
     try {
@@ -548,14 +552,120 @@ export function ConfiguracoesPage() {
           token,
         }),
       });
-      const data = (await res.json().catch(() => null)) as { connected?: boolean } | null;
+      const data = (await res.json().catch(() => null)) as { ga4?: boolean; ads?: boolean; mybusiness?: boolean } | null;
       if (res.ok && data) {
-        setIsGoogleConnected(Boolean(data.connected));
+        setIsGA4Connected(Boolean(data.ga4));
+        setIsAdsConnected(Boolean(data.ads));
+        setIsMyBusinessConnected(Boolean(data.mybusiness));
       } else {
-        setIsGoogleConnected(false);
+        setIsGA4Connected(false);
+        setIsAdsConnected(false);
+        setIsMyBusinessConnected(false);
       }
     } catch {
-      setIsGoogleConnected(false);
+      setIsGA4Connected(false);
+      setIsAdsConnected(false);
+      setIsMyBusinessConnected(false);
+    }
+  }, [companyId, getToken]);
+
+  const handleGoogleConnect = useCallback(
+    async (service: "ga4" | "ads" | "mybusiness") => {
+      if (!companyId) {
+        toast({ variant: "destructive", title: "Empresa não identificada", description: "Acesse o painel com uma empresa selecionada antes de conectar." });
+        return;
+      }
+      setIsGoogleConnecting(true);
+      try {
+        const token = await getToken();
+        if (!token) throw new Error("Token de autenticação indisponível. Faça login novamente.");
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({ action: "getLoginUrl", service, company_id: companyId, token }),
+        });
+        const data = (await res.json().catch(() => null)) as { url?: string; state?: string; error?: string } | null;
+        if (!res.ok || data?.error || !data?.url) throw new Error(data?.error ?? "Erro ao obter URL de autorização.");
+        if (data.state) {
+          window.sessionStorage.setItem("google_oauth_state", data.state);
+        }
+        window.location.href = data.url;
+      } catch (err) {
+        toast({ variant: "destructive", title: "Erro ao conectar Google", description: getErrorMessage(err) });
+        setIsGoogleConnecting(false);
+      }
+    },
+    [companyId, getToken, toast],
+  );
+
+  const handleGoogleDisconnect = useCallback(
+    async (service: "ga4" | "ads" | "mybusiness") => {
+      const ok = window.confirm("Desconectar este serviço Google desta empresa? O refresh_token será removido.");
+      if (!ok) return;
+      try {
+        const token = await getToken();
+        if (!token) throw new Error("Token indisponível.");
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({ action: "disconnect", service, company_id: companyId, token }),
+        });
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        if (!res.ok || data?.error) throw new Error(data?.error ?? "Erro");
+        if (service === "ga4") setIsGA4Connected(false);
+        else if (service === "ads") setIsAdsConnected(false);
+        else setIsMyBusinessConnected(false);
+        toast({ title: "Google desconectado" });
+      } catch (err) {
+        toast({ variant: "destructive", title: "Erro ao desconectar", description: getErrorMessage(err) });
+      }
+    },
+    [companyId, getToken, toast],
+  );
+
+  const handleMetaDisconnect = useCallback(async () => {
+    const ok = window.confirm("Desconectar Meta desta empresa?");
+    if (!ok) return;
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Token indisponível.");
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ action: "disconnect", token }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok || data?.error) throw new Error(data?.error ?? "Erro");
+      setIsMetaConnected(false);
+      setMetaAccounts([]);
+      setSelectedInstagramId(null);
+      setMetaInsights(null);
+      toast({ title: "Meta desconectada" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro", description: getErrorMessage(err) });
+    }
+  }, [getToken, toast]);
+
+  const loadMetaConnectionState = useCallback(async () => {
+    if (!companyId) {
+      setIsMetaConnected(false);
+      return;
+    }
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ action: "listAccounts", token }),
+      });
+      const data = (await res.json().catch(() => null)) as { accounts?: unknown[]; error?: string } | null;
+      setIsMetaConnected(res.ok && !!data && !data.error);
+    } catch {
+      setIsMetaConnected(false);
     }
   }, [companyId, getToken]);
 
@@ -564,8 +674,9 @@ export function ConfiguracoesPage() {
     if (tab === "integracoes") {
       void loadWhatsappConnectionState();
       void loadGoogleConnectionState();
+      void loadMetaConnectionState();
     }
-  }, [searchParams, loadWhatsappConnectionState, loadGoogleConnectionState]);
+  }, [searchParams, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState]);
 
   // Poll para SDK da Meta (carregado dinamicamente em main.tsx)
   useEffect(() => {
@@ -1733,21 +1844,15 @@ export function ConfiguracoesPage() {
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           <Tabs defaultValue="empresa" className="w-full">
-            <TabsList className="grid w-full max-w-[1200px] grid-cols-5">
+            <TabsList className="grid w-full max-w-[1200px] grid-cols-3">
               <TabsTrigger value="empresa" className="gap-2">
                 <Building2 className="h-4 w-4" /> Empresa
-              </TabsTrigger>
-              <TabsTrigger value="dados" className="gap-2">
-                <Database className="h-4 w-4" /> Dados
               </TabsTrigger>
               <TabsTrigger value="integracoes" className="gap-2">
                 <Plug2 className="h-4 w-4" /> Integrações
               </TabsTrigger>
               <TabsTrigger value="evolution" className="gap-2">
                 <Smartphone className="h-4 w-4" /> WhatsApp
-              </TabsTrigger>
-              <TabsTrigger value="anuncios" className="gap-2">
-                <Megaphone className="h-4 w-4" /> Anúncios
               </TabsTrigger>
             </TabsList>
 
@@ -2077,28 +2182,6 @@ export function ConfiguracoesPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="dados" className="space-y-4 pt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Dados de integração</CardTitle>
-                  <CardDescription>
-                    As configurações de WhatsApp foram movidas para a aba WhatsApp. Celular e e-mail continuam na aba Empresa.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isFetchingDados ? (
-                    <div className="flex min-h-[120px] items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Em breve, novos dados de integração poderão ser configurados aqui.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
             <TabsContent value="integracoes" className="space-y-4 pt-4">
               <Card>
                 <CardHeader>
@@ -2108,341 +2191,138 @@ export function ConfiguracoesPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {/* Google (GA4, Ads, My Business) - OAuth real */}
-                    <Card>
-                      <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-2xl">
-                          🔍
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <CardTitle className="text-base">Google (GA4, Ads, My Business)</CardTitle>
-                          <CardDescription>
-                            GA4, Google Ads e Google Meu Negócio. refresh_token armazenado para atualização automática.
-                          </CardDescription>
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <Button
-                            size="sm"
-                            variant={isGoogleConnected ? "outline" : "default"}
-                            disabled={isGoogleConnecting || !companyId}
-                            className={cn(
-                              isGoogleConnected && "border-emerald-500 bg-emerald-50 text-emerald-700"
-                            )}
-                            onClick={async () => {
-                              if (!companyId) {
-                                toast({
-                                  variant: "destructive",
-                                  title: "Empresa não identificada",
-                                  description: "Acesse o painel com uma empresa selecionada antes de conectar.",
-                                });
-                                return;
-                              }
-                              setIsGoogleConnecting(true);
-                              try {
-                                const token = await getToken();
-                                if (!token) {
-                                  throw new Error("Token de autenticação indisponível. Faça login novamente.");
-                                }
-                                const state = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-                                window.sessionStorage.setItem("google_oauth_state", state);
-                                const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
-                                  method: "POST",
-                                  headers: {
-                                    "Content-Type": "application/json",
-                                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                                  },
-                                  body: JSON.stringify({
-                                    action: "getLoginUrl",
-                                    state,
-                                    company_id: companyId,
-                                    token,
-                                  }),
-                                });
-                                const data = (await res.json().catch(() => null)) as { url?: string; error?: string } | null;
-                                if (!res.ok || data?.error || !data?.url) {
-                                  throw new Error(data?.error ?? "Erro ao obter URL de autorização.");
-                                }
-                                window.location.href = data.url;
-                              } catch (err) {
-                                toast({
-                                  variant: "destructive",
-                                  title: "Erro ao conectar Google",
-                                  description: getErrorMessage(err),
-                                });
-                                setIsGoogleConnecting(false);
-                              }
-                            }}
-                          >
-                            {isGoogleConnecting ? (
-                              <>
-                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                Conectando…
-                              </>
-                            ) : isGoogleConnected ? (
-                              <>
-                                <Check className="mr-1 h-4 w-4" />
-                                Conectado
-                              </>
-                            ) : (
-                              "Conectar Google"
-                            )}
-                          </Button>
-                          {isGoogleConnected && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={isGoogleConnecting}
-                              onClick={async () => {
-                                const confirmDisconnect = window.confirm(
-                                  "Tem certeza que deseja desconectar o Google desta empresa? O refresh_token será removido e você precisará autorizar novamente."
-                                );
-                                if (!confirmDisconnect) return;
-                                try {
-                                  const token = await getToken();
-                                  if (!token) throw new Error("Token de autenticação indisponível.");
-                                  const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
-                                    method: "POST",
-                                    headers: {
-                                      "Content-Type": "application/json",
-                                      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                                    },
-                                    body: JSON.stringify({
-                                      action: "disconnect",
-                                      company_id: companyId,
-                                      token,
-                                    }),
-                                  });
-                                  const data = (await res.json().catch(() => null)) as { error?: string } | null;
-                                  if (!res.ok || data?.error) {
-                                    throw new Error(data?.error ?? "Erro ao desconectar.");
-                                  }
-                                  setIsGoogleConnected(false);
-                                  toast({
-                                    title: "Google desconectado",
-                                    description: "A conexão foi removida. O refresh_token não está mais disponível.",
-                                  });
-                                } catch (err) {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Erro ao desconectar Google",
-                                    description: getErrorMessage(err),
-                                  });
-                                }
-                              }}
-                            >
-                              Desconectar
-                            </Button>
-                          )}
-                          <p className="text-[11px] text-muted-foreground">
-                            OAuth offline. refresh_token criptografado em repouso.
-                          </p>
-                        </div>
-                      </CardHeader>
-                    </Card>
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     {[
+                      {
+                        id: "whatsapp",
+                        name: "WhatsApp",
+                        icon: SiWhatsapp,
+                        connected: isWhatsappConnected,
+                        connecting: isWhatsappConnecting,
+                        onConnect: handleWhatsappConnectClick,
+                        onDisconnect: undefined,
+                        connectLabel: "Conectar",
+                        disabled: !isMetaSdkReady && !metaSdkLoadFailed,
+                        reloadHint: metaSdkLoadFailed,
+                      },
+                      {
+                        id: "instagram",
+                        name: "Instagram",
+                        icon: SiInstagram,
+                        connected: isMetaConnected,
+                        connecting: isMetaConnecting,
+                        onConnect: handleMetaConnectClick,
+                        onDisconnect: handleMetaDisconnect,
+                        connectLabel: "Conectar",
+                      },
+                      {
+                        id: "facebook",
+                        name: "Facebook",
+                        icon: SiMeta,
+                        connected: isMetaConnected,
+                        connecting: isMetaConnecting,
+                        onConnect: handleMetaConnectClick,
+                        onDisconnect: handleMetaDisconnect,
+                        connectLabel: "Conectar",
+                      },
                       {
                         id: "meta-ads",
                         name: "Meta Ads",
-                        icon: "📱",
-                        description: "Facebook e Instagram Ads",
+                        icon: SiMeta,
+                        connected: isMetaConnected,
+                        connecting: isMetaConnecting,
+                        onConnect: handleMetaConnectClick,
+                        onDisconnect: handleMetaDisconnect,
+                        connectLabel: "Conectar",
                       },
                       {
-                        id: "whatsapp-cloud",
-                        name: "WhatsApp",
-                        icon: "💬",
-                        description: "Conta oficial via API de Nuvem (Cloud API)",
+                        id: "google-analytics",
+                        name: "Google Analytics",
+                        icon: SiGoogleanalytics,
+                        connected: isGA4Connected,
+                        connecting: isGoogleConnecting,
+                        onConnect: () => handleGoogleConnect("ga4"),
+                        onDisconnect: () => handleGoogleDisconnect("ga4"),
+                        connectLabel: "Conectar",
+                      },
+                      {
+                        id: "google-ads",
+                        name: "Google Ads",
+                        icon: SiGoogleads,
+                        connected: isAdsConnected,
+                        connecting: isGoogleConnecting,
+                        onConnect: () => handleGoogleConnect("ads"),
+                        onDisconnect: () => handleGoogleDisconnect("ads"),
+                        connectLabel: "Conectar",
                       },
                       {
                         id: "google-meu-negocio",
                         name: "Google Meu Negócio",
-                        icon: "📍",
-                        description: "Google Meu Negócio",
+                        icon: SiGoogle,
+                        connected: isMyBusinessConnected,
+                        connecting: isGoogleConnecting,
+                        onConnect: () => handleGoogleConnect("mybusiness"),
+                        onDisconnect: () => handleGoogleDisconnect("mybusiness"),
+                        connectLabel: "Conectar",
                       },
-                      {
-                        id: "rd-station",
-                        name: "RD Station",
-                        icon: "📊",
-                        description: "RD Station Marketing",
-                      },
-                    ].map((platform) => (
-                      <Card key={platform.id}>
-                        <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-2xl">
-                            {platform.icon}
+                    ].map((int) => {
+                      const Icon = int.icon;
+                      return (
+                        <Card
+                          key={int.id}
+                          className={cn(
+                            "flex flex-col items-center justify-between gap-3 p-4 transition-colors",
+                            int.connected
+                              ? "border-primary bg-primary/10"
+                              : "border-border bg-muted/30"
+                          )}
+                        >
+                          <div className="flex flex-col items-center gap-2">
+                            <Icon className="h-10 w-10 shrink-0 text-foreground" style={{ width: 40, height: 40 }} />
+                            <p className="text-sm font-medium text-foreground">{int.name}</p>
                           </div>
-                          <div className="flex-1 space-y-1">
-                            <CardTitle className="text-base">{platform.name}</CardTitle>
-                            <CardDescription>{platform.description}</CardDescription>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {platform.id === "google-meu-negocio" && (
-                              <Button size="sm" onClick={() => setIsGmbManagerOpen(true)}>
-                                Gerenciar perfil
+                          <div className="flex w-full flex-col gap-1">
+                            <Button
+                              size="sm"
+                              variant={int.connected ? "outline" : "default"}
+                              disabled={int.connecting || (int.disabled ?? false) || !companyId}
+                              className={cn(
+                                "w-full",
+                                int.connected && "border-primary text-primary hover:bg-primary/10"
+                              )}
+                              onClick={int.reloadHint ? () => window.location.reload() : int.onConnect}
+                            >
+                              {int.connecting ? (
+                                <>
+                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                  Conectando…
+                                </>
+                              ) : int.connected ? (
+                                <>
+                                  <Check className="mr-1 h-4 w-4" />
+                                  Conectado
+                                </>
+                              ) : int.reloadHint ? (
+                                "Recarregar página"
+                              ) : (
+                                int.connectLabel ?? "Conectar"
+                              )}
+                            </Button>
+                            {int.connected && int.onDisconnect && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full text-muted-foreground hover:text-foreground"
+                                disabled={int.connecting}
+                                onClick={int.onDisconnect}
+                              >
+                                Desconectar
                               </Button>
                             )}
-                            {platform.id === "meta-ads" && (
-                              <div className="flex flex-col items-end gap-1">
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    disabled={isMetaConnecting}
-                                    onClick={handleMetaConnectClick}
-                                  >
-                                    {isMetaConnecting ? (
-                                      <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Conectando…
-                                      </>
-                                    ) : (
-                                      <>Conectar Instagram</>
-                                    )}
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={isLoadingMetaAccounts}
-                                    onClick={handleLoadMetaAccounts}
-                                  >
-                                    {isLoadingMetaAccounts ? (
-                                      <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Buscando contas…
-                                      </>
-                                    ) : (
-                                      <>Ver contas</>
-                                    )}
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={isMetaConnecting || isLoadingMetaAccounts}
-                                    onClick={async () => {
-                                      const confirmDisconnect = window.confirm(
-                                        "Tem certeza que deseja desconectar a integração da Meta desta empresa? Isso irá remover o vínculo atual e você precisará conectar novamente para voltar a usar os insights.",
-                                      );
-                                      if (!confirmDisconnect) return;
-                                      try {
-                                        const token = await getToken();
-                                        if (!token) {
-                                          throw new Error(
-                                            "Token de autenticação indisponível. Faça login novamente.",
-                                          );
-                                        }
-                                        const res = await fetch(
-                                          `${SUPABASE_URL}/functions/v1/meta-instagram`,
-                                          {
-                                            method: "POST",
-                                            headers: {
-                                              "Content-Type": "application/json",
-                                              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                                            },
-                                            body: JSON.stringify({
-                                              action: "disconnect",
-                                              token,
-                                            }),
-                                          },
-                                        );
-                                        const raw = await res.text();
-                                        const data = (() => {
-                                          try {
-                                            return JSON.parse(raw) as {
-                                              success?: boolean;
-                                              error?: string;
-                                              hint?: string;
-                                            } | null;
-                                          } catch {
-                                            return null;
-                                          }
-                                        })();
-                                        if (!res.ok || data?.error) {
-                                          const msg = data?.hint
-                                            ? `${data.error ?? res.status} — ${data.hint}`
-                                            : data?.error ?? `Erro ${res.status}`;
-                                          throw new Error(msg);
-                                        }
-                                        setMetaAccounts([]);
-                                        setSelectedInstagramId(null);
-                                        setMetaInsights(null);
-                                        toast({
-                                          title: "Integração Meta desconectada",
-                                          description:
-                                            "A empresa não está mais vinculada a nenhuma conta da Meta. Você pode conectar novamente quando quiser.",
-                                        });
-                                      } catch (err) {
-                                        toast({
-                                          variant: "destructive",
-                                          title: "Erro ao desconectar a Meta",
-                                          description: getErrorMessage(err),
-                                        });
-                                      }
-                                    }}
-                                  >
-                                    Desconectar
-                                  </Button>
-                                </div>
-                                <p className="text-[11px] text-muted-foreground">
-                                  Fluxo real usando Graph API. UI-level; tokens ficam apenas na Edge Function.
-                                </p>
-                              </div>
-                            )}
-                            {platform.id === "whatsapp-cloud" && (
-                              <div className="flex flex-col items-end gap-1">
-                                <Button
-                                  size="sm"
-                                  variant={isWhatsappConnected ? "outline" : "default"}
-                                  disabled={isWhatsappConnecting || (!isMetaSdkReady && !metaSdkLoadFailed)}
-                                  className={cn(
-                                    isWhatsappConnected &&
-                                      "border-emerald-500 bg-emerald-50 text-emerald-700",
-                                  )}
-                                  onClick={
-                                    metaSdkLoadFailed
-                                      ? () => window.location.reload()
-                                      : handleWhatsappConnectClick
-                                  }
-                                >
-                                  {isWhatsappConnecting ? (
-                                    <>
-                                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                      Conectando…
-                                    </>
-                                  ) : metaSdkLoadFailed ? (
-                                    <>Recarregar página</>
-                                  ) : !isMetaSdkReady ? (
-                                    <>
-                                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                      Carregando SDK…
-                                    </>
-                                  ) : isWhatsappConnected ? (
-                                    <>
-                                      <Check className="mr-1 h-4 w-4" />
-                                      Conectado
-                                    </>
-                                  ) : (
-                                    <>Conectar WhatsApp</>
-                                  )}
-                                </Button>
-                                {isWhatsappConnected && whatsappSelectedDisplay && (
-                                  <p className="text-[11px] text-muted-foreground">
-                                    Número conectado:{" "}
-                                    <span className="font-mono">{whatsappSelectedDisplay}</span>
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            {platform.id === "rd-station" && (
-                              <>
-                                <Badge variant="secondary">Em breve</Badge>
-                                <Button disabled size="sm">
-                                  Conectar
-                                </Button>
-                              </>
-                            )}
                           </div>
-                        </CardHeader>
-                      </Card>
-                    ))}
+                        </Card>
+                      );
+                    })}
                   </div>
 
                   {whatsappPhoneNumbers.length > 0 && (
@@ -2487,6 +2367,29 @@ export function ConfiguracoesPage() {
                           )}
                         </Button>
                       </div>
+                    </div>
+                  )}
+
+                  {isMetaConnected && metaAccounts.length === 0 && (
+                    <div className="mt-6 flex flex-col items-start gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isLoadingMetaAccounts}
+                        onClick={handleLoadMetaAccounts}
+                      >
+                        {isLoadingMetaAccounts ? (
+                          <>
+                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                            Buscando contas…
+                          </>
+                        ) : (
+                          <>Ver contas</>
+                        )}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Carregue as páginas Facebook conectadas para vincular uma conta à empresa.
+                      </p>
                     </div>
                   )}
 
@@ -2616,18 +2519,6 @@ export function ConfiguracoesPage() {
                     </div>
                   )}
 
-                  <Dialog open={isGmbManagerOpen} onOpenChange={setIsGmbManagerOpen}>
-                    <DialogContent className="max-w-3xl">
-                      <DialogHeader>
-                        <DialogTitle>Google Meu Negócio</DialogTitle>
-                        <DialogDescription>
-                          Identifique o negócio, escolha a categoria e configure o Late Account ID para
-                          publicar posts pelo Social Media.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <GmbProfileManager />
-                    </DialogContent>
-                  </Dialog>
                 </CardContent>
               </Card>
 
@@ -2959,399 +2850,6 @@ export function ConfiguracoesPage() {
               </Dialog>
             </TabsContent>
 
-            <TabsContent value="anuncios" className="space-y-4 pt-4">
-              <div className="flex flex-col gap-6">
-                {/* Card Campanhas */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <CardTitle>Campanhas</CardTitle>
-                        <CardDescription>
-                          Cadastre campanhas de anúncios e associe a uma Persona (Cliente Ideal) para acompanhar performance.
-                        </CardDescription>
-                      </div>
-                      <Dialog
-                        open={isModalCampanhaOpen}
-                        onOpenChange={(open) => {
-                          setIsModalCampanhaOpen(open);
-                          if (!open) setEditingCampanha(null);
-                        }}
-                      >
-                        <DialogTrigger asChild>
-                          <Button
-                            onClick={() => {
-                              setEditingCampanha(null);
-                              campanhaForm.reset({
-                                nome: "",
-                                campaign_id: "",
-                                plataforma: "",
-                                ideal_customer_id: "",
-                              });
-                            }}
-                            className="gap-2"
-                          >
-                            <Plus className="h-4 w-4" />
-                            Nova Campanha
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
-                          <DialogHeader>
-                            <DialogTitle>
-                              {editingCampanha ? "Editar Campanha" : "Nova Campanha"}
-                            </DialogTitle>
-                            <DialogDescription>
-                              {editingCampanha
-                                ? "Altere os dados da campanha."
-                                : "Cadastre uma campanha de anúncio com nome, ID, plataforma e Persona (Cliente Ideal) de destino."}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <form
-                            onSubmit={campanhaForm.handleSubmit(onCampanhaSubmit)}
-                            className="grid gap-4 py-4"
-                          >
-                            <div className="space-y-2">
-                              <Label htmlFor="campanha_nome">Nome da Campanha</Label>
-                              <Input
-                                id="campanha_nome"
-                                type="text"
-                                placeholder="Ex: Campanha Black Friday"
-                                {...campanhaForm.register("nome")}
-                              />
-                              {campanhaForm.formState.errors.nome && (
-                                <p className="text-xs text-destructive">
-                                  {campanhaForm.formState.errors.nome.message}
-                                </p>
-                              )}
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="campanha_id">ID</Label>
-                              <Input
-                                id="campanha_id"
-                                type="text"
-                                placeholder="ID da campanha na plataforma"
-                                {...campanhaForm.register("campaign_id")}
-                              />
-                              {campanhaForm.formState.errors.campaign_id && (
-                                <p className="text-xs text-destructive">
-                                  {campanhaForm.formState.errors.campaign_id.message}
-                                </p>
-                              )}
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Plataforma</Label>
-                              <Select
-                                value={campanhaForm.watch("plataforma")}
-                                onValueChange={(v: string) =>
-                                  campanhaForm.setValue("plataforma", v)
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecione" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {PLATAFORMA_CAMPANHA_OPTIONS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>
-                                      {opt.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              {campanhaForm.formState.errors.plataforma && (
-                                <p className="text-xs text-destructive">
-                                  {campanhaForm.formState.errors.plataforma.message}
-                                </p>
-                              )}
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Persona (Cliente Ideal)</Label>
-                              <Select
-                                value={campanhaForm.watch("ideal_customer_id") ?? "none"}
-                                onValueChange={(v: string) =>
-                                  campanhaForm.setValue("ideal_customer_id", v === "none" ? "" : v)
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Nenhuma (opcional)" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">Nenhuma</SelectItem>
-                                  {idealCustomers.map((ic) => (
-                                    <SelectItem key={ic.id} value={ic.id}>
-                                      {ic.profile_name ?? "Sem nome"}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <p className="text-xs text-muted-foreground">
-                                Um Cliente Ideal pode ter 0, 1 ou mais campanhas associadas.
-                              </p>
-                            </div>
-                            <DialogFooter>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setIsModalCampanhaOpen(false)}
-                              >
-                                Cancelar
-                              </Button>
-                              <Button type="submit" disabled={isSavingCampanha}>
-                                {isSavingCampanha ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Salvando…
-                                  </>
-                                ) : (
-                                  "Salvar"
-                                )}
-                              </Button>
-                            </DialogFooter>
-                          </form>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {isFetchingCampanhas ? (
-                      <div className="flex min-h-[120px] items-center justify-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Nome</TableHead>
-                              <TableHead>ID</TableHead>
-                              <TableHead>Plataforma</TableHead>
-                              <TableHead>Persona</TableHead>
-                              <TableHead className="w-[100px]">Ações</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {campanhas.length === 0 ? (
-                              <TableRow>
-                                <TableCell
-                                  colSpan={5}
-                                  className="h-24 text-center text-muted-foreground"
-                                >
-                                  Nenhuma campanha cadastrada. Clique em Nova Campanha para adicionar.
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              campanhas.map((c) => (
-                                <TableRow key={c.id}>
-                                  <TableCell>{c.nome}</TableCell>
-                                  <TableCell className="font-mono text-sm">{c.campaign_id}</TableCell>
-                                  <TableCell>{c.plataforma}</TableCell>
-                                  <TableCell>{c.ideal_customers?.profile_name ?? "—"}</TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-1">
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => openCampanhaEdit(c)}
-                                        aria-label="Editar campanha"
-                                      >
-                                        <Pencil className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        onClick={() => onCampanhaDelete(c.id)}
-                                        aria-label="Excluir campanha"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Card Pagamentos */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <CardTitle>Pagamentos</CardTitle>
-                        <CardDescription>
-                          Registre pagamentos de anúncios (Google Ads ou Meta Ads).
-                        </CardDescription>
-                      </div>
-                  <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                    <DialogTrigger asChild>
-                      <Button
-                        onClick={() => {
-                          pagamentoForm.reset({
-                            data: "",
-                            plataforma: undefined,
-                            valor: 0,
-                          });
-                        }}
-                        className="gap-2"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Novo Pagamento
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                      <DialogHeader>
-                        <DialogTitle>Novo Pagamento</DialogTitle>
-                        <DialogDescription>
-                          Registre um pagamento de anúncio (Google Ads ou Meta
-                          Ads).
-                        </DialogDescription>
-                      </DialogHeader>
-                      <form
-                        onSubmit={pagamentoForm.handleSubmit(onPagamentoSubmit)}
-                        className="grid gap-4 py-4"
-                      >
-                        <div className="space-y-2">
-                          <Label htmlFor="data">Data</Label>
-                          <Input
-                            id="data"
-                            type="date"
-                            {...pagamentoForm.register("data")}
-                          />
-                          {pagamentoForm.formState.errors.data && (
-                            <p className="text-xs text-destructive">
-                              {
-                                pagamentoForm.formState.errors.data.message
-                              }
-                            </p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Plataforma</Label>
-                          <Select
-                            value={pagamentoForm.watch("plataforma")}
-                            onValueChange={(v: string) =>
-                              pagamentoForm.setValue(
-                                "plataforma",
-                                v as PagamentoFormValues["plataforma"]
-                              )
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PLATAFORMA_OPTIONS.map((opt) => (
-                                <SelectItem
-                                  key={opt.value}
-                                  value={opt.value}
-                                >
-                                  {opt.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {pagamentoForm.formState.errors.plataforma && (
-                            <p className="text-xs text-destructive">
-                              {
-                                pagamentoForm.formState.errors.plataforma
-                                  .message
-                              }
-                            </p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="valor">Valor (R$)</Label>
-                          <Input
-                            id="valor"
-                            type="number"
-                            step="0.01"
-                            min={0}
-                            placeholder="0,00"
-                            {...pagamentoForm.register("valor")}
-                          />
-                          {pagamentoForm.formState.errors.valor && (
-                            <p className="text-xs text-destructive">
-                              {
-                                pagamentoForm.formState.errors.valor.message
-                              }
-                            </p>
-                          )}
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setIsModalOpen(false)}
-                          >
-                            Cancelar
-                          </Button>
-                          <Button type="submit" disabled={isSavingPagamento}>
-                            {isSavingPagamento ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Salvando…
-                              </>
-                            ) : (
-                              "Salvar"
-                            )}
-                          </Button>
-                        </DialogFooter>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-                  {isFetchingPagamentos ? (
-                    <div className="flex min-h-[200px] items-center justify-center p-8">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Data</TableHead>
-                          <TableHead>Plataforma</TableHead>
-                          <TableHead className="text-right">Valor</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {pagamentos.length === 0 ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={3}
-                              className="h-24 text-center text-muted-foreground"
-                            >
-                              Nenhum pagamento cadastrado. Clique em Novo
-                              Pagamento para adicionar.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          pagamentos.map((p) => (
-                            <TableRow key={p.id}>
-                              <TableCell>{formatDate(p.data)}</TableCell>
-                              <TableCell>{p.plataforma}</TableCell>
-                              <TableCell className="text-right">
-                                {formatValor(p.valor)}
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
           </Tabs>
         </div>
       </SidebarInset>

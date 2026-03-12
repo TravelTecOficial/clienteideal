@@ -45,6 +45,12 @@ export function GoogleOAuthCallbackPage() {
         }
 
         if (!companyId) {
+          toast({
+            variant: "destructive",
+            title: "Empresa não identificada",
+            description: "Selecione uma empresa antes de conectar. Redirecionando…",
+          })
+          navigate("/dashboard/configuracoes?tab=integracoes")
           return
         }
 
@@ -73,22 +79,55 @@ export function GoogleOAuthCallbackPage() {
         const raw = await res.text()
         const data = (() => {
           try {
-            return JSON.parse(raw) as { error?: string; hint?: string } | null
+            return JSON.parse(raw) as {
+              error?: string
+              hint?: string
+              supabaseError?: string
+              supabaseErrorCode?: string
+              supabaseErrorDetails?: string
+              service?: string
+            } | null
           } catch {
             return null
           }
         })()
         if (!res.ok || data?.error) {
-          const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`)
+          // #region agent log
+          const logPayload = {
+            sessionId: "d1d2fb",
+            location: "GoogleOAuthCallbackPage.tsx:exchangeCode-error",
+            message: "Erro ao salvar credenciais Google",
+            data: { status: res.status, error: data?.error, hint: data?.hint, supabaseError: data?.supabaseError, rawPreview: raw.slice(0, 800) },
+            runId: "exchangeCode",
+            hypothesisId: "H1",
+            timestamp: Date.now(),
+          }
+          console.error("[google-oauth-callback] 500 response:", logPayload)
+          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "d1d2fb" },
+            body: JSON.stringify(logPayload),
+          }).catch(() => {})
+          // #endregion
+          let msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`)
+          if (data?.supabaseError) msg += ` [Supabase: ${data.supabaseError}]`
+          else if (data?.supabaseErrorCode) msg += ` [Supabase code: ${data.supabaseErrorCode}]`
+          else if (raw && raw.length < 600) msg += ` [Resposta: ${raw}]`
           throw new Error(msg)
         }
 
         window.sessionStorage.removeItem(STORAGE_KEY)
 
+        const serviceLabels: Record<string, string> = {
+          ga4: "Google Analytics",
+          ads: "Google Ads",
+          mybusiness: "Google Meu Negócio",
+        }
+        const serviceName = serviceLabels[data?.service ?? ""] ?? "Google"
+
         toast({
-          title: "Google conectado",
-          description:
-            "A conta do Google foi conectada com sucesso. GA4, Ads e My Business estão disponíveis para atualização automática de dados.",
+          title: `${serviceName} conectado`,
+          description: "A conta do Google foi conectada com sucesso para este serviço.",
         })
 
         navigate("/dashboard/configuracoes?tab=integracoes", { replace: true })
@@ -110,7 +149,7 @@ export function GoogleOAuthCallbackPage() {
       <div className="flex flex-col items-center gap-3 rounded-lg border bg-card px-6 py-8 shadow-sm">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          Concluindo conexão com Google (GA4, Ads, My Business)…
+          Concluindo conexão com o Google…
         </p>
       </div>
     </div>
