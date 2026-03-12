@@ -60,6 +60,7 @@ type GoogleAction =
   | "selectAnalyticsProperty"
   | "listMyBusinessLocations"
   | "selectMyBusinessLocation"
+  | "getAdsAccountInfo"
   | "disconnect"
 
 interface BaseRequestBody {
@@ -114,6 +115,11 @@ interface SelectMyBusinessLocationBody extends BaseRequestBody {
   propertyDisplayName?: string
 }
 
+interface GetAdsAccountInfoBody extends BaseRequestBody {
+  action: "getAdsAccountInfo"
+  company_id?: string
+}
+
 interface DisconnectBody extends BaseRequestBody {
   action: "disconnect"
   company_id?: string
@@ -128,6 +134,7 @@ type RequestBody =
   | SelectAnalyticsPropertyBody
   | ListMyBusinessLocationsBody
   | SelectMyBusinessLocationBody
+  | GetAdsAccountInfoBody
   | DisconnectBody
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -251,6 +258,7 @@ interface MyBusinessAccount {
 
 interface MyBusinessLocation {
   name?: string | null
+  title?: string | null
   locationName?: string | null
 }
 
@@ -543,6 +551,36 @@ async function handleExchangeCode(
   const { service } = stateStr ? decodeState(stateStr) : { service: "ga4" as GoogleService }
   const scopes = SCOPES_BY_SERVICE[service] ?? SCOPES_BY_SERVICE.ga4
 
+  let selectedAccountName: string | null = null
+  let selectedAccountDisplayName: string | null = null
+
+  if (service === "ads") {
+    try {
+      const adsRes = await fetch("https://googleads.googleapis.com/v20/customers:listAccessibleCustomers", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      const adsRaw = await adsRes.text()
+      const adsData = (() => {
+        try {
+          return JSON.parse(adsRaw) as { resourceNames?: string[]; error?: { message?: string } }
+        } catch {
+          return null
+        }
+      })()
+      if (adsRes.ok && Array.isArray(adsData?.resourceNames) && adsData.resourceNames.length > 0) {
+        const first = adsData.resourceNames[0]
+        if (typeof first === "string" && first.startsWith("customers/")) {
+          selectedAccountName = first
+          const id = first.replace(/^customers\//, "")
+          selectedAccountDisplayName = id.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
+        }
+      }
+    } catch (err) {
+      console.error("[google-oauth] Falha ao listar contas Ads:", err)
+    }
+  }
+
   const payload = {
     company_id: ctx.companyId,
     service,
@@ -551,8 +589,8 @@ async function handleExchangeCode(
     token_expires_at: tokenExpiresAt,
     scopes,
     status: "active",
-    selected_account_name: null,
-    selected_account_display_name: null,
+    selected_account_name: selectedAccountName,
+    selected_account_display_name: selectedAccountDisplayName,
     selected_property_name: null,
     selected_property_display_name: null,
     updated_at: new Date().toISOString(),
@@ -626,7 +664,7 @@ async function handleGetConnectionStatus(
 ): Promise<Response> {
   const { data, error } = await supabase
     .from("google_connections")
-    .select("service, status, selected_account_display_name, selected_property_name, selected_property_display_name")
+    .select("service, status, selected_account_name, selected_account_display_name, selected_property_name, selected_property_display_name")
     .eq("company_id", ctx.companyId)
 
   if (error) {
@@ -640,12 +678,14 @@ async function handleGetConnectionStatus(
   const rows = (data ?? []) as Array<{
     service?: string
     status?: string
+    selected_account_name?: string | null
     selected_account_display_name?: string | null
     selected_property_name?: string | null
     selected_property_display_name?: string | null
   }>
   const active = new Set(rows.filter((r) => r.status === "active").map((r) => r.service))
   const ga4Row = rows.find((r) => r.service === "ga4" && r.status === "active") ?? null
+  const adsRow = rows.find((r) => r.service === "ads" && r.status === "active") ?? null
   const mybusinessRow = rows.find((r) => r.service === "mybusiness" && r.status === "active") ?? null
 
   return jsonResponse({
@@ -655,6 +695,8 @@ async function handleGetConnectionStatus(
     ga4SelectedPropertyName: ga4Row?.selected_property_name ?? null,
     ga4SelectedPropertyDisplayName: ga4Row?.selected_property_display_name ?? null,
     ga4SelectedAccountDisplayName: ga4Row?.selected_account_display_name ?? null,
+    adsSelectedAccountId: adsRow?.selected_account_name ?? null,
+    adsSelectedAccountDisplayName: adsRow?.selected_account_display_name ?? null,
     mybusinessSelectedPropertyName: mybusinessRow?.selected_property_name ?? null,
     mybusinessSelectedPropertyDisplayName: mybusinessRow?.selected_property_display_name ?? null,
     mybusinessSelectedAccountDisplayName: mybusinessRow?.selected_account_display_name ?? null,
@@ -842,7 +884,7 @@ async function handleListMyBusinessLocations(
   let accountsPageCount = 0
 
   do {
-    const accountsUrl = new URL("https://mybusiness.googleapis.com/v4/accounts")
+    const accountsUrl = new URL("https://mybusinessaccountmanagement.googleapis.com/v1/accounts")
     accountsUrl.searchParams.set("pageSize", "20")
     if (accountsNextPageToken) {
       accountsUrl.searchParams.set("pageToken", accountsNextPageToken)
@@ -869,11 +911,17 @@ async function handleListMyBusinessLocations(
         accountsData?.error?.message ??
         (accountsRaw && accountsRaw.length < 400 ? accountsRaw : null) ??
         `Erro ao listar contas do Google Meu Negócio (${accountsRes.status}).`
+      const errDetail = accountsData?.error
+        ? `status=${accountsRes.status} code=${(accountsData.error as { code?: number }).code}`
+        : `status=${accountsRes.status}`
+      console.error("[google-oauth] Accounts API failed:", errDetail, accountsRaw?.slice(0, 500))
       return jsonResponse(
         {
           error: "Erro ao listar perfis do Google Meu Negócio.",
           hint: errorMessage,
           code: "GOOGLE_MYBUSINESS_LIST_FAILED",
+          googleStatus: accountsRes.status,
+          googleError: accountsData?.error ?? null,
         },
         502,
       )
@@ -889,9 +937,10 @@ async function handleListMyBusinessLocations(
 
       do {
         const locationsUrl = new URL(
-          `https://mybusiness.googleapis.com/v4/${accountName}/locations`,
+          `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations`,
         )
         locationsUrl.searchParams.set("pageSize", "100")
+        locationsUrl.searchParams.set("readMask", "name,title")
         if (locationsNextPageToken) {
           locationsUrl.searchParams.set("pageToken", locationsNextPageToken)
         }
@@ -928,13 +977,19 @@ async function handleListMyBusinessLocations(
         }
 
         for (const loc of locationsData?.locations ?? []) {
-          const propertyName = loc.name?.trim() ?? ""
+          let propertyName = loc.name?.trim() ?? ""
           if (!propertyName) continue
+          if (propertyName.startsWith("locations/")) {
+            propertyName = `${accountName}/${propertyName}`
+          } else if (!propertyName.startsWith("accounts/")) {
+            propertyName = `${accountName}/locations/${propertyName}`
+          }
+          const displayName = loc.title?.trim() ?? loc.locationName?.trim() ?? propertyName
           locationOptions.push({
             accountName,
             accountDisplayName,
             propertyName,
-            propertyDisplayName: loc.locationName?.trim() || propertyName,
+            propertyDisplayName: displayName,
             propertyId: propertyName.split("/").pop() ?? propertyName,
             isSelected: propertyName === (row.selected_property_name ?? null),
           })
@@ -1016,6 +1071,78 @@ async function handleSelectMyBusinessLocation(
   })
 }
 
+async function handleGetAdsAccountInfo(
+  ctx: AuthContext,
+  supabase: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const config = getGoogleConfig()
+  if ("error" in config) return config.error
+
+  const connectionResult = await getGoogleConnectionForService(ctx, supabase, "ads")
+  if (connectionResult.error) return connectionResult.error
+  const row = connectionResult.row
+  if (!row) {
+    return jsonResponse({ error: "Conexão Google Ads não encontrada." }, 404)
+  }
+
+  let accessToken: string
+  try {
+    accessToken = await decryptToken(row.access_token_encrypted, config.encryptionKey)
+  } catch (err) {
+    console.error("[google-oauth] Falha ao descriptografar token Google:", err)
+    return jsonResponse({ error: "Erro ao acessar credenciais do Google." }, 500)
+  }
+
+  try {
+    const adsRes = await fetch("https://googleads.googleapis.com/v20/customers:listAccessibleCustomers", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const adsRaw = await adsRes.text()
+    const adsData = (() => {
+      try {
+        return JSON.parse(adsRaw) as { resourceNames?: string[]; error?: { message?: string } }
+      } catch {
+        return null
+      }
+    })()
+    if (!adsRes.ok || !Array.isArray(adsData?.resourceNames) || adsData.resourceNames.length === 0) {
+      const errMsg = adsData?.error?.message ?? (adsRaw?.slice(0, 200) ?? `Erro ${adsRes.status}`)
+      return jsonResponse(
+        { error: "Erro ao obter conta Google Ads.", hint: errMsg },
+        502,
+      )
+    }
+    const first = adsData.resourceNames[0]
+    if (typeof first !== "string" || !first.startsWith("customers/")) {
+      return jsonResponse({ error: "Resposta inválida da API Google Ads." }, 502)
+    }
+    const id = first.replace(/^customers\//, "")
+    const displayName = id.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
+
+    await supabase
+      .from("google_connections")
+      .update({
+        selected_account_name: first,
+        selected_account_display_name: displayName,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("company_id", ctx.companyId)
+      .eq("service", "ads")
+
+    return jsonResponse({
+      accountId: first,
+      accountDisplayName: displayName,
+    })
+  } catch (err) {
+    console.error("[google-oauth] getAdsAccountInfo:", err)
+    return jsonResponse(
+      { error: "Erro ao obter conta Google Ads.", hint: err instanceof Error ? err.message : String(err) },
+      500,
+    )
+  }
+}
+
 async function handleDisconnect(
   body: DisconnectBody,
   ctx: AuthContext,
@@ -1093,10 +1220,28 @@ Deno.serve(async (req: Request) => {
       return handleListAnalyticsProperties(ctx, supabase)
     case "selectAnalyticsProperty":
       return handleSelectAnalyticsProperty(body as SelectAnalyticsPropertyBody, ctx, supabase)
-    case "listMyBusinessLocations":
-      return handleListMyBusinessLocations(ctx, supabase)
+    case "listMyBusinessLocations": {
+      try {
+        return await handleListMyBusinessLocations(ctx, supabase)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        const stack = err instanceof Error ? err.stack : undefined
+        console.error("[google-oauth] listMyBusinessLocations crash:", msg, stack)
+        return jsonResponse(
+          {
+            error: "Erro ao listar perfis do Google Meu Negócio.",
+            hint: msg,
+            code: "MYBUSINESS_CRASH",
+            debug: stack ? stack.slice(0, 500) : undefined,
+          },
+          500,
+        )
+      }
+    }
     case "selectMyBusinessLocation":
       return handleSelectMyBusinessLocation(body as SelectMyBusinessLocationBody, ctx, supabase)
+    case "getAdsAccountInfo":
+      return handleGetAdsAccountInfo(ctx, supabase)
     case "disconnect":
       return handleDisconnect(body as DisconnectBody, ctx, supabase)
     default:

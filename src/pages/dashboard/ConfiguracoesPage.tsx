@@ -282,6 +282,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
   const [isGA4Connected, setIsGA4Connected] = useState(false);
   const [isAdsConnected, setIsAdsConnected] = useState(false);
+  const [adsAccountDisplayName, setAdsAccountDisplayName] = useState<string | null>(null);
   const [isMyBusinessConnected, setIsMyBusinessConnected] = useState(false);
   const [isLoadingGoogleAnalyticsProperties, setIsLoadingGoogleAnalyticsProperties] = useState(false);
   const [isSavingGoogleAnalyticsProperty, setIsSavingGoogleAnalyticsProperty] = useState(false);
@@ -557,6 +558,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     if (!companyId) {
       setIsGA4Connected(false);
       setIsAdsConnected(false);
+      setAdsAccountDisplayName(null);
       setIsMyBusinessConnected(false);
       setSelectedGoogleAnalyticsPropertyName(null);
       setSelectedGoogleAnalyticsPropertyLabel(null);
@@ -585,6 +587,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         ga4SelectedPropertyName?: string | null;
         ga4SelectedPropertyDisplayName?: string | null;
         ga4SelectedAccountDisplayName?: string | null;
+        adsSelectedAccountDisplayName?: string | null;
         mybusinessSelectedPropertyName?: string | null;
         mybusinessSelectedPropertyDisplayName?: string | null;
         mybusinessSelectedAccountDisplayName?: string | null;
@@ -593,6 +596,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         setIsGA4Connected(Boolean(data.ga4));
         setIsAdsConnected(Boolean(data.ads));
         setIsMyBusinessConnected(Boolean(data.mybusiness));
+        setAdsAccountDisplayName(data.adsSelectedAccountDisplayName ?? null);
         setSelectedGoogleAnalyticsPropertyName(data.ga4SelectedPropertyName ?? null);
         setSelectedGoogleAnalyticsPropertyLabel(
           data.ga4SelectedPropertyDisplayName
@@ -613,6 +617,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         setIsGA4Connected(false);
         setIsAdsConnected(false);
         setIsMyBusinessConnected(false);
+        setAdsAccountDisplayName(null);
         setSelectedGoogleAnalyticsPropertyName(null);
         setSelectedGoogleAnalyticsPropertyLabel(null);
         setSelectedMyBusinessPropertyName(null);
@@ -622,6 +627,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       setIsGA4Connected(false);
       setIsAdsConnected(false);
       setIsMyBusinessConnected(false);
+      setAdsAccountDisplayName(null);
       setSelectedGoogleAnalyticsPropertyName(null);
       setSelectedGoogleAnalyticsPropertyLabel(null);
       setSelectedMyBusinessPropertyName(null);
@@ -691,7 +697,10 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           setMyBusinessLocations([]);
           setSelectedMyBusinessPropertyName(null);
           setSelectedMyBusinessPropertyLabel(null);
-        } else if (service === "ads") setIsAdsConnected(false);
+        } else if (service === "ads") {
+          setIsAdsConnected(false);
+          setAdsAccountDisplayName(null);
+        }
         toast({ title: "Google desconectado" });
       } catch (err) {
         toast({ variant: "destructive", title: "Erro ao desconectar", description: getErrorMessage(err) });
@@ -699,6 +708,29 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     },
     [companyId, getToken, toast],
   );
+
+  const fetchAdsAccountInfo = useCallback(async () => {
+    if (!companyId) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ action: "getAdsAccountInfo", company_id: companyId, token }),
+      });
+      const data = (await res.json().catch(() => null)) as { accountDisplayName?: string; error?: string } | null;
+      if (res.ok && data?.accountDisplayName) {
+        setAdsAccountDisplayName(data.accountDisplayName);
+      }
+    } catch {
+      // Silencioso - não bloqueia a UI
+    }
+  }, [companyId, getToken]);
 
   const handleLoadGoogleAnalyticsProperties = useCallback(async () => {
     if (!companyId) {
@@ -887,10 +919,15 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         locations?: GoogleAnalyticsPropertyOption[];
         error?: string;
         hint?: string;
+        code?: string;
+        googleStatus?: number;
+        debug?: string;
       } | null;
 
       if (!res.ok || data?.error) {
-        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        let msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        if (data?.googleStatus) msg += ` [Google: ${data.googleStatus}]`;
+        if (data?.debug) msg += ` | ${data.debug}`;
         throw new Error(msg);
       }
 
@@ -1062,6 +1099,12 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       void loadMetaConnectionState();
     }
   }, [section, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState]);
+
+  useEffect(() => {
+    if (section === "integracoes" && companyId && isAdsConnected && !adsAccountDisplayName) {
+      void fetchAdsAccountInfo();
+    }
+  }, [section, companyId, isAdsConnected, adsAccountDisplayName, fetchAdsAccountInfo]);
 
   // Carregar empresas para admin quando companyId é null (seletor de empresa)
   useEffect(() => {
@@ -2709,6 +2752,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           <div className="flex flex-col items-center gap-2">
                             <Icon className="h-10 w-10 shrink-0 text-foreground" style={{ width: 40, height: 40 }} />
                             <p className="text-sm font-medium text-foreground">{int.name}</p>
+                            {int.id === "google-ads" && adsAccountDisplayName && (
+                              <p className="text-xs font-mono text-muted-foreground">Conta: {adsAccountDisplayName}</p>
+                            )}
                           </div>
                           <div className="flex w-full flex-col gap-1">
                             <Button
