@@ -735,9 +735,17 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   );
 
   const fetchAdsAccountInfo = useCallback(async () => {
-    if (!companyId) return;
+    if (!companyId) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf487b'},body:JSON.stringify({sessionId:'bf487b',runId:'ads-account-info',hypothesisId:'H3',location:'ConfiguracoesPage.tsx:738',message:'fetchAdsAccountInfo sem companyId',data:{effectiveFromHook:!!effectiveFromHook,storedOAuthCompanyId:!!storedOAuthCompanyId},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      return;
+    }
     try {
       const token = await getToken();
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf487b'},body:JSON.stringify({sessionId:'bf487b',runId:'ads-account-info',hypothesisId:'H1',location:'ConfiguracoesPage.tsx:745',message:'antes de chamar google-oauth getAdsAccountInfo',data:{hasCompanyId:!!companyId,companyIdSource:effectiveFromHook?'hook':storedOAuthCompanyId?'oauth-storage':'missing',hasClerkToken:!!token},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (!token) return;
       const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
         method: "POST",
@@ -754,6 +762,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         error?: string;
         hint?: string;
       } | null;
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf487b'},body:JSON.stringify({sessionId:'bf487b',runId:'ads-account-info',hypothesisId:res.ok?'H4':'H2',location:'ConfiguracoesPage.tsx:760',message:'resposta de google-oauth getAdsAccountInfo',data:{status:res.status,ok:res.ok,error:data?.error??null,hint:data?.hint??null,hasAccountDisplayName:!!data?.accountDisplayName,hasAccountId:!!data?.accountId},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (res.ok && data) {
         const display =
           data.accountDisplayName ??
@@ -768,10 +779,13 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           description: data.hint ?? data.error,
         });
       }
-    } catch {
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf487b'},body:JSON.stringify({sessionId:'bf487b',runId:'ads-account-info',hypothesisId:'H4',location:'ConfiguracoesPage.tsx:779',message:'excecao no fetchAdsAccountInfo',data:{error:err instanceof Error?err.message:String(err)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       // Silencioso - não bloqueia a UI
     }
-  }, [companyId, getToken, toast]);
+  }, [companyId, effectiveFromHook, getToken, storedOAuthCompanyId, toast]);
 
   const handleLoadGoogleAnalyticsProperties = useCallback(async () => {
     if (!companyId) {
