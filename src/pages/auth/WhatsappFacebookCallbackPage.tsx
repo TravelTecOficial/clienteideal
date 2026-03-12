@@ -33,7 +33,12 @@ export function WhatsappFacebookCallbackPage() {
           return
         }
 
-        const companyId = window.sessionStorage.getItem(STORAGE_KEY)
+        // #region agent log
+        const companyIdFromLocal = window.localStorage.getItem(STORAGE_KEY);
+        const companyIdFromSession = window.sessionStorage.getItem(STORAGE_KEY);
+        fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff4a93'},body:JSON.stringify({sessionId:'ff4a93',location:'WhatsappFacebookCallbackPage.tsx:35',message:'storage check on callback',data:{hasLocal:!!companyIdFromLocal,hasSession:!!companyIdFromSession},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        const companyId = companyIdFromLocal ?? companyIdFromSession;
         if (!companyId) {
           toast({
             variant: "destructive",
@@ -82,6 +87,7 @@ export function WhatsappFacebookCallbackPage() {
           throw new Error(msg)
         }
 
+        window.localStorage.removeItem(STORAGE_KEY);
         window.sessionStorage.removeItem(STORAGE_KEY)
 
         toast({
