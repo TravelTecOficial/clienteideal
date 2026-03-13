@@ -2929,7 +2929,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                               type="text"
                               list="empresa_gmb_place_type_options"
                               placeholder="Ex: dentist, insurance_agent"
-                              className="font-mono text-xs"
+                              readOnly={isMyBusinessConnected && !!selectedMyBusinessPropertyName}
+                              className={cn(
+                                "font-mono text-xs",
+                                isMyBusinessConnected && selectedMyBusinessPropertyName && "bg-muted cursor-not-allowed"
+                              )}
                               {...empresaForm.register("gmb_place_type")}
                             />
                             <datalist id="empresa_gmb_place_type_options">
@@ -2938,7 +2942,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                               ))}
                             </datalist>
                             <p className="text-xs text-muted-foreground">
-                              Categoria principal do Google Places. Usada para buscar concorrentes no GMB Local.
+                              {isMyBusinessConnected && selectedMyBusinessPropertyName
+                                ? "Travado: categorias vêm do perfil Google Meu Negócio. Altere em business.google.com."
+                                : "Categoria principal do Google Places. Usada para buscar concorrentes no GMB Local."}
                             </p>
                           </div>
                           <div className="space-y-2">
@@ -2948,7 +2954,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                               type="text"
                               list="empresa_gmb_place_type_secondary_options"
                               placeholder="Ex: doctor, health"
-                              className="font-mono text-xs"
+                              readOnly={isMyBusinessConnected && !!selectedMyBusinessPropertyName}
+                              className={cn(
+                                "font-mono text-xs",
+                                isMyBusinessConnected && selectedMyBusinessPropertyName && "bg-muted cursor-not-allowed"
+                              )}
                               {...empresaForm.register("gmb_place_type_secondary")}
                             />
                             <datalist id="empresa_gmb_place_type_secondary_options">
@@ -2957,7 +2967,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                               ))}
                             </datalist>
                             <p className="text-xs text-muted-foreground">
-                              Categoria secundária opcional do Google Places. Pode ser usada para análises futuras.
+                              {isMyBusinessConnected && selectedMyBusinessPropertyName
+                                ? "Travado: categorias vêm do perfil Google Meu Negócio. Altere em business.google.com."
+                                : "Categoria secundária opcional do Google Places. Pode ser usada para análises futuras."}
                             </p>
                           </div>
                         </div>

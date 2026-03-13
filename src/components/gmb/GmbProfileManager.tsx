@@ -19,7 +19,7 @@ import { useSupabaseClient } from "@/lib/supabase-context";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase";
 import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
 import { useToast } from "@/hooks/use-toast";
-import { getErrorMessage } from "@/lib/utils";
+import { getErrorMessage, cn } from "@/lib/utils";
 import { GMB_CATEGORIES } from "@/constants/gmb-categories";
 
 interface CompanyData {
@@ -63,6 +63,7 @@ export function GmbProfileManager() {
   const [lateAccountId, setLateAccountId] = useState("");
   const [gmbAccountLoading, setGmbAccountLoading] = useState(false);
   const [gmbAccountSaving, setGmbAccountSaving] = useState(false);
+  const [isGmbProfileConnected, setIsGmbProfileConnected] = useState(false);
 
   const loadCompany = useCallback(async () => {
     if (!effectiveCompanyId) {
@@ -116,10 +117,31 @@ export function GmbProfileManager() {
     }
   }, [effectiveCompanyId, supabase]);
 
+  const loadGmbConnectionStatus = useCallback(async () => {
+    if (!effectiveCompanyId) {
+      setIsGmbProfileConnected(false);
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from("google_connections")
+        .select("selected_property_name")
+        .eq("company_id", effectiveCompanyId)
+        .eq("service", "mybusiness")
+        .maybeSingle();
+      setIsGmbProfileConnected(
+        !!(data as { selected_property_name?: string | null } | null)?.selected_property_name?.trim()
+      );
+    } catch {
+      setIsGmbProfileConnected(false);
+    }
+  }, [effectiveCompanyId, supabase]);
+
   useEffect(() => {
     void loadCompany();
     void loadGmbAccount();
-  }, [loadCompany, loadGmbAccount]);
+    void loadGmbConnectionStatus();
+  }, [loadCompany, loadGmbAccount, loadGmbConnectionStatus]);
 
   useEffect(() => {
     if (companyData?.nome_fantasia && !gmbSearchName) {
@@ -188,29 +210,32 @@ export function GmbProfileManager() {
       }
 
       const placeId = data?.placeId?.trim() || null;
+      const secondaryType =
+        (data?.types ?? []).find((t) => t && t !== primaryType) ?? null;
 
       setCompanyData((prev) => ({
         ...(prev ?? {}),
-        gmb_place_type: primaryType,
-        gmb_place_type_secondary:
-          (data?.types ?? []).find((t) => t && t !== primaryType) ?? null,
+        gmb_place_type: isGmbProfileConnected ? prev?.gmb_place_type : primaryType,
+        gmb_place_type_secondary: isGmbProfileConnected ? prev?.gmb_place_type_secondary : secondaryType,
         gmb_place_id: placeId,
       }));
 
+      const updatePayload: Record<string, unknown> = { gmb_place_id: placeId };
+      if (!isGmbProfileConnected) {
+        updatePayload.gmb_place_type = primaryType;
+        updatePayload.gmb_place_type_secondary = secondaryType;
+      }
       const { error } = await supabase
         .from("companies")
-        .update({
-          gmb_place_type: primaryType,
-          gmb_place_type_secondary:
-            (data?.types ?? []).find((t) => t && t !== primaryType) ?? null,
-          gmb_place_id: placeId,
-        })
+        .update(updatePayload)
         .eq("id", effectiveCompanyId);
       if (error) throw error;
       setGmbMapsUrl("");
       toast({
         title: "Negócio identificado",
-        description: `${data?.displayName || "Negócio"} — Categoria: ${primaryType}. Dados gravados.`,
+        description: isGmbProfileConnected
+          ? `${data?.displayName || "Negócio"} — Place ID atualizado. Categorias permanecem do perfil Google.`
+          : `${data?.displayName || "Negócio"} — Categoria: ${primaryType}. Dados gravados.`,
       });
     } catch (err) {
       const msg = getErrorMessage(err);
@@ -363,24 +388,27 @@ export function GmbProfileManager() {
     try {
       setCompanyData((prev) => ({
         ...(prev ?? {}),
-        gmb_place_type: primaryType,
-        gmb_place_type_secondary: secondaryType,
+        gmb_place_type: isGmbProfileConnected ? prev?.gmb_place_type : primaryType,
+        gmb_place_type_secondary: isGmbProfileConnected ? prev?.gmb_place_type_secondary : secondaryType,
         gmb_place_id: placeId,
       }));
 
+      const updatePayload: Record<string, unknown> = { gmb_place_id: placeId };
+      if (!isGmbProfileConnected) {
+        updatePayload.gmb_place_type = primaryType;
+        updatePayload.gmb_place_type_secondary = secondaryType;
+      }
       const { error } = await supabase
         .from("companies")
-        .update({
-          gmb_place_type: primaryType,
-          gmb_place_type_secondary: secondaryType,
-          gmb_place_id: placeId,
-        })
+        .update(updatePayload)
         .eq("id", effectiveCompanyId);
       if (error) throw error;
 
       toast({
         title: "Negócio identificado",
-        description: `${candidate.displayName || "Negócio"} — Categoria: ${primaryType}. Dados gravados.`,
+        description: isGmbProfileConnected
+          ? `${candidate.displayName || "Negócio"} — Place ID atualizado. Categorias permanecem do perfil Google.`
+          : `${candidate.displayName || "Negócio"} — Categoria: ${primaryType}. Dados gravados.`,
       });
     } catch (err) {
       const msg = getErrorMessage(err);
@@ -561,12 +589,17 @@ export function GmbProfileManager() {
               list="gmb_place_type_options"
               placeholder="Preenchido ao identificar ou digite manualmente (ex: dentist, insurance_agent)"
               value={companyData?.gmb_place_type ?? ""}
+              readOnly={isGmbProfileConnected}
               onChange={(e) =>
+                !isGmbProfileConnected &&
                 setCompanyData((prev) => ({
                   ...(prev ?? {}),
                   gmb_place_type: e.target.value,
                 }))
               }
+              className={cn(
+                isGmbProfileConnected && "bg-muted cursor-not-allowed"
+              )}
             />
             <datalist id="gmb_place_type_options">
               {GMB_CATEGORIES.map((opt) => (
@@ -574,7 +607,9 @@ export function GmbProfileManager() {
               ))}
             </datalist>
             <p className="text-xs text-muted-foreground">
-              Usado nas análises do GMB Local para buscar concorrentes próximos.
+              {isGmbProfileConnected
+                ? "Travado: categorias vêm do perfil Google Meu Negócio. Altere em business.google.com."
+                : "Usado nas análises do GMB Local para buscar concorrentes próximos."}
             </p>
           </div>
         </div>
