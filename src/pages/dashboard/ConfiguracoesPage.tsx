@@ -1096,6 +1096,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           title: "Nenhum perfil encontrado",
           description: "A conta conectada não retornou perfis do Google Meu Negócio acessíveis.",
         });
+      } else if (locations.length === 1 && !selectedLocation) {
+        // Um único perfil: auto-vincular para gravar placeId e categorias do perfil
+        void handleSelectMyBusinessLocation(locations[0]);
       }
     } catch (err) {
       toast({
@@ -1951,12 +1954,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       else if (service === "facebook") setMetaAccountsFacebook(accounts);
       else if (service === "meta_ads") setMetaAccountsMetaAds(accounts);
 
-      if (service === "instagram" || service === "facebook") {
-        const selected = accounts.find((a) => a.isSelected && a.instagramBusinessId);
-        if (selected?.instagramBusinessId) {
-          void handleLoadMetaInsights(selected.instagramBusinessId);
-        }
-      }
+      // Insights não são carregados automaticamente para evitar erro ao abrir a página
+      // (meta-instagram pode falhar por CORS/500). O usuário pode carregar manualmente se necessário.
 
       if (!accounts.length) {
         toast({
