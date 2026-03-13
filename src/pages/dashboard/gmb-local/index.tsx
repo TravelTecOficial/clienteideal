@@ -197,9 +197,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
 
   const loadGmbServices = useCallback(async () => {
     if (!effectiveCompanyId || !getToken) return;
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9368ef'},body:JSON.stringify({sessionId:'9368ef',location:'index.tsx:loadGmbServices:entry',message:'loadGmbServices called',data:{effectiveCompanyId:effectiveCompanyId?.slice(0,8)},hypothesisId:'B,D','timestamp':Date.now()})}).catch(()=>{});
-    // #endregion
     setGmbServicesLoading(true);
     try {
       const token = await getToken();
@@ -209,9 +206,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
         body: JSON.stringify({ action: "listCurrent", company_id: effectiveCompanyId }),
       });
       const data = (await res.json().catch(() => ({}))) as { serviceItems?: unknown[]; canModifyServiceList?: boolean; error?: string; code?: string };
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9368ef'},body:JSON.stringify({sessionId:'9368ef',location:'index.tsx:loadGmbServices:response',message:'loadGmbServices response',data:{status:res.status,ok:res.ok,code:(data as {code?:string})?.code},hypothesisId:'B,D','timestamp':Date.now()})}).catch(()=>{});
-      // #endregion
       if (!res.ok) {
         // Perfil sem serviços, sem location selecionada ou erro: tratar como "não disponível"
         setGmbServices({ serviceItems: [], canModifyServiceList: false });
@@ -232,9 +226,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
     async (categoryId: string) => {
       if (!effectiveCompanyId || !getToken || !categoryId?.trim()) return;
       setGmbAvailableServicesLoading(true);
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9368ef'},body:JSON.stringify({sessionId:'9368ef',location:'index.tsx:loadGmbAvailableServices:entry',message:'loadGmbAvailableServices called',data:{categoryId:categoryId?.trim()},hypothesisId:'A,C,E','timestamp':Date.now()})}).catch(()=>{});
-      // #endregion
       try {
         const token = await getToken();
         const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-services`, {
@@ -248,9 +239,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
           }),
         });
         const data = (await res.json().catch(() => ({}))) as { categories?: { serviceTypes?: { serviceTypeId?: string; displayName?: string }[] }[] };
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9368ef'},body:JSON.stringify({sessionId:'9368ef',location:'index.tsx:loadGmbAvailableServices:response',message:'loadGmbAvailableServices response',data:{status:res.status,ok:res.ok,typesCount:(data?.categories?.[0]?.serviceTypes ?? []).length},hypothesisId:'A,E','timestamp':Date.now()})}).catch(()=>{});
-        // #endregion
         if (!res.ok) return;
         const cat = data?.categories?.[0];
         const types = (cat?.serviceTypes ?? []).map((t) => ({
@@ -258,10 +246,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
           displayName: t?.displayName,
         })).filter((t) => t.serviceTypeId);
         setGmbAvailableServiceTypes(types);
-      } catch (err) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9368ef'},body:JSON.stringify({sessionId:'9368ef',location:'index.tsx:loadGmbAvailableServices:catch',message:'loadGmbAvailableServices catch',data:{err:String(err)},hypothesisId:'E','timestamp':Date.now()})}).catch(()=>{});
-        // #endregion
+      } catch {
         setGmbAvailableServiceTypes([]);
       } finally {
         setGmbAvailableServicesLoading(false);
@@ -295,9 +280,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
   );
 
   const loadSaudeNegocioData = useCallback(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9368ef'},body:JSON.stringify({sessionId:'9368ef',location:'index.tsx:loadSaudeNegocioData',message:'loadSaudeNegocioData called',data:{hasPlaceType:!!companyData?.gmb_place_type},hypothesisId:'C','timestamp':Date.now()})}).catch(()=>{});
-    // #endregion
     void loadGmbProfile();
     void loadGmbMedia();
     void loadGmbServices();

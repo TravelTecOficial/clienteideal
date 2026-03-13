@@ -83,6 +83,14 @@ function formatAddressFromCompany(c: CompanyData | null): string {
   return parts.join(" - ");
 }
 
+/** Formata serviceTypeId para exibição (ex: job_type_id:web_design → Web Design). */
+function formatServiceTypeDisplayName(serviceTypeId: string): string {
+  const part = serviceTypeId.includes(":") ? serviceTypeId.split(":")[1] ?? serviceTypeId : serviceTypeId;
+  return part
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function GmbSaudeNegocioTab({
   companyData,
   effectiveCompanyId,
@@ -134,15 +142,28 @@ export function GmbSaudeNegocioTab({
     return ids;
   }, [gmbServices?.serviceItems]);
 
+  /** Fallback: quando listByCategory retorna serviceTypes vazios, usa os serviceItems atuais. */
+  const effectiveServiceTypes = useMemo(() => {
+    if (gmbAvailableServiceTypes.length > 0) return gmbAvailableServiceTypes;
+    if (!gmbServices?.serviceItems?.length) return [];
+    const seen = new Set<string>();
+    const types: { serviceTypeId: string; displayName?: string }[] = [];
+    for (const item of gmbServices.serviceItems) {
+      const sid = (item as { structuredServiceItem?: { serviceTypeId?: string } })?.structuredServiceItem?.serviceTypeId;
+      if (sid && !seen.has(sid)) {
+        seen.add(sid);
+        types.push({ serviceTypeId: sid, displayName: formatServiceTypeDisplayName(sid) });
+      }
+    }
+    return types;
+  }, [gmbAvailableServiceTypes, gmbServices?.serviceItems]);
+
   useEffect(() => {
     setSelectedServiceIds(currentStructuredIds);
   }, [currentStructuredIds]);
 
   useEffect(() => {
     const shouldCall = !!(gmbServices?.canModifyServiceList && companyData?.gmb_place_type?.trim());
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9368ef'},body:JSON.stringify({sessionId:'9368ef',location:'GmbSaudeNegocioTab.tsx:useEffect',message:'useEffect onLoadAvailableServices',data:{shouldCall,canModify:!!gmbServices?.canModifyServiceList,hasPlaceType:!!companyData?.gmb_place_type?.trim(),gmbServicesNull:gmbServices==null},hypothesisId:'A,E','timestamp':Date.now()})}).catch(()=>{});
-    // #endregion
     if (shouldCall) {
       onLoadAvailableServices(companyData!.gmb_place_type!.trim());
     }
@@ -331,14 +352,14 @@ export function GmbSaudeNegocioTab({
                         <div className="flex justify-center py-4">
                           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                         </div>
-                      ) : gmbAvailableServiceTypes.length > 0 ? (
+                      ) : effectiveServiceTypes.length > 0 ? (
                         <div className="space-y-3">
-                          {gmbAvailableServiceTypes.map((svc) => {
-                            const label = svc.displayName ?? svc.serviceTypeId?.replace(/^[^_]+_/, "").replace(/_/g, " ") ?? svc.serviceTypeId;
+                          {effectiveServiceTypes.map((svc) => {
+                            const label = svc.displayName ?? formatServiceTypeDisplayName(svc.serviceTypeId);
                             const isChecked = selectedServiceIds.has(svc.serviceTypeId);
                             return (
                               <div key={svc.serviceTypeId} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">
-                                <span className="text-sm font-medium capitalize">{label}</span>
+                                <span className="text-sm font-medium">{label}</span>
                                 <Switch
                                   checked={isChecked}
                                   onCheckedChange={(checked) =>
@@ -359,7 +380,7 @@ export function GmbSaudeNegocioTab({
                           Nenhum serviço disponível para esta categoria. Cadastre a categoria GMB em Configurações &gt; Integrações &gt; Google Meu Negócio.
                         </p>
                       )}
-                      {gmbAvailableServiceTypes.length > 0 && (
+                      {effectiveServiceTypes.length > 0 && (
                         <Button
                           size="sm"
                           disabled={gmbServicesUpdating || !onServicesUpdate}
@@ -378,10 +399,13 @@ export function GmbSaudeNegocioTab({
                             structuredServiceItem?: { serviceTypeId?: string };
                             freeFormServiceItem?: { label?: { displayName?: string } };
                           };
-                          const name =
+                          const raw =
                             s?.structuredServiceItem?.serviceTypeId ??
                             s?.freeFormServiceItem?.label?.displayName ??
                             `Serviço ${i + 1}`;
+                          const name = s?.structuredServiceItem?.serviceTypeId
+                            ? formatServiceTypeDisplayName(raw)
+                            : raw;
                           return <li key={i}>{name}</li>;
                         })}
                       </ul>
