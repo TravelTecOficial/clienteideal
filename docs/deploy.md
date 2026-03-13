@@ -105,9 +105,11 @@ supabase functions deploy meta-instagram
 supabase functions deploy meta-connections-n8n
 supabase functions deploy whatsapp-integration
 supabase functions deploy gmb-post-create
+supabase functions deploy gmb-reviews
+supabase functions deploy gmb-qa
 ```
 
-> Algumas funções específicas podem exigir `--no-verify-jwt` (como `gmb-post-create`, conforme comentário no arquivo). Use exatamente as flags indicadas nos comentários da função.
+> Algumas funções específicas podem exigir `--no-verify-jwt` (como `gmb-post-create`, `gmb-reviews`, `gmb-qa`, conforme comentário no arquivo). Use exatamente as flags indicadas nos comentários da função.
 
 ---
 

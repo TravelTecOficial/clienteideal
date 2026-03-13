@@ -264,6 +264,34 @@ Arquivo: `supabase/functions/gmb-post-create/index.ts`
   - O usuário é `saas_admin`.
 - Mensagens de erro ajudam a diagnosticar casos de accountId inválido ou workspace errado.
 
+### Edge Function `gmb-reviews`
+
+Arquivo: `supabase/functions/gmb-reviews/index.ts`
+
+- Proxy para **Google My Business API v4** — listar e responder reviews.
+- Requisitos:
+  - Header `Authorization: Bearer <clerk_jwt>` (JWT do Clerk).
+  - Body: `{ action: "listReviews" | "replyToReview", company_id?: string, reviewId?: string, comment?: string, pageToken?: string, pageSize?: number }`.
+  - Secrets: `CLERK_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`.
+- Fluxo:
+  1. Valida JWT do Clerk e obtém `company_id` do perfil.
+  2. Busca conexão `google_connections` para `service = "mybusiness"` e `company_id`.
+  3. Obtém `access_token` (descriptografa ou renova via `refresh_token`).
+  4. Chama a API do Google: `listReviews` (GET) ou `replyToReview` (PUT).
+- Deploy: `npx supabase functions deploy gmb-reviews --no-verify-jwt`.
+
+### Edge Function `gmb-qa`
+
+Arquivo: `supabase/functions/gmb-qa/index.ts`
+
+- Proxy para **Google My Business Q&A API** — listar perguntas e criar/atualizar respostas.
+- **Atenção:** A API de Q&A será descontinuada em 3 de novembro de 2025.
+- Requisitos:
+  - Header `Authorization: Bearer <clerk_jwt>` (JWT do Clerk).
+  - Body: `{ action: "listQuestions" | "upsertAnswer", company_id?: string, questionId?: string, text?: string, pageToken?: string }`.
+  - Secrets: `CLERK_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`.
+- Deploy: `npx supabase functions deploy gmb-qa --no-verify-jwt`.
+
 ---
 
 ## Boas práticas ao consumir integrações no frontend

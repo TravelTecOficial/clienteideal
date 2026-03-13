@@ -3,12 +3,23 @@
  *
  * Integração Supabase com Clerk Bearer Token.
  * Dados de gmb_health_checks e gmb_audit_items filtrados por company_id (useEffectiveCompanyId).
+ * Reviews via Edge Function gmb-reviews (Google My Business API v4).
  * RLS garante isolamento por empresa. Validação frontend é UX; API enforcement via RLS.
  */
 import { useState, useEffect, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -27,7 +38,11 @@ import {
   Phone,
   Filter,
   Loader2,
+  MessageSquare,
+  Star,
+  HelpCircle,
 } from "lucide-react";
+import { useAuth } from "@clerk/clerk-react";
 import { useSupabaseClient } from "@/lib/supabase-context";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase";
 import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id";
@@ -68,6 +83,30 @@ interface CompanyData {
   gmb_place_id?: string | null;
 }
 
+/** Review do Google Business Profile (API v4). */
+interface GmbReview {
+  name?: string | null;
+  reviewId?: string | null;
+  reviewer?: { displayName?: string | null; profilePhotoUrl?: string | null } | null;
+  starRating?: string | null;
+  comment?: string | null;
+  createTime?: string | null;
+  updateTime?: string | null;
+  reviewReply?: { comment?: string | null; updateTime?: string | null } | null;
+}
+
+/** Pergunta do Google Business Profile Q&A API. */
+interface GmbQuestion {
+  name?: string | null;
+  author?: { displayName?: string | null } | null;
+  text?: string | null;
+  createTime?: string | null;
+  updateTime?: string | null;
+  upvoteCount?: number | null;
+  totalAnswerCount?: number | null;
+  topAnswers?: Array<{ author?: { displayName?: string | null } | null; text?: string | null } | null> | null;
+}
+
 // Fallback quando não há dados no banco
 const DEFAULT_HEALTH: Pick<
   GmbHealthCheck,
@@ -86,6 +125,7 @@ interface GMBLocalProps {
 export default function GMBLocal({ className }: GMBLocalProps) {
   const supabase = useSupabaseClient();
   const effectiveCompanyId = useEffectiveCompanyId();
+  const { getToken } = useAuth();
   const { toast } = useToast();
 
   const [healthCheck, setHealthCheck] = useState<GmbHealthCheck | null>(null);
@@ -97,6 +137,16 @@ export default function GMBLocal({ className }: GMBLocalProps) {
   const [loading, setLoading] = useState(true);
   const [competitorsPage, setCompetitorsPage] = useState(1);
   const [radiusKm, setRadiusKm] = useState<1 | 2 | 3 | 4 | 5>(3);
+  const [reviews, setReviews] = useState<GmbReview[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsTotalCount, setReviewsTotalCount] = useState(0);
+  const [reviewsAverageRating, setReviewsAverageRating] = useState<number | null>(null);
+  const [replyModal, setReplyModal] = useState<{ review: GmbReview; comment: string } | null>(null);
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const [questions, setQuestions] = useState<GmbQuestion[]>([]);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [answerModal, setAnswerModal] = useState<{ question: GmbQuestion; text: string } | null>(null);
+  const [answerSubmitting, setAnswerSubmitting] = useState(false);
   const COMPETITORS_PER_PAGE = 10;
   const RADIUS_OPTIONS = [1, 2, 3, 4, 5] as const;
 
@@ -266,6 +316,199 @@ export default function GMBLocal({ className }: GMBLocalProps) {
     [toast]
   );
 
+  const loadReviews = useCallback(async () => {
+    if (!effectiveCompanyId || !getToken) return;
+    setReviewsLoading(true);
+    setReviews([]);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-reviews`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({
+          action: "listReviews",
+          company_id: effectiveCompanyId,
+          pageSize: 50,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        reviews?: GmbReview[];
+        totalReviewCount?: number;
+        averageRating?: number;
+        error?: string;
+        hint?: string;
+        code?: string;
+      };
+      if (!res.ok) {
+        const code = data?.code;
+        if (code === "NOT_CONNECTED" || code === "NO_LOCATION_SELECTED") {
+          toast({
+            variant: "destructive",
+            title: "Google Meu Negócio não conectado",
+            description: "Conecte e selecione o perfil em Configurações > Integrações > Google Meu Negócio.",
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: data?.error ?? "Erro ao carregar reviews",
+            description: data?.hint,
+          });
+        }
+        return;
+      }
+      setReviews(data?.reviews ?? []);
+      setReviewsTotalCount(data?.totalReviewCount ?? 0);
+      setReviewsAverageRating(data?.averageRating ?? null);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao carregar reviews",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [effectiveCompanyId, getToken, toast]);
+
+  const handleReplySubmit = useCallback(async () => {
+    if (!replyModal || !effectiveCompanyId || !getToken) return;
+    const { review, comment } = replyModal;
+    const reviewName = review?.name ?? review?.reviewId ?? "";
+    if (!reviewName || !comment.trim()) return;
+    setReplySubmitting(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-reviews`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({
+          action: "replyToReview",
+          company_id: effectiveCompanyId,
+          reviewId: reviewName,
+          comment: comment.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as { success?: boolean; error?: string; hint?: string };
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          title: data?.error ?? "Erro ao responder",
+          description: data?.hint,
+        });
+        return;
+      }
+      toast({ title: "Resposta enviada com sucesso." });
+      setReplyModal(null);
+      void loadReviews();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao responder",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setReplySubmitting(false);
+    }
+  }, [replyModal, effectiveCompanyId, getToken, loadReviews, toast]);
+
+  const loadQuestions = useCallback(async () => {
+    if (!effectiveCompanyId || !getToken) return;
+    setQuestionsLoading(true);
+    setQuestions([]);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-qa`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({
+          action: "listQuestions",
+          company_id: effectiveCompanyId,
+          pageSize: 10,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        questions?: GmbQuestion[];
+        error?: string;
+        hint?: string;
+        code?: string;
+      };
+      if (!res.ok) {
+        const code = data?.code;
+        if (code === "NOT_CONNECTED" || code === "NO_LOCATION_SELECTED") {
+          return;
+        }
+        toast({
+          variant: "destructive",
+          title: data?.error ?? "Erro ao carregar perguntas",
+          description: data?.hint,
+        });
+        return;
+      }
+      setQuestions(data?.questions ?? []);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao carregar perguntas",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setQuestionsLoading(false);
+    }
+  }, [effectiveCompanyId, getToken, toast]);
+
+  const handleAnswerSubmit = useCallback(async () => {
+    if (!answerModal || !effectiveCompanyId || !getToken) return;
+    const { question, text } = answerModal;
+    const questionName = question?.name ?? "";
+    if (!questionName || !text.trim()) return;
+    setAnswerSubmitting(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-qa`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({
+          action: "upsertAnswer",
+          company_id: effectiveCompanyId,
+          questionId: questionName,
+          text: text.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as { success?: boolean; error?: string; hint?: string };
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          title: data?.error ?? "Erro ao responder",
+          description: data?.hint,
+        });
+        return;
+      }
+      toast({ title: "Resposta enviada com sucesso." });
+      setAnswerModal(null);
+      void loadQuestions();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao responder",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setAnswerSubmitting(false);
+    }
+  }, [answerModal, effectiveCompanyId, getToken, loadQuestions, toast]);
+
   useEffect(() => {
     const placeType = companyData?.gmb_place_type?.trim();
     if (companyCoords && placeType) {
@@ -303,7 +546,16 @@ export default function GMBLocal({ className }: GMBLocalProps) {
         </div>
       )}
 
-      <Tabs defaultValue="explorar" className="flex flex-col flex-1 min-h-0 w-full mt-4">
+      <Tabs
+        defaultValue="explorar"
+        className="flex flex-col flex-1 min-h-0 w-full mt-4"
+        onValueChange={(v) => {
+          if (v === "audit") {
+            void loadReviews();
+            void loadQuestions();
+          }
+        }}
+      >
         <TabsList className="grid w-full grid-cols-3 max-w-3xl mb-4 shrink-0">
           <TabsTrigger value="explorar" className="gap-2">
             <Search className="w-4 h-4" /> 1. Explorar
@@ -471,18 +723,28 @@ export default function GMBLocal({ className }: GMBLocalProps) {
           </div>
         </TabsContent>
 
-        {/* ABA 2: GMB AUDIT (BOTÕES ACCENT) */}
-        <TabsContent value="audit" className="flex-1 min-h-0 flex justify-center items-start py-6 overflow-auto mt-0 data-[state=inactive]:hidden">
-          <Card className="w-full max-w-2xl border-t-4 border-t-accent shadow-md">
+        {/* ABA 2: GMB AUDIT (BOTÕES + REVIEWS) */}
+        <TabsContent value="audit" className="flex-1 min-h-0 flex flex-col gap-6 py-6 overflow-auto mt-0 data-[state=inactive]:hidden">
+          <Card className="w-full max-w-2xl border-t-4 border-t-accent shadow-md shrink-0">
             <CardHeader className="flex flex-row justify-between border-b border-border">
               <div>
-                <CardTitle className="text-2xl font-bold">Smile Central</CardTitle>
+                <CardTitle className="text-2xl font-bold">
+                  {companyData?.nome_fantasia ?? "Empresa"}
+                </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Dentist • Bacoor, Cavite
+                  {[companyData?.gmb_place_type, companyData?.cidade, companyData?.uf]
+                    .filter(Boolean)
+                    .join(" • ")}
+                  {![companyData?.gmb_place_type, companyData?.cidade].some(Boolean)] && "—"}
                 </p>
               </div>
-              <Badge variant="destructive" className="uppercase text-[10px]">
-                Sem Reviews
+              <Badge
+                variant={reviewsTotalCount > 0 ? "secondary" : "destructive"}
+                className="uppercase text-[10px]"
+              >
+                {reviewsTotalCount > 0
+                  ? `${reviewsTotalCount} review${reviewsTotalCount !== 1 ? "s" : ""}`
+                  : "Sem Reviews"}
               </Badge>
             </CardHeader>
             <CardContent className="p-8 grid grid-cols-2 gap-4">
@@ -499,7 +761,294 @@ export default function GMBLocal({ className }: GMBLocalProps) {
               )}
             </CardContent>
           </Card>
+
+          {/* Seção Reviews */}
+          <Card className="w-full max-w-2xl border-border shrink-0">
+            <CardHeader className="border-b border-border">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <MessageSquare className="w-5 h-5" />
+                Reviews do Google
+                {reviewsAverageRating != null && (
+                  <span className="text-sm font-normal text-muted-foreground">
+                    ({reviewsAverageRating.toFixed(1)} ★ média)
+                  </span>
+                )}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Responda às avaliações dos clientes diretamente pelo painel.
+              </p>
+            </CardHeader>
+            <CardContent className="p-4">
+              {reviewsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : reviews.length === 0 ? (
+                <div className="p-6 rounded-lg border border-dashed border-border bg-muted/30 text-center text-sm text-muted-foreground">
+                  {reviewsTotalCount === 0 && !reviewsLoading
+                    ? "Nenhum review encontrado. Conecte o Google Meu Negócio em Configurações > Integrações se ainda não conectou."
+                    : "Nenhum review para exibir."}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {reviews.map((r) => {
+                    const rating = r.starRating ? parseInt(r.starRating, 10) : null;
+                    const hasReply = Boolean(r.reviewReply?.comment?.trim());
+                    return (
+                      <div
+                        key={r.name ?? r.reviewId ?? Math.random()}
+                        className="p-4 rounded-lg border border-border bg-card"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {rating != null && (
+                                <span className="flex items-center gap-0.5 text-accent font-medium">
+                                  {Array.from({ length: 5 }, (_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={cn(
+                                        "w-4 h-4",
+                                        i < rating ? "fill-current" : "opacity-40"
+                                      )}
+                                    />
+                                  ))}
+                                </span>
+                              )}
+                              <span className="text-sm font-medium text-foreground">
+                                {r.reviewer?.displayName ?? "Anônimo"}
+                              </span>
+                            </div>
+                            {r.comment && (
+                              <p className="text-sm text-foreground mt-1 whitespace-pre-wrap">
+                                {r.comment}
+                              </p>
+                            )}
+                            {hasReply && (
+                              <div className="mt-2 pl-3 border-l-2 border-primary/30">
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Sua resposta:
+                                </p>
+                                <p className="text-sm text-foreground mt-0.5">
+                                  {r.reviewReply?.comment}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          {!hasReply && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() =>
+                                setReplyModal({
+                                  review: r,
+                                  comment: r.reviewReply?.comment ?? "",
+                                })
+                              }
+                            >
+                              Responder
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Seção Q&A */}
+          <Card className="w-full max-w-2xl border-border shrink-0">
+            <CardHeader className="border-b border-border">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <HelpCircle className="w-5 h-5" />
+                Perguntas e Respostas
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Responda às perguntas dos clientes no Google. A API de Q&A será descontinuada em nov/2025.
+              </p>
+            </CardHeader>
+            <CardContent className="p-4">
+              {questionsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : questions.length === 0 ? (
+                <div className="p-6 rounded-lg border border-dashed border-border bg-muted/30 text-center text-sm text-muted-foreground">
+                  Nenhuma pergunta encontrada.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {questions.map((q) => {
+                    const hasAnswer = (q.topAnswers?.length ?? 0) > 0;
+                    return (
+                      <div
+                        key={q.name ?? q.text ?? Math.random()}
+                        className="p-4 rounded-lg border border-border bg-card"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground">
+                              {q.author?.displayName ?? "Anônimo"} perguntou:
+                            </p>
+                            {q.text && (
+                              <p className="text-sm text-foreground mt-1 whitespace-pre-wrap">
+                                {q.text}
+                              </p>
+                            )}
+                            {hasAnswer && q.topAnswers?.[0] && (
+                              <div className="mt-2 pl-3 border-l-2 border-primary/30">
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Sua resposta:
+                                </p>
+                                <p className="text-sm text-foreground mt-0.5">
+                                  {q.topAnswers[0]?.text}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          {!hasAnswer && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() =>
+                                setAnswerModal({
+                                  question: q,
+                                  text: q.topAnswers?.[0]?.text ?? "",
+                                })
+                              }
+                            >
+                              Responder
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
+
+        {/* Modal Responder Review */}
+        <Dialog
+          open={!!replyModal}
+          onOpenChange={(open) => !open && setReplyModal(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Responder ao review</DialogTitle>
+              <DialogDescription>
+                Sua resposta será publicada no Google e visível para outros clientes.
+              </DialogDescription>
+            </DialogHeader>
+            {replyModal && (
+              <>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Review: &quot;{replyModal.review.comment?.slice(0, 100)}
+                    {replyModal.review.comment && replyModal.review.comment.length > 100 ? "…" : ""}&quot;
+                  </p>
+                  <Textarea
+                    placeholder="Digite sua resposta..."
+                    value={replyModal.comment}
+                    onChange={(e) =>
+                      setReplyModal((prev) =>
+                        prev ? { ...prev, comment: e.target.value } : null
+                      )
+                    }
+                    rows={4}
+                    className="resize-none"
+                  />
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setReplyModal(null)}
+                    disabled={replySubmitting}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={() => void handleReplySubmit()}
+                    disabled={replySubmitting || !replyModal.comment.trim()}
+                  >
+                    {replySubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      "Enviar resposta"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal Responder Pergunta (Q&A) */}
+        <Dialog
+          open={!!answerModal}
+          onOpenChange={(open) => !open && setAnswerModal(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Responder à pergunta</DialogTitle>
+              <DialogDescription>
+                Sua resposta será publicada no Google.
+              </DialogDescription>
+            </DialogHeader>
+            {answerModal && (
+              <>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Pergunta: &quot;{answerModal.question.text?.slice(0, 150)}
+                    {answerModal.question.text && answerModal.question.text.length > 150 ? "…" : ""}&quot;
+                  </p>
+                  <Textarea
+                    placeholder="Digite sua resposta..."
+                    value={answerModal.text}
+                    onChange={(e) =>
+                      setAnswerModal((prev) =>
+                        prev ? { ...prev, text: e.target.value } : null
+                      )
+                    }
+                    rows={4}
+                    className="resize-none"
+                  />
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setAnswerModal(null)}
+                    disabled={answerSubmitting}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={() => void handleAnswerSubmit()}
+                    disabled={answerSubmitting || !answerModal.text.trim()}
+                  >
+                    {answerSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      "Enviar resposta"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* ABA 3: GESTÃO DE SAÚDE (VELOCÍMETRO + CHECKLIST) */}
         <TabsContent value="gestao" className="flex-1 min-h-0 overflow-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mt-0 data-[state=inactive]:hidden">
