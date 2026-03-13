@@ -51,6 +51,17 @@ import { useEvolutionProxy } from "@/hooks/use-evolution-proxy";
 import { ChatBriefingModal } from "@/components/chat-briefing/ChatBriefingModal";
 import { GMB_CATEGORIES } from "@/constants/gmb-categories";
 
+/** Formata categoria GMB para exibição: label conhecido ou slug legível (ex: internet_marketing_service → Internet Marketing Service) */
+function formatGmbCategoryDisplay(value: string | null | undefined): string {
+  if (!value?.trim()) return ""
+  const s = value.trim()
+  const gcidMatch = s.match(/gcid:([a-z0-9_]+)/i)
+  const slug = gcidMatch ? gcidMatch[1] : s
+  const found = GMB_CATEGORIES.find((c) => c.value === slug)
+  if (found) return found.label
+  return slug.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 // --- Interfaces ---
 interface CompanyRow {
   name: string | null;
@@ -2997,18 +3008,23 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="empresa_gmb_place_type">Categoria principal</Label>
-                            <Input
-                              id="empresa_gmb_place_type"
-                              type="text"
-                              list="empresa_gmb_place_type_options"
-                              placeholder="Ex: dentist, insurance_agent"
-                              readOnly={isMyBusinessConnected && !!selectedMyBusinessPropertyName}
-                              className={cn(
-                                "font-mono text-xs",
-                                isMyBusinessConnected && selectedMyBusinessPropertyName && "bg-muted cursor-not-allowed"
-                              )}
-                              {...empresaForm.register("gmb_place_type")}
-                            />
+                            {isMyBusinessConnected && selectedMyBusinessPropertyName ? (
+                              <>
+                                <input type="hidden" {...empresaForm.register("gmb_place_type")} />
+                                <div className="font-mono text-xs bg-muted px-3 py-2 rounded-md border border-input">
+                                  {formatGmbCategoryDisplay(empresaForm.watch("gmb_place_type"))}
+                                </div>
+                              </>
+                            ) : (
+                              <Input
+                                id="empresa_gmb_place_type"
+                                type="text"
+                                list="empresa_gmb_place_type_options"
+                                placeholder="Ex: dentist, insurance_agent"
+                                className="font-mono text-xs"
+                                {...empresaForm.register("gmb_place_type")}
+                              />
+                            )}
                             <datalist id="empresa_gmb_place_type_options">
                               {GMB_CATEGORIES.map((opt) => (
                                 <option key={opt.value} value={opt.value} label={opt.label} />
@@ -3022,18 +3038,23 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="empresa_gmb_place_type_secondary">Categoria secundária (opcional)</Label>
-                            <Input
-                              id="empresa_gmb_place_type_secondary"
-                              type="text"
-                              list="empresa_gmb_place_type_secondary_options"
-                              placeholder="Ex: doctor, health"
-                              readOnly={isMyBusinessConnected && !!selectedMyBusinessPropertyName}
-                              className={cn(
-                                "font-mono text-xs",
-                                isMyBusinessConnected && selectedMyBusinessPropertyName && "bg-muted cursor-not-allowed"
-                              )}
-                              {...empresaForm.register("gmb_place_type_secondary")}
-                            />
+                            {isMyBusinessConnected && selectedMyBusinessPropertyName ? (
+                              <>
+                                <input type="hidden" {...empresaForm.register("gmb_place_type_secondary")} />
+                                <div className="font-mono text-xs bg-muted px-3 py-2 rounded-md border border-input">
+                                  {formatGmbCategoryDisplay(empresaForm.watch("gmb_place_type_secondary"))}
+                                </div>
+                              </>
+                            ) : (
+                              <Input
+                                id="empresa_gmb_place_type_secondary"
+                                type="text"
+                                list="empresa_gmb_place_type_secondary_options"
+                                placeholder="Ex: doctor, health"
+                                className="font-mono text-xs"
+                                {...empresaForm.register("gmb_place_type_secondary")}
+                              />
+                            )}
                             <datalist id="empresa_gmb_place_type_secondary_options">
                               {GMB_CATEGORIES.map((opt) => (
                                 <option key={opt.value} value={opt.value} label={opt.label} />

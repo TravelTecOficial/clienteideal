@@ -3,7 +3,7 @@
  *
  * Hub central para gerenciamento de canais sociais.
  * O Google Meu Negócio é o primeiro canal integrado,
- * usando Late via Supabase Edge Functions.
+ * usando a API oficial do Google (localPosts) via Supabase Edge Functions.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Plus, RefreshCw, Send, Share2 } from "lucide-react";
@@ -38,8 +38,8 @@ export default function SocialHub() {
   const { getToken } = useAuth();
   const { toast } = useToast();
 
-  const [lateAccountId, setLateAccountId] = useState("");
-  const [gmbAccountLoading, setGmbAccountLoading] = useState(false);
+  const [isGmbConnected, setIsGmbConnected] = useState(false);
+  const [gmbConnectionLoading, setGmbConnectionLoading] = useState(false);
 
   const [posts, setPosts] = useState<GmbPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
@@ -50,34 +50,31 @@ export default function SocialHub() {
   const [postPublishing, setPostPublishing] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  const loadGmbAccount = useCallback(async () => {
+  const loadGmbConnection = useCallback(async () => {
     if (!effectiveCompanyId) {
-      setLateAccountId("");
+      setIsGmbConnected(false);
       return;
     }
-    setGmbAccountLoading(true);
+    setGmbConnectionLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("gmb_accounts")
-        .select("late_account_id")
+      const { data } = await supabase
+        .from("google_connections")
+        .select("selected_property_name")
         .eq("company_id", effectiveCompanyId)
+        .eq("service", "mybusiness")
         .maybeSingle();
-      if (!error && data) {
-        setLateAccountId(
-          (data as { late_account_id: string | null }).late_account_id ?? ""
-        );
-      } else {
-        setLateAccountId("");
-      }
+      setIsGmbConnected(
+        !!(data as { selected_property_name?: string | null } | null)?.selected_property_name?.trim()
+      );
     } catch {
-      setLateAccountId("");
+      setIsGmbConnected(false);
     } finally {
-      setGmbAccountLoading(false);
+      setGmbConnectionLoading(false);
     }
   }, [effectiveCompanyId, supabase]);
 
   const loadPosts = useCallback(async () => {
-    if (!lateAccountId.trim()) {
+    if (!isGmbConnected || !effectiveCompanyId) {
       setPosts([]);
       setPostsError(null);
       return;
@@ -128,18 +125,17 @@ export default function SocialHub() {
     } finally {
       setPostsLoading(false);
     }
-  }, [lateAccountId, effectiveCompanyId, getToken, toast]);
+  }, [isGmbConnected, effectiveCompanyId, getToken, toast]);
 
   const handlePublish = useCallback(async () => {
-    const accountId = lateAccountId.trim();
     const content = postContent.trim();
 
-    if (!accountId) {
+    if (!isGmbConnected) {
       toast({
         variant: "destructive",
-        title: "Configure o Late Account ID",
+        title: "Conecte o Google Meu Negócio",
         description:
-          "Configure o Late Account ID em Configurações → Integrações → Google Meu Negócio antes de publicar.",
+          "Conecte e selecione o perfil em Configurações → Integrações → Google Meu Negócio antes de publicar.",
       });
       return;
     }
@@ -175,7 +171,7 @@ export default function SocialHub() {
         body: JSON.stringify({
           content,
           mediaUrl,
-          accountId,
+          ...(effectiveCompanyId ? { company_id: effectiveCompanyId } : {}),
         }),
       });
 
@@ -202,17 +198,17 @@ export default function SocialHub() {
     } finally {
       setPostPublishing(false);
     }
-  }, [lateAccountId, postContent, postMediaUrl, getToken, toast, loadPosts]);
+  }, [isGmbConnected, effectiveCompanyId, postContent, postMediaUrl, getToken, toast, loadPosts]);
 
   useEffect(() => {
-    void loadGmbAccount();
-  }, [loadGmbAccount]);
+    void loadGmbConnection();
+  }, [loadGmbConnection]);
 
   useEffect(() => {
-    if (lateAccountId.trim()) {
+    if (isGmbConnected) {
       void loadPosts();
     }
-  }, [lateAccountId, loadPosts]);
+  }, [isGmbConnected, loadPosts]);
 
   return (
     <div className="space-y-6">
@@ -302,7 +298,7 @@ export default function SocialHub() {
                   variant="outline"
                   size="sm"
                   onClick={() => void loadPosts()}
-                  disabled={postsLoading || !lateAccountId.trim()}
+                  disabled={postsLoading || !isGmbConnected}
                   className="gap-1"
                 >
                   {postsLoading ? (
@@ -315,7 +311,7 @@ export default function SocialHub() {
                 <Button
                   size="sm"
                   onClick={() => setShowCreateForm((v) => !v)}
-                  disabled={!lateAccountId.trim()}
+                  disabled={!isGmbConnected}
                   className="gap-1"
                 >
                   <Plus className="w-3 h-3" />
@@ -324,15 +320,15 @@ export default function SocialHub() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!gmbAccountLoading && !lateAccountId.trim() && (
+              {!gmbConnectionLoading && !isGmbConnected && (
                 <p className="text-sm text-muted-foreground">
-                  Configure o vínculo com Google Meu Negócio na tela{" "}
-                  <span className="font-medium">GMB Local</span> para ver e
-                  publicar posts aqui.
+                  Conecte o Google Meu Negócio em{" "}
+                  <span className="font-medium">Configurações → Integrações</span>{" "}
+                  e selecione o perfil para ver e publicar posts aqui.
                 </p>
               )}
 
-              {lateAccountId.trim() && (
+              {isGmbConnected && (
                 <>
                   {postsLoading ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">

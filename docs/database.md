@@ -115,10 +115,10 @@ Este documento resume o modelo de dados no Supabase, as principais tabelas e as 
       - `selected_instagram_id`, `selected_instagram_username`.
       - `selected_ad_account_id` (quando usado para Ads).
 - `gmb_accounts`
-  - Mapeia contas Google My Business (Late Account ID) para empresas.
+  - (Legado) Mapeia contas Google My Business (Late Account ID) para empresas. Posts agora usam `google_connections`.
   - Campos:
     - `company_id`.
-    - `late_account_id` (ID da conta na Late API).
+    - `late_account_id` (ID da conta na Late API — legado; posts usam `google_connections`).
 
 ### Integrações em geral
 

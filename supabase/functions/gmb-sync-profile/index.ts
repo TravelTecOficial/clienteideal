@@ -122,7 +122,9 @@ function getGoogleConfig(): {
 function toPlaceType(raw: string | undefined): string | null {
   const s = raw?.trim()
   if (!s) return null
-  if (s.startsWith("gcid:")) return s.slice(5).trim() || null
+  // API retorna "categories/gcid:internet_marketing_service" ou "gcid:xxx"
+  const gcidMatch = s.match(/gcid:([a-z0-9_]+)/i)
+  if (gcidMatch) return gcidMatch[1] || null
   return s
 }
 
@@ -227,6 +229,10 @@ Deno.serve(async (req: Request) => {
     }, 400)
   }
 
+  // Business Information API v1 espera "locations/{locationId}", não "accounts/.../locations/..."
+  const locationMatch = propertyName.match(/locations\/[^/]+$/)
+  const locationPath = locationMatch ? locationMatch[0] : propertyName
+
   // Obter access token válido
   const BUFFER_SECONDS = 5 * 60
   const now = Date.now()
@@ -291,7 +297,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const locUrl = new URL(
-    `https://mybusinessbusinessinformation.googleapis.com/v1/${propertyName}`,
+    `https://mybusinessbusinessinformation.googleapis.com/v1/${locationPath}`,
   )
   locUrl.searchParams.set(
     "readMask",

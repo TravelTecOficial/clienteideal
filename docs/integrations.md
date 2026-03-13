@@ -14,7 +14,7 @@ flowchart LR
   supabaseFunctions --> meta[Meta_APIs]
   supabaseFunctions --> whatsappCloud[WhatsApp_Cloud_API]
   supabaseFunctions --> evolution[Evolution_API_Legado]
-  supabaseFunctions --> lateApi[Late_API_GMB]
+  supabaseFunctions --> gmbApi[Google_My_Business_API]
 ```
 
 - O **frontend nunca envia secrets** diretamente para APIs externas.
@@ -242,27 +242,35 @@ Ou POST com body:
 
 Arquivo: `supabase/functions/gmb-post-create/index.ts`
 
-- Função faz proxy para a **Late API** (`https://getlate.dev/api/v1/posts`) para criar posts no Google Business.
+- Proxy para **Google My Business API v4** — `accounts.locations.localPosts.create`.
+- Cria posts no Google Business Profile usando a API oficial do Google.
 - Requisitos:
   - Header `Authorization: Bearer <clerk_jwt>` (JWT do Clerk).
-  - Body: `{ content: string, mediaUrl?: string, accountId: string }`.
-  - Secrets:
-    - `CLERK_SECRET_KEY`
-    - `LATE_API_KEY`
+  - Body: `{ content: string, mediaUrl?: string, company_id?: string }`.
+  - Secrets: `CLERK_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`.
 - Fluxo:
   1. Valida JWT do Clerk e obtém `sub`.
-  2. Busca `company_id` e flag `saas_admin` em `profiles`.
-  3. Verifica se o `accountId` pertence à empresa do usuário via tabela `gmb_accounts`.
-  4. Lista contas na Late API (`/api/v1/accounts`) para garantir que o `accountId` pertence ao workspace correto.
-  5. Cria o post em `LATE_API_URL` com `publishNow: true` e, opcionalmente, `mediaItems`.
+  2. Busca `company_id` em `profiles`.
+  3. Obtém conexão `google_connections` para `service = "mybusiness"` e `company_id`.
+  4. Usa `selected_property_name` (accounts/xxx/locations/yyy) e access token.
+  5. Chama `POST https://mybusiness.googleapis.com/v4/{locationName}/localPosts` com `summary`, `topicType: STANDARD`, opcionalmente `media`.
 
-### Segurança
+### Edge Function `gmb-post-list`
 
-- `LATE_API_KEY` nunca é exposta ao cliente; fica apenas nas secrets do Supabase.
-- A função valida se o `accountId`:
-  - Pertence a uma conta cadastrada em `gmb_accounts` para a empresa do usuário, **ou**
-  - O usuário é `saas_admin`.
-- Mensagens de erro ajudam a diagnosticar casos de accountId inválido ou workspace errado.
+Arquivo: `supabase/functions/gmb-post-list/index.ts`
+
+- Proxy para **Google My Business API v4** — `accounts.locations.localPosts.list`.
+- Lista posts do Google Business Profile.
+- Requisitos:
+  - Header `Authorization: Bearer <clerk_jwt>`.
+  - Query: `company_id` (opcional), `pageSize`, `pageToken`.
+  - Secrets: `CLERK_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`.
+- Usa `google_connections` e `selected_property_name` (não mais `gmb_accounts`/Late).
+
+### Segurança (posts)
+
+- A função valida se o usuário tem acesso à empresa via `profiles.company_id` ou `saas_admin`.
+- O perfil GMB deve estar conectado e selecionado em Configurações > Integrações.
 
 ### Edge Function `gmb-reviews`
 

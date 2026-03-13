@@ -39,7 +39,7 @@ No painel do Supabase, em **Edge Functions → Secrets**, configure pelo menos:
 - `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_TOKEN_ENCRYPTION_KEY`, `META_GRAPH_VERSION` (opcional).
 - `META_WHATSAPP_REDIRECT_URI`, se usar a nova integração WhatsApp Cloud API.
 - `N8N_META_CONNECTIONS_API_KEY`, se usar a Edge Function `meta-connections-n8n` (n8n obtém IDs Meta por empresa).
-- `LATE_API_KEY` — Chave da Late API (Google My Business / Social Hub).
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` — OAuth Google (reviews, posts, sync perfil GMB).
 - Outras chaves específicas de funções (ver comentários nos arquivos de `supabase/functions/*`).
 
 ---
@@ -81,7 +81,7 @@ Opcionalmente, **revise** as migrations no painel (**SQL Editor**) antes de apli
 
 ### 3.1 Conferir secrets antes do deploy
 
-Para cada função sensível, verifique os comentários no topo do arquivo em `supabase/functions/*/index.ts` para saber quais secrets são necessárias (ex.: `CLERK_SECRET_KEY`, `META_*`, `LATE_API_KEY`).
+Para cada função sensível, verifique os comentários no topo do arquivo em `supabase/functions/*/index.ts` para saber quais secrets são necessárias (ex.: `CLERK_SECRET_KEY`, `META_*`, `GOOGLE_*`).
 
 ### 3.2 Deploy das funções
 
@@ -199,10 +199,10 @@ Acesse `http://localhost:4173` e valide:
 
 ### 5.5 Google My Business / Social Hub
 
-- Configure `LATE_API_KEY` nas secrets do Supabase.
-- Garanta que `gmb_accounts` tenha os `late_account_id` corretos por empresa.
+- Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` nas secrets do Supabase.
+- Garanta que o Google Meu Negócio esteja conectado em Configurações > Integrações e o perfil selecionado.
 - No módulo Social Hub:
-  - Crie um post de teste e verifique se ele aparece no Google Business via Late.
+  - Crie um post de teste e verifique se ele aparece no Google Business.
 
 ---
 
@@ -226,7 +226,7 @@ Use esta lista rápida após cada deploy:
    - [ ] Evolution API (se em uso) envia/recebe mensagens.
    - [ ] WhatsApp via Meta conectado e número selecionado.
    - [ ] Meta/Instagram conectado; gráficos de alcance exibidos.
-   - [ ] Social Hub consegue publicar em GMB via Late API.
+   - [ ] Social Hub consegue publicar em GMB via API oficial do Google.
 5. **Monitoramento e erros**
    - [ ] Console do navegador sem erros críticos.
    - [ ] Logs das Edge Functions no Supabase sem erros recorrentes.

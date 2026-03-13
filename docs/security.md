@@ -80,14 +80,14 @@ Pontos de atenção:
 - Nunca colocar:
   - `SUPABASE_SERVICE_ROLE_KEY`.
   - `CLERK_SECRET_KEY`.
-  - Chaves da Meta, WhatsApp, Evolution, Late API, etc.
+  - Chaves da Meta, WhatsApp, Evolution, Google OAuth, etc.
 
 ### Supabase — Edge Functions
 
 - Secrets configuradas via `supabase secrets set`:
   - `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`.
   - `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_WHATSAPP_REDIRECT_URI`, `META_TOKEN_ENCRYPTION_KEY`, etc.
-  - `LATE_API_KEY` (Google My Business / Social Hub).
+  - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` (Google My Business / Social Hub).
   - Outras chaves específicas de integrações.
 - Edge Functions acessam essas secrets via `Deno.env.get(...)` e **nunca** as retornam para o cliente.
 
@@ -127,9 +127,9 @@ Pontos de atenção:
 
 - Função `gmb-post-create`:
   - Valida JWT do Clerk e carrega `company_id` via `profiles`.
-  - Garante que o `accountId` (Late Account ID) pertence à empresa (`gmb_accounts`) ou ao Admin SaaS.
-  - Valida o `accountId` contra a Late API antes de publicar.
-  - `LATE_API_KEY` é usada apenas server-side.
+  - Garante que o usuário tem acesso à empresa via `profiles.company_id` ou `saas_admin`.
+  - Usa `google_connections` e `selected_property_name` para autenticar na API do Google.
+  - Tokens de acesso são criptografados e armazenados apenas no servidor.
 
 ---
 
