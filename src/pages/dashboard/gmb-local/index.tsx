@@ -40,7 +40,6 @@ import {
   Loader2,
   MessageSquare,
   Star,
-  HelpCircle,
 } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
 import { useSupabaseClient } from "@/lib/supabase-context";
@@ -95,18 +94,6 @@ interface GmbReview {
   reviewReply?: { comment?: string | null; updateTime?: string | null } | null;
 }
 
-/** Pergunta do Google Business Profile Q&A API. */
-interface GmbQuestion {
-  name?: string | null;
-  author?: { displayName?: string | null } | null;
-  text?: string | null;
-  createTime?: string | null;
-  updateTime?: string | null;
-  upvoteCount?: number | null;
-  totalAnswerCount?: number | null;
-  topAnswers?: Array<{ author?: { displayName?: string | null } | null; text?: string | null } | null> | null;
-}
-
 // Fallback quando não há dados no banco
 const DEFAULT_HEALTH: Pick<
   GmbHealthCheck,
@@ -143,10 +130,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
   const [reviewsAverageRating, setReviewsAverageRating] = useState<number | null>(null);
   const [replyModal, setReplyModal] = useState<{ review: GmbReview; comment: string } | null>(null);
   const [replySubmitting, setReplySubmitting] = useState(false);
-  const [questions, setQuestions] = useState<GmbQuestion[]>([]);
-  const [questionsLoading, setQuestionsLoading] = useState(false);
-  const [answerModal, setAnswerModal] = useState<{ question: GmbQuestion; text: string } | null>(null);
-  const [answerSubmitting, setAnswerSubmitting] = useState(false);
   const COMPETITORS_PER_PAGE = 10;
   const RADIUS_OPTIONS = [1, 2, 3, 4, 5] as const;
 
@@ -417,98 +400,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
     }
   }, [replyModal, effectiveCompanyId, getToken, loadReviews, toast]);
 
-  const loadQuestions = useCallback(async () => {
-    if (!effectiveCompanyId || !getToken) return;
-    setQuestionsLoading(true);
-    setQuestions([]);
-    try {
-      const token = await getToken();
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-qa`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token ?? ""}`,
-        },
-        body: JSON.stringify({
-          action: "listQuestions",
-          company_id: effectiveCompanyId,
-          pageSize: 10,
-        }),
-      });
-      const data = (await res.json().catch(() => null)) as {
-        questions?: GmbQuestion[];
-        error?: string;
-        hint?: string;
-        code?: string;
-      };
-      if (!res.ok) {
-        const code = data?.code;
-        if (code === "NOT_CONNECTED" || code === "NO_LOCATION_SELECTED") {
-          return;
-        }
-        toast({
-          variant: "destructive",
-          title: data?.error ?? "Erro ao carregar perguntas",
-          description: data?.hint,
-        });
-        return;
-      }
-      setQuestions(data?.questions ?? []);
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao carregar perguntas",
-        description: getErrorMessage(err),
-      });
-    } finally {
-      setQuestionsLoading(false);
-    }
-  }, [effectiveCompanyId, getToken, toast]);
-
-  const handleAnswerSubmit = useCallback(async () => {
-    if (!answerModal || !effectiveCompanyId || !getToken) return;
-    const { question, text } = answerModal;
-    const questionName = question?.name ?? "";
-    if (!questionName || !text.trim()) return;
-    setAnswerSubmitting(true);
-    try {
-      const token = await getToken();
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-qa`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token ?? ""}`,
-        },
-        body: JSON.stringify({
-          action: "upsertAnswer",
-          company_id: effectiveCompanyId,
-          questionId: questionName,
-          text: text.trim(),
-        }),
-      });
-      const data = (await res.json().catch(() => null)) as { success?: boolean; error?: string; hint?: string };
-      if (!res.ok) {
-        toast({
-          variant: "destructive",
-          title: data?.error ?? "Erro ao responder",
-          description: data?.hint,
-        });
-        return;
-      }
-      toast({ title: "Resposta enviada com sucesso." });
-      setAnswerModal(null);
-      void loadQuestions();
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao responder",
-        description: getErrorMessage(err),
-      });
-    } finally {
-      setAnswerSubmitting(false);
-    }
-  }, [answerModal, effectiveCompanyId, getToken, loadQuestions, toast]);
-
   useEffect(() => {
     const placeType = companyData?.gmb_place_type?.trim();
     if (companyCoords && placeType) {
@@ -552,7 +443,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
         onValueChange={(v) => {
           if (v === "audit") {
             void loadReviews();
-            void loadQuestions();
           }
         }}
       >
@@ -723,45 +613,8 @@ export default function GMBLocal({ className }: GMBLocalProps) {
           </div>
         </TabsContent>
 
-        {/* ABA 2: GMB AUDIT (BOTÕES + REVIEWS) */}
+        {/* ABA 2: GMB AUDIT (REVIEWS) */}
         <TabsContent value="audit" className="flex-1 min-h-0 flex flex-col gap-6 py-6 overflow-auto mt-0 data-[state=inactive]:hidden">
-          <Card className="w-full max-w-2xl border-t-4 border-t-accent shadow-md shrink-0">
-            <CardHeader className="flex flex-row justify-between border-b border-border">
-              <div>
-                <CardTitle className="text-2xl font-bold">
-                  {companyData?.nome_fantasia ?? "Empresa"}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {[companyData?.gmb_place_type, companyData?.cidade, companyData?.uf]
-                    .filter(Boolean)
-                    .join(" • ")}
-                  {![companyData?.gmb_place_type, companyData?.cidade].some(Boolean) && "—"}
-                </p>
-              </div>
-              <Badge
-                variant={reviewsTotalCount > 0 ? "secondary" : "destructive"}
-                className="uppercase text-[10px]"
-              >
-                {reviewsTotalCount > 0
-                  ? `${reviewsTotalCount} review${reviewsTotalCount !== 1 ? "s" : ""}`
-                  : "Sem Reviews"}
-              </Badge>
-            </CardHeader>
-            <CardContent className="p-8 grid grid-cols-2 gap-4">
-              {["Basic Audit", "Teleport", "Review Audit", "Post Audit"].map(
-                (btn) => (
-                  <button
-                    key={btn}
-                    type="button"
-                    className="bg-accent/10 text-accent-foreground p-6 rounded-xl font-black text-sm border-2 border-accent/20 hover:bg-accent/20 transition uppercase"
-                  >
-                    {btn}
-                  </button>
-                )
-              )}
-            </CardContent>
-          </Card>
-
           {/* Seção Reviews */}
           <Card className="w-full max-w-2xl border-border shrink-0">
             <CardHeader className="border-b border-border">
@@ -858,80 +711,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
               )}
             </CardContent>
           </Card>
-
-          {/* Seção Q&A */}
-          <Card className="w-full max-w-2xl border-border shrink-0">
-            <CardHeader className="border-b border-border">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <HelpCircle className="w-5 h-5" />
-                Perguntas e Respostas
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Responda às perguntas dos clientes no Google. A API de Q&A será descontinuada em nov/2025.
-              </p>
-            </CardHeader>
-            <CardContent className="p-4">
-              {questionsLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : questions.length === 0 ? (
-                <div className="p-6 rounded-lg border border-dashed border-border bg-muted/30 text-center text-sm text-muted-foreground">
-                  Nenhuma pergunta encontrada.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {questions.map((q) => {
-                    const hasAnswer = (q.topAnswers?.length ?? 0) > 0;
-                    return (
-                      <div
-                        key={q.name ?? q.text ?? Math.random()}
-                        className="p-4 rounded-lg border border-border bg-card"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground">
-                              {q.author?.displayName ?? "Anônimo"} perguntou:
-                            </p>
-                            {q.text && (
-                              <p className="text-sm text-foreground mt-1 whitespace-pre-wrap">
-                                {q.text}
-                              </p>
-                            )}
-                            {hasAnswer && q.topAnswers?.[0] && (
-                              <div className="mt-2 pl-3 border-l-2 border-primary/30">
-                                <p className="text-xs text-muted-foreground font-medium">
-                                  Sua resposta:
-                                </p>
-                                <p className="text-sm text-foreground mt-0.5">
-                                  {q.topAnswers[0]?.text}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                          {!hasAnswer && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="shrink-0"
-                              onClick={() =>
-                                setAnswerModal({
-                                  question: q,
-                                  text: q.topAnswers?.[0]?.text ?? "",
-                                })
-                              }
-                            >
-                              Responder
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* Modal Responder Review */}
@@ -978,64 +757,6 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                     disabled={replySubmitting || !replyModal.comment.trim()}
                   >
                     {replySubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Enviando...
-                      </>
-                    ) : (
-                      "Enviar resposta"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
-
-        {/* Modal Responder Pergunta (Q&A) */}
-        <Dialog
-          open={!!answerModal}
-          onOpenChange={(open) => !open && setAnswerModal(null)}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Responder à pergunta</DialogTitle>
-              <DialogDescription>
-                Sua resposta será publicada no Google.
-              </DialogDescription>
-            </DialogHeader>
-            {answerModal && (
-              <>
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Pergunta: &quot;{answerModal.question.text?.slice(0, 150)}
-                    {answerModal.question.text && answerModal.question.text.length > 150 ? "…" : ""}&quot;
-                  </p>
-                  <Textarea
-                    placeholder="Digite sua resposta..."
-                    value={answerModal.text}
-                    onChange={(e) =>
-                      setAnswerModal((prev) =>
-                        prev ? { ...prev, text: e.target.value } : null
-                      )
-                    }
-                    rows={4}
-                    className="resize-none"
-                  />
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setAnswerModal(null)}
-                    disabled={answerSubmitting}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={() => void handleAnswerSubmit()}
-                    disabled={answerSubmitting || !answerModal.text.trim()}
-                  >
-                    {answerSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Enviando...
