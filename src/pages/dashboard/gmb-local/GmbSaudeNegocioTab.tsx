@@ -30,7 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { MapPin, Phone, Loader2, ImagePlus, Pencil, ExternalLink, Briefcase, Clock } from "lucide-react";
+import { MapPin, Phone, Loader2, ImagePlus, Pencil, ExternalLink, Briefcase, Clock, Trash2 } from "lucide-react";
 import { getErrorMessage, cn } from "@/lib/utils";
 import type { CompanyData } from "./types";
 
@@ -181,8 +181,11 @@ export function GmbSaudeNegocioTab({
   const [editServiceAreaRegion, setEditServiceAreaRegion] = useState("");
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
   const [serviceDescriptions, setServiceDescriptions] = useState<Record<string, string>>({});
+  const [servicePrices, setServicePrices] = useState<Record<string, { type: "none" | "fixed"; value?: string }>>({});
   const [serviceDescriptionModal, setServiceDescriptionModal] = useState<{ serviceTypeId: string; displayName: string } | null>(null);
   const [serviceDescriptionDraft, setServiceDescriptionDraft] = useState("");
+  const [servicePriceTypeDraft, setServicePriceTypeDraft] = useState<"none" | "fixed">("none");
+  const [servicePriceValueDraft, setServicePriceValueDraft] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const freeFormItems = useMemo(() => {
@@ -254,17 +257,32 @@ export function GmbSaudeNegocioTab({
     setEditServiceAreaRegion(sa?.regionCode ?? "");
   }, [gmbProfile, companyData]);
 
-  /** Sincroniza descrições dos serviços vindas da API. */
+  /** Sincroniza descrições e preços dos serviços vindas da API. */
   useEffect(() => {
     if (!gmbServices?.serviceItems?.length) return;
-    const next: Record<string, string> = {};
+    const nextDesc: Record<string, string> = {};
+    const nextPrice: Record<string, { type: "none" | "fixed"; value?: string }> = {};
     for (const item of gmbServices.serviceItems) {
-      const s = item as { structuredServiceItem?: { serviceTypeId?: string; description?: string } };
+      const s = item as {
+        price?: { currencyCode?: string; units?: string; nanos?: number };
+        structuredServiceItem?: { serviceTypeId?: string; description?: string };
+      };
       const sid = s?.structuredServiceItem?.serviceTypeId;
+      if (!sid) continue;
       const desc = s?.structuredServiceItem?.description?.trim();
-      if (sid && desc) next[sid] = desc;
+      if (desc) nextDesc[sid] = desc;
+      const price = s?.price;
+      if (price?.units != null && (price.units !== "0" || (price.nanos ?? 0) > 0)) {
+        const units = parseInt(price.units, 10) || 0;
+        const nanos = price.nanos ?? 0;
+        const val = nanos > 0 ? `${units}.${String(Math.round(nanos / 1e7)).padStart(2, "0")}` : String(units);
+        nextPrice[sid] = { type: "fixed", value: val };
+      } else {
+        nextPrice[sid] = { type: "none" };
+      }
     }
-    setServiceDescriptions((prev) => ({ ...prev, ...next }));
+    setServiceDescriptions((prev) => ({ ...prev, ...nextDesc }));
+    setServicePrices((prev) => ({ ...prev, ...nextPrice }));
   }, [gmbServices?.serviceItems]);
 
   useEffect(() => {
@@ -278,11 +296,25 @@ export function GmbSaudeNegocioTab({
     try {
       const structuredItems = Array.from(selectedServiceIds).map((id) => {
         const desc = serviceDescriptions[id]?.trim();
-        return {
+        const priceState = servicePrices[id] ?? { type: "none" as const };
+        const base = {
           structuredServiceItem: desc
             ? { serviceTypeId: id, description: desc }
             : { serviceTypeId: id },
         };
+        if (priceState.type === "fixed" && priceState.value?.trim()) {
+          const parsed = parseFloat(priceState.value.replace(",", "."));
+          if (!Number.isNaN(parsed) && parsed >= 0) {
+            const units = Math.floor(parsed);
+            const nanos = Math.round((parsed - units) * 1e9);
+            (base as Record<string, unknown>).price = {
+              currencyCode: "BRL",
+              units: String(units),
+              nanos,
+            };
+          }
+        }
+        return base;
       });
       const payload = [...structuredItems, ...freeFormItems];
       await onServicesUpdate(payload);
@@ -297,12 +329,39 @@ export function GmbSaudeNegocioTab({
     const displayName = svc.displayName ?? formatServiceTypeDisplayName(svc.serviceTypeId);
     setServiceDescriptionModal({ serviceTypeId: svc.serviceTypeId, displayName });
     setServiceDescriptionDraft(serviceDescriptions[svc.serviceTypeId] ?? "");
+    const priceState = servicePrices[svc.serviceTypeId] ?? { type: "none" as const };
+    setServicePriceTypeDraft(priceState.type);
+    setServicePriceValueDraft(priceState.value ?? "");
   };
 
   const handleSaveServiceDescription = () => {
     if (!serviceDescriptionModal) return;
     const trimmed = serviceDescriptionDraft.trim().slice(0, 300);
     setServiceDescriptions((prev) => ({ ...prev, [serviceDescriptionModal.serviceTypeId]: trimmed }));
+    const priceType = servicePriceTypeDraft;
+    const priceVal = servicePriceTypeDraft === "fixed" && servicePriceValueDraft.trim() ? servicePriceValueDraft.trim() : undefined;
+    setServicePrices((prev) => ({
+      ...prev,
+      [serviceDescriptionModal.serviceTypeId]: { type: priceType, value: priceVal },
+    }));
+    setServiceDescriptionModal(null);
+  };
+
+  const handleDeleteService = () => {
+    if (!serviceDescriptionModal) return;
+    setSelectedServiceIds((prev) => {
+      const next = new Set(prev);
+      next.delete(serviceDescriptionModal.serviceTypeId);
+      return next;
+    });
+    setServiceDescriptions((prev) => {
+      const { [serviceDescriptionModal.serviceTypeId]: _, ...rest } = prev;
+      return rest;
+    });
+    setServicePrices((prev) => {
+      const { [serviceDescriptionModal.serviceTypeId]: _, ...rest } = prev;
+      return rest;
+    });
     setServiceDescriptionModal(null);
   };
 
@@ -783,31 +842,61 @@ export function GmbSaudeNegocioTab({
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Descrição do serviço</DialogTitle>
-            <DialogDescription>
-              {serviceDescriptionModal && (
-                <>
-                  Adicione um texto para &quot;{serviceDescriptionModal.displayName}&quot;. Máximo 300 caracteres.
-                </>
-              )}
-            </DialogDescription>
+            <DialogTitle>Editar serviço</DialogTitle>
+            {serviceDescriptionModal && (
+              <div className="space-y-1 pt-1">
+                <Label className="text-muted-foreground font-normal">Serviço</Label>
+                <p className="text-base font-medium">{serviceDescriptionModal.displayName}</p>
+              </div>
+            )}
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="service-desc">Texto da descrição</Label>
+            <div className="space-y-2">
+              <Label>Preço</Label>
+              <div className="flex gap-2">
+                <Select value={servicePriceTypeDraft} onValueChange={(v) => setServicePriceTypeDraft(v as "none" | "fixed")}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem preço</SelectItem>
+                    <SelectItem value="fixed">Preço fixo</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Preço do serviço (BRL)"
+                  value={servicePriceValueDraft}
+                  onChange={(e) => setServicePriceValueDraft(e.target.value.replace(/[^0-9,.]/g, ""))}
+                  disabled={servicePriceTypeDraft === "none"}
+                  className="flex-1"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="service-desc">Descrição do serviço</Label>
               <Textarea
                 id="service-desc"
                 value={serviceDescriptionDraft}
                 onChange={(e) => setServiceDescriptionDraft(e.target.value.slice(0, 300))}
-                placeholder="Ex: Consultoria personalizada para estratégias de marketing digital."
+                placeholder="Ex: A melhor solução para e-mail marketing."
                 rows={4}
                 maxLength={300}
                 className="resize-none"
               />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground text-right">
                 {serviceDescriptionDraft.length}/300 caracteres
               </p>
             </div>
+
+            <button
+              type="button"
+              onClick={handleDeleteService}
+              className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/90 hover:underline"
+            >
+              <Trash2 className="w-4 h-4" />
+              Excluir serviço
+            </button>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setServiceDescriptionModal(null)}>
