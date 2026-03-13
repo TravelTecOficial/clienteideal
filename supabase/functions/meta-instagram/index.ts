@@ -1304,6 +1304,8 @@ async function handleDisconnect(
       ? (body.service as MetaService)
       : "instagram"
 
+  // DELETE remove a linha por completo (token, IDs, etc.). O N8N (meta-connections-n8n)
+  // consulta meta_connections e não encontrará a conexão após o delete.
   const { error } = await supabase
     .from("meta_connections")
     .delete()
@@ -1341,35 +1343,18 @@ Deno.serve(async (req) => {
   }
 
   const action = body?.action
-  // #region agent log - meta-instagram request received
-  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "f42ba2",
-    },
-    body: JSON.stringify({
-      sessionId: "f42ba2",
-      runId: "pre-fix-1",
-      hypothesisId: "H1",
-      location: "supabase/functions/meta-instagram/index.ts:891",
-      message: "meta-instagram request received",
-      data: { action },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion agent log - meta-instagram request received
 
   if (!action) {
     return jsonResponse({ error: "Parâmetro 'action' é obrigatório." }, 400)
   }
 
-  const authResult = await requireAuthAndCompany(req, body)
-  if (authResult.error) return authResult.error
-  const ctx = authResult.ctx as AuthContext
-  const supabase = authResult.supabase as ReturnType<typeof createClient>
+  try {
+    const authResult = await requireAuthAndCompany(req, body)
+    if (authResult.error) return authResult.error
+    const ctx = authResult.ctx as AuthContext
+    const supabase = authResult.supabase as ReturnType<typeof createClient>
 
-  switch (action) {
+    switch (action) {
     case "getLoginUrl":
       return handleGetLoginUrl(body as GetLoginUrlBody)
     case "exchangeCode":
@@ -1391,26 +1376,18 @@ Deno.serve(async (req) => {
     case "disconnect":
       return handleDisconnect(body as DisconnectBody, ctx, supabase)
     default:
-      // #region agent log - meta-instagram unsupported action
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "f42ba2",
-        },
-        body: JSON.stringify({
-          sessionId: "f42ba2",
-          runId: "pre-fix-1",
-          hypothesisId: "H2",
-          location: "supabase/functions/meta-instagram/index.ts:918",
-          message: "meta-instagram unsupported action reached",
-          data: { action: String(action) },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion agent log - meta-instagram unsupported action
-
       return jsonResponse({ error: `Ação '${String(action)}' não suportada.` }, 400)
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error("[meta-instagram] Erro não tratado:", msg, err)
+    return jsonResponse(
+      {
+        error: "Erro interno ao processar requisição Meta.",
+        hint: msg.slice(0, 200),
+      },
+      500,
+    )
   }
 })
 
