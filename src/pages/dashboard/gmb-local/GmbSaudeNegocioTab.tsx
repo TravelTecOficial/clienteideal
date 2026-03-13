@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Accordion,
   AccordionContent,
@@ -77,6 +78,7 @@ interface GmbSaudeNegocioTabProps {
   supabase: ReturnType<typeof import("@/lib/supabase-context").useSupabaseClient>;
   gmbProfile: GmbProfile | Record<string, unknown> | null;
   gmbProfileLoading: boolean;
+  gmbProfileError?: string | null;
   gmbMediaItems: unknown[];
   gmbMediaLoading: boolean;
   gmbServices: { serviceItems: unknown[]; canModifyServiceList: boolean } | null;
@@ -145,6 +147,7 @@ export function GmbSaudeNegocioTab({
   effectiveCompanyId,
   gmbProfile,
   gmbProfileLoading,
+  gmbProfileError,
   gmbMediaItems,
   gmbMediaLoading,
   gmbServices,
@@ -454,6 +457,12 @@ export function GmbSaudeNegocioTab({
   return (
     <div className="flex-1 min-h-0 overflow-auto grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
       <div className="lg:col-span-2 space-y-6">
+        {gmbProfileError && (
+          <Alert variant="destructive">
+            <AlertTitle>Erro ao carregar perfil</AlertTitle>
+            <AlertDescription>{gmbProfileError}</AlertDescription>
+          </Alert>
+        )}
         <Accordion type="single" collapsible defaultValue="perfil" className="w-full">
           <AccordionItem value="perfil">
             <AccordionTrigger>

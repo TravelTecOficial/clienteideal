@@ -139,6 +139,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
   // ABA Saúde do Negócio: perfil GMB, mídia e serviços
   const [gmbProfile, setGmbProfile] = useState<Record<string, unknown> | null>(null);
   const [gmbProfileLoading, setGmbProfileLoading] = useState(false);
+  const [gmbProfileError, setGmbProfileError] = useState<string | null>(null);
   const [gmbMediaItems, setGmbMediaItems] = useState<unknown[]>([]);
   const [gmbMediaLoading, setGmbMediaLoading] = useState(false);
   const [gmbServices, setGmbServices] = useState<{ serviceItems: unknown[]; canModifyServiceList: boolean } | null>(null);
@@ -154,6 +155,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
   const loadGmbProfile = useCallback(async () => {
     if (!effectiveCompanyId || !getToken) return;
     setGmbProfileLoading(true);
+    setGmbProfileError(null);
     try {
       const token = await getToken();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-profile`, {
@@ -162,14 +164,49 @@ export default function GMBLocal({ className }: GMBLocalProps) {
         body: JSON.stringify({ action: "get", company_id: effectiveCompanyId }),
       });
       const data = (await res.json().catch(() => ({}))) as { location?: Record<string, unknown>; error?: string; code?: string };
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9368ef" },
+        body: JSON.stringify({
+          sessionId: "9368ef",
+          location: "gmb-local/index.tsx:loadGmbProfile",
+          message: "gmb-profile response",
+          data: { status: res.status, ok: res.ok, code: data?.code, error: data?.error, hasLocation: !!data?.location },
+          timestamp: Date.now(),
+          hypothesisId: "H1",
+        }),
+      }).catch(() => {});
+      // #endregion
       if (!res.ok) {
-        if (data?.code === "NOT_CONNECTED" || data?.code === "NO_LOCATION_SELECTED") return;
-        toast({ variant: "destructive", title: data?.error ?? "Erro ao carregar perfil" });
+        if (data?.code === "NOT_CONNECTED" || data?.code === "NO_LOCATION_SELECTED") {
+          // #region agent log
+          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9368ef" },
+            body: JSON.stringify({
+              sessionId: "9368ef",
+              location: "gmb-local/index.tsx:loadGmbProfile:earlyReturn",
+              message: "Early return - no toast",
+              data: { code: data?.code },
+              timestamp: Date.now(),
+              hypothesisId: "H1",
+            }),
+          }).catch(() => {});
+          // #endregion
+          return;
+        }
+        const errMsg = data?.error ?? "Erro ao carregar perfil";
+        setGmbProfileError(errMsg);
+        toast({ variant: "destructive", title: errMsg });
         return;
       }
       setGmbProfile(data?.location ?? null);
+      setGmbProfileError(null);
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro", description: getErrorMessage(err) });
+      const errMsg = getErrorMessage(err);
+      setGmbProfileError(errMsg);
+      toast({ variant: "destructive", title: "Erro", description: errMsg });
     } finally {
       setGmbProfileLoading(false);
     }
@@ -993,6 +1030,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
             supabase={supabase}
             gmbProfile={gmbProfile}
             gmbProfileLoading={gmbProfileLoading}
+            gmbProfileError={gmbProfileError}
             gmbMediaItems={gmbMediaItems}
             gmbMediaLoading={gmbMediaLoading}
             gmbServices={gmbServices}
