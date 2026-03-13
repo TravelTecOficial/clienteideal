@@ -861,30 +861,33 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
   }, [companyId, getToken, toast]);
 
-  const handleSelectGoogleAnalyticsProperty = useCallback(async () => {
-    if (!companyId) {
-      toast({
-        variant: "destructive",
-        title: "Empresa não identificada",
-        description: "Acesse o painel com uma empresa selecionada antes de salvar a propriedade do GA4.",
-      });
-      return;
-    }
+  const handleSelectGoogleAnalyticsProperty = useCallback(
+    async (propertyOverride?: GoogleAnalyticsPropertyOption) => {
+      if (!companyId) {
+        toast({
+          variant: "destructive",
+          title: "Empresa não identificada",
+          description: "Acesse o painel com uma empresa selecionada antes de salvar a propriedade do GA4.",
+        });
+        return;
+      }
 
-    const selectedProperty =
-      googleAnalyticsProperties.find((property) => property.propertyName === selectedGoogleAnalyticsPropertyName) ?? null;
+      const selectedProperty =
+        propertyOverride ??
+        googleAnalyticsProperties.find((property) => property.propertyName === selectedGoogleAnalyticsPropertyName) ??
+        null;
 
-    if (!selectedProperty) {
-      toast({
-        variant: "destructive",
-        title: "Selecione uma propriedade",
-        description: "Escolha qual propriedade GA4 será vinculada a esta empresa antes de confirmar.",
-      });
-      return;
-    }
+      if (!selectedProperty) {
+        toast({
+          variant: "destructive",
+          title: "Selecione uma propriedade",
+          description: "Escolha qual propriedade GA4 será vinculada a esta empresa antes de confirmar.",
+        });
+        return;
+      }
 
-    setIsSavingGoogleAnalyticsProperty(true);
-    try {
+      setIsSavingGoogleAnalyticsProperty(true);
+      try {
       const token = await getToken();
       if (!token) {
         throw new Error("Token de autenticação indisponível. Faça login novamente.");
@@ -941,7 +944,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     } finally {
       setIsSavingGoogleAnalyticsProperty(false);
     }
-  }, [companyId, getToken, googleAnalyticsProperties, selectedGoogleAnalyticsPropertyName, toast]);
+    },
+    [companyId, getToken, googleAnalyticsProperties, selectedGoogleAnalyticsPropertyName, toast],
+  );
 
   const handleLoadMyBusinessLocations = useCallback(async () => {
     if (!companyId) {
@@ -1018,30 +1023,33 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
   }, [companyId, getToken, toast]);
 
-  const handleSelectMyBusinessLocation = useCallback(async () => {
-    if (!companyId) {
-      toast({
-        variant: "destructive",
-        title: "Empresa não identificada",
-        description: "Acesse o painel com uma empresa selecionada antes de salvar o perfil do Meu Negócio.",
-      });
-      return;
-    }
+  const handleSelectMyBusinessLocation = useCallback(
+    async (locationOverride?: GoogleAnalyticsPropertyOption) => {
+      if (!companyId) {
+        toast({
+          variant: "destructive",
+          title: "Empresa não identificada",
+          description: "Acesse o painel com uma empresa selecionada antes de salvar o perfil do Meu Negócio.",
+        });
+        return;
+      }
 
-    const selectedLocation =
-      myBusinessLocations.find((loc) => loc.propertyName === selectedMyBusinessPropertyName) ?? null;
+      const selectedLocation =
+        locationOverride ??
+        myBusinessLocations.find((loc) => loc.propertyName === selectedMyBusinessPropertyName) ??
+        null;
 
-    if (!selectedLocation) {
-      toast({
-        variant: "destructive",
-        title: "Selecione um perfil",
-        description: "Escolha qual perfil do Meu Negócio será vinculado a esta empresa antes de confirmar.",
-      });
-      return;
-    }
+      if (!selectedLocation) {
+        toast({
+          variant: "destructive",
+          title: "Selecione um perfil",
+          description: "Escolha qual perfil do Meu Negócio será vinculado a esta empresa antes de confirmar.",
+        });
+        return;
+      }
 
-    setIsSavingMyBusinessLocation(true);
-    try {
+      setIsSavingMyBusinessLocation(true);
+      try {
       const token = await getToken();
       if (!token) {
         throw new Error("Token de autenticação indisponível. Faça login novamente.");
@@ -1098,7 +1106,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     } finally {
       setIsSavingMyBusinessLocation(false);
     }
-  }, [companyId, getToken, myBusinessLocations, selectedMyBusinessPropertyName, toast]);
+    },
+    [companyId, getToken, myBusinessLocations, selectedMyBusinessPropertyName, toast],
+  );
 
   const handleMetaDisconnect = useCallback(
     async (service: "instagram" | "facebook" | "meta_ads") => {
@@ -1365,6 +1375,12 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       void fetchAdsAccountInfo();
     }
   }, [section, companyId, isAdsConnected, adsAccountDisplayName, fetchAdsAccountInfo]);
+
+  useEffect(() => {
+    if (section !== "integracoes" || !companyId) return;
+    if (isGA4Connected && googleAnalyticsProperties.length === 0) void handleLoadGoogleAnalyticsProperties();
+    if (isMyBusinessConnected && myBusinessLocations.length === 0) void handleLoadMyBusinessLocations();
+  }, [section, companyId, isGA4Connected, isMyBusinessConnected, googleAnalyticsProperties.length, myBusinessLocations.length]);
 
   // Carregar empresas para admin quando companyId é null (seletor de empresa)
   useEffect(() => {
@@ -3037,6 +3053,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                     ].map((int) => {
                       const Icon = int.icon;
                       const isMetaCard = int.id === "instagram" || int.id === "facebook" || int.id === "meta-ads";
+                      const isGoogleCard =
+                        int.id === "google-analytics" || int.id === "google-ads" || int.id === "google-meu-negocio";
                       const metaAccountsForCard =
                         int.id === "instagram"
                           ? metaAccountsInstagram
@@ -3070,34 +3088,21 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           <div className="flex flex-col items-center gap-2">
                             <Icon className="h-10 w-10 shrink-0 text-foreground" style={{ width: 40, height: 40 }} />
                             <p className="text-sm font-medium text-foreground">{int.name}</p>
-                            {int.id === "google-ads" && (
-                              <>
-                                {adsAccountDisplayName ? (
-                                  <p className="text-xs font-mono text-muted-foreground">Conta: {adsAccountDisplayName}</p>
-                                ) : (
-                                  <Button
-                                    variant="link"
-                                    size="sm"
-                                    className="h-auto p-0 text-xs text-muted-foreground"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      void fetchAdsAccountInfo();
-                                    }}
-                                  >
-                                    Carregar número da conta
-                                  </Button>
-                                )}
-                              </>
-                            )}
                           </div>
                           <div className="flex w-full flex-col gap-2">
                             <Button
                               size="sm"
-                              variant={int.connected && isMetaCard ? "warning" : int.connected ? "outline" : "default"}
+                              variant={
+                                int.connected && (isMetaCard || isGoogleCard)
+                                  ? "warning"
+                                  : int.connected
+                                    ? "outline"
+                                    : "default"
+                              }
                               disabled={int.connecting || (int.disabled ?? false) || !companyId}
                               className="w-full"
                               onClick={
-                                int.connected && isMetaCard && int.onDisconnect
+                                int.connected && (isMetaCard || isGoogleCard) && int.onDisconnect
                                   ? int.onDisconnect
                                   : int.reloadHint
                                     ? () => window.location.reload()
@@ -3109,7 +3114,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                   Conectando…
                                 </>
-                              ) : int.connected && isMetaCard ? (
+                              ) : int.connected && (isMetaCard || isGoogleCard) ? (
                                 "Desconectar"
                               ) : int.connected ? (
                                 <>
@@ -3178,7 +3183,116 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                 </Select>
                               </div>
                             )}
-                            {int.connected && !isMetaCard && int.onDisconnect && (
+                            {int.connected && isGoogleCard && int.onDisconnect && (
+                              <div className="w-full space-y-1">
+                                <Label className="text-xs text-muted-foreground">
+                                  {int.id === "google-analytics"
+                                    ? "Propriedade GA4"
+                                    : int.id === "google-ads"
+                                      ? "Conta"
+                                      : "Perfil"}
+                                </Label>
+                                <Select
+                                  value={
+                                    int.id === "google-analytics"
+                                      ? selectedGoogleAnalyticsPropertyName ?? ""
+                                      : int.id === "google-ads"
+                                        ? (adsAccountDisplayName ? "ads_account" : "")
+                                        : selectedMyBusinessPropertyName ?? ""
+                                  }
+                                  onOpenChange={(open) => {
+                                    if (open && companyId) {
+                                      if (int.id === "google-analytics" && googleAnalyticsProperties.length === 0)
+                                        void handleLoadGoogleAnalyticsProperties();
+                                      if (int.id === "google-meu-negocio" && myBusinessLocations.length === 0)
+                                        void handleLoadMyBusinessLocations();
+                                      if (int.id === "google-ads" && !adsAccountDisplayName) void fetchAdsAccountInfo();
+                                    }
+                                  }}
+                                  onValueChange={(value) => {
+                                    if (value === "__load__") {
+                                      if (int.id === "google-analytics") void handleLoadGoogleAnalyticsProperties();
+                                      else if (int.id === "google-meu-negocio") void handleLoadMyBusinessLocations();
+                                      else if (int.id === "google-ads") void fetchAdsAccountInfo();
+                                      return;
+                                    }
+                                    if (int.id === "google-analytics") {
+                                      const prop = googleAnalyticsProperties.find((p) => p.propertyName === value);
+                                      if (prop) void handleSelectGoogleAnalyticsProperty(prop);
+                                    } else if (int.id === "google-meu-negocio") {
+                                      const loc = myBusinessLocations.find((l) => l.propertyName === value);
+                                      if (loc) void handleSelectMyBusinessLocation(loc);
+                                    }
+                                  }}
+                                  disabled={
+                                    (int.id === "google-analytics" && isLoadingGoogleAnalyticsProperties) ||
+                                    (int.id === "google-meu-negocio" && isLoadingMyBusinessLocations) ||
+                                    !companyId
+                                  }
+                                >
+                                  <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue
+                                      placeholder={
+                                        int.id === "google-analytics"
+                                          ? isLoadingGoogleAnalyticsProperties
+                                            ? "Carregando…"
+                                            : googleAnalyticsProperties.length === 0
+                                              ? "Clique para carregar"
+                                              : "Selecione"
+                                          : int.id === "google-ads"
+                                            ? adsAccountDisplayName || "Carregar número da conta"
+                                            : isLoadingMyBusinessLocations
+                                              ? "Carregando…"
+                                              : myBusinessLocations.length === 0
+                                                ? "Clique para carregar"
+                                                : "Selecione"
+                                      }
+                                    />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {int.id === "google-analytics" &&
+                                      (googleAnalyticsProperties.length === 0 && !isLoadingGoogleAnalyticsProperties ? (
+                                        <SelectItem value="__load__" onSelect={() => void handleLoadGoogleAnalyticsProperties()}>
+                                          Carregar propriedades
+                                        </SelectItem>
+                                      ) : (
+                                        googleAnalyticsProperties.map((prop) => (
+                                          <SelectItem key={prop.propertyName} value={prop.propertyName}>
+                                            {prop.accountDisplayName} — {prop.propertyDisplayName}
+                                            {prop.isSelected ? " ✓" : ""}
+                                          </SelectItem>
+                                        ))
+                                      ))}
+                                    {int.id === "google-ads" && (
+                                      <>
+                                        {!adsAccountDisplayName && (
+                                          <SelectItem value="__load__" onSelect={() => void fetchAdsAccountInfo()}>
+                                            Carregar número da conta
+                                          </SelectItem>
+                                        )}
+                                        {adsAccountDisplayName && (
+                                          <SelectItem value="ads_account">{adsAccountDisplayName}</SelectItem>
+                                        )}
+                                      </>
+                                    )}
+                                    {int.id === "google-meu-negocio" &&
+                                      (myBusinessLocations.length === 0 && !isLoadingMyBusinessLocations ? (
+                                        <SelectItem value="__load__" onSelect={() => void handleLoadMyBusinessLocations()}>
+                                          Carregar perfis
+                                        </SelectItem>
+                                      ) : (
+                                        myBusinessLocations.map((loc) => (
+                                          <SelectItem key={loc.propertyName} value={loc.propertyName}>
+                                            {loc.accountDisplayName} — {loc.propertyDisplayName}
+                                            {loc.isSelected ? " ✓" : ""}
+                                          </SelectItem>
+                                        ))
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                            {int.connected && !isMetaCard && !isGoogleCard && int.onDisconnect && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -3311,158 +3425,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                     </Dialog>
                   </div>
 
-                  {isGA4Connected && googleAnalyticsProperties.length === 0 && (
-                    <div className="mt-6 flex flex-col items-start gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isLoadingGoogleAnalyticsProperties}
-                        onClick={handleLoadGoogleAnalyticsProperties}
-                      >
-                        {isLoadingGoogleAnalyticsProperties ? (
-                          <>
-                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                            Buscando propriedades…
-                          </>
-                        ) : (
-                          <>Ver propriedades do GA4</>
-                        )}
-                      </Button>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedGoogleAnalyticsPropertyLabel
-                          ? `Propriedade atual: ${selectedGoogleAnalyticsPropertyLabel}`
-                          : "Carregue as propriedades da conta Google conectada para escolher qual será vinculada a esta empresa."}
-                      </p>
-                    </div>
-                  )}
-
-                  {(googleAnalyticsProperties.length > 0 || selectedGoogleAnalyticsPropertyLabel) && (
-                    <div className="mt-6 space-y-3">
-                      <h3 className="text-sm font-medium">Selecionar propriedade do Google Analytics</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Escolha qual propriedade GA4 da conta conectada será usada como padrão nesta empresa.
-                      </p>
-                      {selectedGoogleAnalyticsPropertyLabel && (
-                        <p className="text-xs text-muted-foreground">
-                          Seleção atual: {selectedGoogleAnalyticsPropertyLabel}
-                        </p>
-                      )}
-                      {googleAnalyticsProperties.length > 0 && (
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                          <div className="w-full space-y-1 sm:max-w-xl">
-                            <Label htmlFor="google-analytics-property">Propriedade GA4</Label>
-                            <Select
-                              value={selectedGoogleAnalyticsPropertyName ?? ""}
-                              onValueChange={(value) => setSelectedGoogleAnalyticsPropertyName(value)}
-                            >
-                              <SelectTrigger id="google-analytics-property">
-                                <SelectValue placeholder="Selecione uma propriedade" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {googleAnalyticsProperties.map((property) => (
-                                  <SelectItem key={property.propertyName} value={property.propertyName}>
-                                    {property.accountDisplayName} — {property.propertyDisplayName}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Button
-                            type="button"
-                            className="sm:ml-2"
-                            disabled={!selectedGoogleAnalyticsPropertyName || isSavingGoogleAnalyticsProperty}
-                            onClick={handleSelectGoogleAnalyticsProperty}
-                          >
-                            {isSavingGoogleAnalyticsProperty ? (
-                              <>
-                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                Salvando…
-                              </>
-                            ) : (
-                              <>Confirmar propriedade</>
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {isMyBusinessConnected && myBusinessLocations.length === 0 && (
-                    <div className="mt-6 flex flex-col items-start gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isLoadingMyBusinessLocations}
-                        onClick={handleLoadMyBusinessLocations}
-                      >
-                        {isLoadingMyBusinessLocations ? (
-                          <>
-                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                            Buscando perfis…
-                          </>
-                        ) : (
-                          <>Ver perfis do Meu Negócio</>
-                        )}
-                      </Button>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedMyBusinessPropertyLabel
-                          ? `Perfil atual: ${selectedMyBusinessPropertyLabel}`
-                          : "Carregue os perfis da conta Google conectada para escolher qual será vinculado a esta empresa."}
-                      </p>
-                    </div>
-                  )}
-
-                  {(myBusinessLocations.length > 0 || selectedMyBusinessPropertyLabel) && (
-                    <div className="mt-6 space-y-3">
-                      <h3 className="text-sm font-medium">Selecionar perfil do Google Meu Negócio</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Escolha qual perfil da conta conectada será usado como padrão nesta empresa.
-                      </p>
-                      {selectedMyBusinessPropertyLabel && (
-                        <p className="text-xs text-muted-foreground">
-                          Seleção atual: {selectedMyBusinessPropertyLabel}
-                        </p>
-                      )}
-                      {myBusinessLocations.length > 0 && (
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                          <div className="w-full space-y-1 sm:max-w-xl">
-                            <Label htmlFor="mybusiness-location">Perfil Meu Negócio</Label>
-                            <Select
-                              value={selectedMyBusinessPropertyName ?? ""}
-                              onValueChange={(value) => setSelectedMyBusinessPropertyName(value)}
-                            >
-                              <SelectTrigger id="mybusiness-location">
-                                <SelectValue placeholder="Selecione um perfil" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {myBusinessLocations.map((loc) => (
-                                  <SelectItem key={loc.propertyName} value={loc.propertyName}>
-                                    {loc.accountDisplayName} — {loc.propertyDisplayName}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Button
-                            type="button"
-                            className="sm:ml-2"
-                            disabled={!selectedMyBusinessPropertyName || isSavingMyBusinessLocation}
-                            onClick={handleSelectMyBusinessLocation}
-                          >
-                            {isSavingMyBusinessLocation ? (
-                              <>
-                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                Salvando…
-                              </>
-                            ) : (
-                              <>Confirmar perfil</>
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {whatsappPhoneNumbers.length > 0 && (
                     <div className="mt-6 space-y-3">
                       <h3 className="text-sm font-medium">Selecione o número do WhatsApp</h3>
@@ -3505,57 +3467,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           )}
                         </Button>
                       </div>
-                    </div>
-                  )}
-
-                  {selectedInstagramId && (
-                    <div className="mt-6 space-y-3">
-                      <h3 className="text-sm font-medium">
-                        Métricas do Instagram{" "}
-                        <span className="font-mono text-[11px] align-middle">
-                          ({selectedInstagramId})
-                        </span>
-                      </h3>
-                      {isLoadingMetaInsights ? (
-                        <div className="flex min-h-[80px] items-center justify-center">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : metaInsights && metaInsights.length > 0 ? (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          {metaInsights.map((metric) => {
-                            const latest = metric.values[metric.values.length - 1];
-                            const label =
-                              metric.metric === "reach"
-                                ? "Alcance (último dia)"
-                                : metric.metric === "profile_views"
-                                  ? "Visualizações de perfil (último dia)"
-                                  : metric.metric;
-                            return (
-                              <Card key={metric.metric}>
-                                <CardHeader className="pb-2">
-                                  <CardTitle className="text-sm">{label}</CardTitle>
-                                  <CardDescription>Período diário (period=day)</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                  <p className="text-2xl font-semibold">
-                                    {latest ? latest.value.toLocaleString("pt-BR") : "—"}
-                                  </p>
-                                  {latest?.endTime && (
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                      Até {new Date(latest.endTime).toLocaleDateString("pt-BR")}
-                                    </p>
-                                  )}
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          Nenhuma métrica carregada ainda. Clique em uma conta com Instagram
-                          vinculado para buscar os dados.
-                        </p>
-                      )}
                     </div>
                   )}
 
