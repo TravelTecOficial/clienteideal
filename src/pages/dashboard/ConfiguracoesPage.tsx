@@ -318,9 +318,24 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
 
   const [isLoadingMetaAccounts, setIsLoadingMetaAccounts] = useState(false);
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
+  const [metaAccountsService, setMetaAccountsService] = useState<"instagram" | "facebook" | "meta_ads" | null>(null);
   const [isLoadingMetaInsights, setIsLoadingMetaInsights] = useState(false);
   const [selectedInstagramId, setSelectedInstagramId] = useState<string | null>(null);
   const [metaInsights, setMetaInsights] = useState<InstagramMetric[] | null>(null);
+  const [metaInstagramDisplay, setMetaInstagramDisplay] = useState<{
+    page_name?: string;
+    instagram_id?: string;
+    instagram_username?: string;
+  } | null>(null);
+  const [metaFacebookDisplay, setMetaFacebookDisplay] = useState<{
+    page_name?: string;
+    instagram_id?: string;
+    instagram_username?: string;
+  } | null>(null);
+  const [metaAdsDisplay, setMetaAdsDisplay] = useState<{
+    ad_account_id?: string;
+    ad_account_name?: string;
+  } | null>(null);
 
   const [isWhatsappConnecting, setIsWhatsappConnecting] = useState(false);
   const [isMetaSdkReady, setIsMetaSdkReady] = useState(false);
@@ -1161,6 +1176,53 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
   }, [companyId, getToken]);
 
+  const loadMetaConnectionSummary = useCallback(async () => {
+    if (!companyId) {
+      setMetaInstagramDisplay(null);
+      setMetaFacebookDisplay(null);
+      setMetaAdsDisplay(null);
+      return;
+    }
+    if (!isInstagramConnected && !isFacebookConnected && !isMetaAdsConnected) {
+      setMetaInstagramDisplay(null);
+      setMetaFacebookDisplay(null);
+      setMetaAdsDisplay(null);
+      return;
+    }
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ action: "getConnectionSummary", company_id: companyId, token }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        instagram?: { page_name?: string; instagram_id?: string; instagram_username?: string };
+        facebook?: { page_name?: string; instagram_id?: string; instagram_username?: string };
+        meta_ads?: { ad_account_id?: string; ad_account_name?: string };
+        error?: string;
+      } | null;
+      if (res.ok && data && !data.error) {
+        setMetaInstagramDisplay(data.instagram ?? null);
+        setMetaFacebookDisplay(data.facebook ?? null);
+        setMetaAdsDisplay(data.meta_ads ?? null);
+      } else {
+        setMetaInstagramDisplay(null);
+        setMetaFacebookDisplay(null);
+        setMetaAdsDisplay(null);
+      }
+    } catch {
+      setMetaInstagramDisplay(null);
+      setMetaFacebookDisplay(null);
+      setMetaAdsDisplay(null);
+    }
+  }, [companyId, getToken, isInstagramConnected, isFacebookConnected, isMetaAdsConnected]);
+
   const loadWordpressConnection = useCallback(async () => {
     if (!companyId) {
       setIsWordpressConnected(false);
@@ -1268,6 +1330,23 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       void loadWordpressConnection();
     }
   }, [section, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState, loadWordpressConnection]);
+
+  useEffect(() => {
+    if (
+      section === "integracoes" &&
+      companyId &&
+      (isInstagramConnected || isFacebookConnected || isMetaAdsConnected)
+    ) {
+      void loadMetaConnectionSummary();
+    }
+  }, [
+    section,
+    companyId,
+    isInstagramConnected,
+    isFacebookConnected,
+    isMetaAdsConnected,
+    loadMetaConnectionSummary,
+  ]);
 
   useEffect(() => {
     if (section === "integracoes" && companyId && isAdsConnected && !adsAccountDisplayName) {
@@ -1707,7 +1786,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
   }
 
-  async function handleLoadMetaAccounts() {
+  async function handleLoadMetaAccounts(serviceOverride?: "instagram" | "facebook" | "meta_ads") {
     if (!companyId) {
       toast({
         variant: "destructive",
@@ -1716,7 +1795,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       });
       return;
     }
-    const service = isInstagramConnected ? "instagram" : isFacebookConnected ? "facebook" : null;
+    const service =
+      serviceOverride ??
+      (isInstagramConnected ? "instagram" : isFacebookConnected ? "facebook" : isMetaAdsConnected ? "meta_ads" : null);
     if (!service) return;
     setIsLoadingMetaAccounts(true);
     try {
@@ -1755,18 +1836,22 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       }
       const accounts = data?.accounts ?? [];
       setMetaAccounts(accounts);
+      setMetaAccountsService(service);
 
-      const selected = accounts.find((a) => a.isSelected && a.instagramBusinessId);
-      if (selected?.instagramBusinessId) {
-        // Carrega automaticamente insights da conta vinculada, se existir.
-        void handleLoadMetaInsights(selected.instagramBusinessId);
+      if (service === "instagram" || service === "facebook") {
+        const selected = accounts.find((a) => a.isSelected && a.instagramBusinessId);
+        if (selected?.instagramBusinessId) {
+          void handleLoadMetaInsights(selected.instagramBusinessId);
+        }
       }
 
       if (!accounts.length) {
         toast({
-          title: "Nenhuma página encontrada",
+          title: service === "meta_ads" ? "Nenhuma conta de anúncios encontrada" : "Nenhuma página encontrada",
           description:
-            "Conecte uma conta da Meta com páginas que possuam Instagram Business vinculado.",
+            service === "meta_ads"
+              ? "Verifique as permissões da conta Meta conectada."
+              : "Conecte uma conta da Meta com páginas que possuam Instagram Business vinculado.",
         });
       }
     } catch (err) {
@@ -1787,6 +1872,53 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         title: "Empresa não identificada",
         description: "Acesse o painel com uma empresa selecionada antes de selecionar a conta.",
       });
+      return;
+    }
+    const service = metaAccountsService ?? (isInstagramConnected ? "instagram" : isFacebookConnected ? "facebook" : "meta_ads");
+    if (service === "meta_ads") {
+      try {
+        const token = await getToken();
+        if (!token) throw new Error("Token de autenticação indisponível. Faça login novamente.");
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            action: "selectAccount",
+            adAccountId: account.id,
+            adAccountName: account.name,
+            service: "meta_ads",
+            token,
+          }),
+        });
+        const raw = await res.text();
+        const data = (() => {
+          try {
+            return JSON.parse(raw) as { success?: boolean; error?: string; hint?: string } | null;
+          } catch {
+            return null;
+          }
+        })();
+        if (!res.ok || data?.error || !data?.success) {
+          const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+          throw new Error(msg);
+        }
+        toast({
+          title: "Conta Meta Ads vinculada à empresa",
+          description: "A conta de anúncios selecionada será usada como padrão.",
+        });
+        void loadMetaConnectionSummary();
+        void handleLoadMetaAccounts("meta_ads");
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao vincular conta Meta Ads",
+          description: getErrorMessage(err),
+        });
+      }
       return;
     }
     if (!account.instagramBusinessId) {
@@ -1815,7 +1947,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           pageId: account.id,
           pageName: account.name,
           instagramId: account.instagramBusinessId,
-          service: isInstagramConnected ? "instagram" : "facebook",
+          service,
           token,
         }),
       });
@@ -1838,8 +1970,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           "A página selecionada será usada como padrão para os insights de Instagram desta empresa.",
       });
 
-      // Recarrega lista para refletir a seleção única.
-      void handleLoadMetaAccounts();
+      void loadMetaConnectionSummary();
+      void handleLoadMetaAccounts(service);
     } catch (err) {
       toast({
         variant: "destructive",
@@ -2891,6 +3023,32 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           <div className="flex flex-col items-center gap-2">
                             <Icon className="h-10 w-10 shrink-0 text-foreground" style={{ width: 40, height: 40 }} />
                             <p className="text-sm font-medium text-foreground">{int.name}</p>
+                            {int.id === "instagram" && int.connected && (
+                              <>
+                                {metaInstagramDisplay?.page_name && (
+                                  <p className="text-xs text-muted-foreground">Página: {metaInstagramDisplay.page_name}</p>
+                                )}
+                                {(metaInstagramDisplay?.instagram_username || metaInstagramDisplay?.instagram_id) && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Perfil: {metaInstagramDisplay.instagram_username
+                                      ? `@${metaInstagramDisplay.instagram_username}`
+                                      : metaInstagramDisplay.instagram_id}
+                                  </p>
+                                )}
+                              </>
+                            )}
+                            {int.id === "facebook" && int.connected && metaFacebookDisplay?.page_name && (
+                              <p className="text-xs text-muted-foreground">Página: {metaFacebookDisplay.page_name}</p>
+                            )}
+                            {int.id === "meta-ads" && int.connected && (
+                              <>
+                                {metaAdsDisplay?.ad_account_name ? (
+                                  <p className="text-xs font-mono text-muted-foreground">Conta: {metaAdsDisplay.ad_account_name}</p>
+                                ) : metaAdsDisplay?.ad_account_id ? (
+                                  <p className="text-xs font-mono text-muted-foreground">Conta: {metaAdsDisplay.ad_account_id}</p>
+                                ) : null}
+                              </>
+                            )}
                             {int.id === "google-ads" && (
                               <>
                                 {adsAccountDisplayName ? (
@@ -3268,36 +3426,65 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                     </div>
                   )}
 
-                  {(isInstagramConnected || isFacebookConnected) && metaAccounts.length === 0 && (
+                  {(isInstagramConnected || isFacebookConnected || isMetaAdsConnected) && (
                     <div className="mt-6 flex flex-col items-start gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isLoadingMetaAccounts}
-                        onClick={handleLoadMetaAccounts}
-                      >
-                        {isLoadingMetaAccounts ? (
-                          <>
-                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                            Buscando contas…
-                          </>
-                        ) : (
-                          <>Ver contas</>
+                      <div className="flex flex-wrap gap-2">
+                        {(isInstagramConnected || isFacebookConnected) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isLoadingMetaAccounts}
+                            onClick={() => void handleLoadMetaAccounts(isInstagramConnected ? "instagram" : "facebook")}
+                          >
+                            {isLoadingMetaAccounts && metaAccountsService !== "meta_ads" ? (
+                              <>
+                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                Buscando…
+                              </>
+                            ) : (
+                              <>Ver páginas Facebook</>
+                            )}
+                          </Button>
                         )}
-                      </Button>
-                      <p className="text-xs text-muted-foreground">
-                        Carregue as páginas Facebook conectadas para vincular uma conta à empresa.
-                      </p>
+                        {isMetaAdsConnected && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isLoadingMetaAccounts}
+                            onClick={() => void handleLoadMetaAccounts("meta_ads")}
+                          >
+                            {isLoadingMetaAccounts && metaAccountsService === "meta_ads" ? (
+                              <>
+                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                Buscando…
+                              </>
+                            ) : (
+                              <>Ver contas Meta Ads</>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      {metaAccounts.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {metaAccountsService === "meta_ads"
+                            ? "Carregue as contas de anúncios para vincular uma à empresa."
+                            : "Carregue as páginas Facebook conectadas para vincular uma conta à empresa."}
+                        </p>
+                      )}
                     </div>
                   )}
 
                   {metaAccounts.length > 0 && (
                     <div className="mt-6 space-y-3">
-                      <h3 className="text-sm font-medium">Páginas Facebook conectadas</h3>
+                      <h3 className="text-sm font-medium">
+                        {metaAccountsService === "meta_ads"
+                          ? "Contas de anúncios Meta conectadas"
+                          : "Páginas Facebook conectadas"}
+                      </h3>
                       <p className="text-xs text-muted-foreground">
-                        Clique em uma conta com Instagram vinculado para simular a leitura de
-                        métricas de alcance e impressões. Use o botão de seleção para definir qual
-                        conta será vinculada a esta empresa no Cliente Ideal.
+                        {metaAccountsService === "meta_ads"
+                          ? "Selecione qual conta de anúncios será vinculada a esta empresa."
+                          : "Clique em uma conta com Instagram vinculado para métricas. Use o botão para definir qual conta será vinculada à empresa."}
                       </p>
                       <div className="grid gap-3 md:grid-cols-2">
                         {metaAccounts.map((account) => (
@@ -3307,33 +3494,38 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           >
                             <button
                               type="button"
-                              onClick={() => void handleLoadMetaInsights(account.instagramBusinessId)}
+                              onClick={() =>
+                                metaAccountsService !== "meta_ads" &&
+                                void handleLoadMetaInsights(account.instagramBusinessId)
+                              }
                               className="flex flex-1 flex-col items-stretch text-left"
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <div>
                                   <p className="text-sm font-semibold text-foreground">
-                                    {account.name || "Página sem nome"}
+                                    {account.name || (metaAccountsService === "meta_ads" ? "Conta sem nome" : "Página sem nome")}
                                   </p>
                                   <p className="text-[11px] text-muted-foreground">
-                                    Page ID:{" "}
+                                    {metaAccountsService === "meta_ads" ? "Account ID: " : "Page ID: "}
                                     <span className="font-mono text-[11px]">{account.id}</span>
                                   </p>
                                 </div>
                                 <div className="flex flex-col items-end gap-1">
-                                  <div className="rounded-full bg-background px-2 py-1 text-[10px] font-medium text-muted-foreground">
-                                    {account.instagramBusinessId
-                                      ? "Instagram vinculado"
-                                      : "Sem Instagram vinculado"}
-                                  </div>
-                                  {account.isSelected && account.instagramBusinessId && (
+                                  {metaAccountsService !== "meta_ads" && (
+                                    <div className="rounded-full bg-background px-2 py-1 text-[10px] font-medium text-muted-foreground">
+                                      {account.instagramBusinessId
+                                        ? "Instagram vinculado"
+                                        : "Sem Instagram vinculado"}
+                                    </div>
+                                  )}
+                                  {account.isSelected && (
                                     <Badge variant="outline" className="text-[10px] px-2 py-0.5">
                                       Conta da empresa
                                     </Badge>
                                   )}
                                 </div>
                               </div>
-                              {account.instagramBusinessId && (
+                              {metaAccountsService !== "meta_ads" && account.instagramBusinessId && (
                                 <p className="mt-1 text-[11px] text-muted-foreground">
                                   Instagram Business ID:{" "}
                                   <span className="font-mono text-[11px]">
@@ -3346,14 +3538,19 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                               <p className="text-[11px] text-muted-foreground">
                                 {account.isSelected
                                   ? "Esta é a conta atualmente vinculada à empresa."
-                                  : account.instagramBusinessId
-                                    ? "Defina esta conta como padrão para os insights."
-                                    : "Vincule um Instagram Business a esta página para utilizá-la."}
+                                  : metaAccountsService === "meta_ads"
+                                    ? "Defina esta conta como padrão."
+                                    : account.instagramBusinessId
+                                      ? "Defina esta conta como padrão para os insights."
+                                      : "Vincule um Instagram Business a esta página para utilizá-la."}
                               </p>
                               <Button
                                 size="sm"
                                 variant={account.isSelected ? "outline" : "default"}
-                                disabled={isLoadingMetaAccounts || !account.instagramBusinessId}
+                                disabled={
+                                  isLoadingMetaAccounts ||
+                                  (metaAccountsService !== "meta_ads" && !account.instagramBusinessId)
+                                }
                                 onClick={() => void handleSelectMetaAccount(account)}
                                 className="shrink-0"
                               >

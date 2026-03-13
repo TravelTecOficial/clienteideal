@@ -173,6 +173,69 @@ Principais ações (`action` no body):
 
 ---
 
+## Meta Connections para n8n
+
+### Edge Function `meta-connections-n8n`
+
+Arquivo: `supabase/functions/meta-connections-n8n/index.ts`
+
+Retorna metadados das conexões Meta (Instagram, Facebook, Meta Ads) por empresa para uso em workflows n8n. **Não expõe tokens** — apenas IDs e nomes necessários para montar URLs (ex.: `instagram_business_id` para `media_publish`).
+
+### Autenticação
+
+- **Secret:** `N8N_META_CONNECTIONS_API_KEY` (configurar no Supabase Dashboard > Edge Functions > Secrets)
+- **Método:** GET ou POST
+- **Parâmetros:**
+  - `company_id` (obrigatório): ID da empresa
+  - `api_key`: valor de `N8N_META_CONNECTIONS_API_KEY`
+- **Alternativa:** header `X-N8N-API-Key` com o valor da secret
+
+### Exemplo de requisição (n8n HTTP Request)
+
+```
+GET https://<SUPABASE_PROJECT>.supabase.co/functions/v1/meta-connections-n8n?company_id=xxx&api_key=yyy
+```
+
+Ou POST com body:
+```json
+{
+  "company_id": "uuid-da-empresa",
+  "api_key": "seu-secret-compartilhado"
+}
+```
+
+### Exemplo de resposta
+
+```json
+{
+  "company_id": "uuid-da-empresa",
+  "instagram": {
+    "page_id": "812492191941463",
+    "page_name": "Guaraná Viagens - Corporativo",
+    "instagram_business_id": "17841477360734621",
+    "instagram_username": "guarana_viagens"
+  },
+  "facebook": {
+    "page_id": "812492191941463",
+    "page_name": "Guaraná Viagens - Corporativo",
+    "instagram_business_id": "17841477360734621",
+    "instagram_username": "guarana_viagens"
+  },
+  "meta_ads": {
+    "ad_account_id": "act_123456789",
+    "ad_account_name": "Minha Conta de Anúncios"
+  }
+}
+```
+
+### Uso no n8n
+
+- Use `instagram_business_id` na URL `https://graph.facebook.com/v23.0/{instagram_business_id}/media_publish` para publicar no Instagram.
+- Use `page_id` para operações na página Facebook.
+- O token de acesso da Meta deve ser obtido separadamente (configuração manual ou outro fluxo); esta API retorna apenas os IDs.
+
+---
+
 ## Google My Business / Social Hub
 
 ### Edge Function `gmb-post-create`

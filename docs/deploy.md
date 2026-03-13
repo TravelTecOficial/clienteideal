@@ -38,6 +38,7 @@ No painel do Supabase, em **Edge Functions → Secrets**, configure pelo menos:
 - `CLERK_WEBHOOK_SECRET` — Signing secret do webhook Clerk (se usar webhook).
 - `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_TOKEN_ENCRYPTION_KEY`, `META_GRAPH_VERSION` (opcional).
 - `META_WHATSAPP_REDIRECT_URI`, se usar a nova integração WhatsApp Cloud API.
+- `N8N_META_CONNECTIONS_API_KEY`, se usar a Edge Function `meta-connections-n8n` (n8n obtém IDs Meta por empresa).
 - `LATE_API_KEY` — Chave da Late API (Google My Business / Social Hub).
 - Outras chaves específicas de funções (ver comentários nos arquivos de `supabase/functions/*`).
 
@@ -101,6 +102,7 @@ supabase functions deploy persona-template-generate-avatar
 
 # Integrações novas
 supabase functions deploy meta-instagram
+supabase functions deploy meta-connections-n8n
 supabase functions deploy whatsapp-integration
 supabase functions deploy gmb-post-create
 ```
