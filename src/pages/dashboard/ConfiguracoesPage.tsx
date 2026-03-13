@@ -238,6 +238,12 @@ interface GoogleAnalyticsPropertyOption {
   isSelected: boolean;
 }
 
+interface GoogleAdsAccountOption {
+  id: string;
+  displayName: string;
+  isSelected: boolean;
+}
+
 const GOOGLE_OAUTH_STATE_KEY = "google_oauth_state";
 const GOOGLE_OAUTH_COMPANY_KEY = "google_oauth_company_id";
 const GOOGLE_OAUTH_POST_CONNECT_KEY = "google_oauth_post_connect_service";
@@ -293,6 +299,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [isGA4Connected, setIsGA4Connected] = useState(false);
   const [isAdsConnected, setIsAdsConnected] = useState(false);
   const [adsAccountDisplayName, setAdsAccountDisplayName] = useState<string | null>(null);
+  const [adsAccounts, setAdsAccounts] = useState<GoogleAdsAccountOption[]>([]);
+  const [selectedAdsAccountId, setSelectedAdsAccountId] = useState<string | null>(null);
+  const [isLoadingAdsAccounts, setIsLoadingAdsAccounts] = useState(false);
   const [isMyBusinessConnected, setIsMyBusinessConnected] = useState(false);
   const [isLoadingGoogleAnalyticsProperties, setIsLoadingGoogleAnalyticsProperties] = useState(false);
   const [isSavingGoogleAnalyticsProperty, setIsSavingGoogleAnalyticsProperty] = useState(false);
@@ -640,6 +649,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
             ? data.adsSelectedAccountId.replace(/^customers\//, "").replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
             : null);
         setAdsAccountDisplayName(adsDisplay ?? null);
+        setSelectedAdsAccountId(
+          typeof data.adsSelectedAccountId === "string" && data.adsSelectedAccountId.startsWith("customers/")
+            ? data.adsSelectedAccountId
+            : null,
+        );
         setSelectedGoogleAnalyticsPropertyName(data.ga4SelectedPropertyName ?? null);
         setSelectedGoogleAnalyticsPropertyLabel(
           data.ga4SelectedPropertyDisplayName
@@ -661,6 +675,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         setIsAdsConnected(false);
         setIsMyBusinessConnected(false);
         setAdsAccountDisplayName(null);
+        setSelectedAdsAccountId(null);
         setSelectedGoogleAnalyticsPropertyName(null);
         setSelectedGoogleAnalyticsPropertyLabel(null);
         setSelectedMyBusinessPropertyName(null);
@@ -743,6 +758,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         } else if (service === "ads") {
           setIsAdsConnected(false);
           setAdsAccountDisplayName(null);
+          setAdsAccounts([]);
+          setSelectedAdsAccountId(null);
         }
         toast({ title: "Google desconectado" });
       } catch (err) {
@@ -752,11 +769,12 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     [companyId, getToken, toast],
   );
 
-  const fetchAdsAccountInfo = useCallback(async () => {
+  const handleLoadAdsAccounts = useCallback(async () => {
     if (!companyId) return;
+    setIsLoadingAdsAccounts(true);
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) throw new Error("Token indisponível.");
       const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
         method: "POST",
         headers: {
@@ -764,46 +782,96 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           apikey: SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ action: "getAdsAccountInfo", company_id: companyId, token }),
+        body: JSON.stringify({ action: "listAdsAccounts", company_id: companyId, token }),
       });
       const data = (await res.json().catch(() => null)) as {
-        accountDisplayName?: string;
-        accountId?: string;
+        accounts?: GoogleAdsAccountOption[];
         error?: string;
         hint?: string;
       } | null;
-      if (res.ok && data) {
-        const display =
-          data.accountDisplayName ??
-          (typeof data.accountId === "string" && data.accountId.startsWith("customers/")
-            ? data.accountId.replace(/^customers\//, "").replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
-            : null);
-        if (display) setAdsAccountDisplayName(display);
+      if (res.ok && data?.accounts) {
+        setAdsAccounts(data.accounts);
+        const selected = data.accounts.find((a) => a.isSelected);
+        if (selected) {
+          setSelectedAdsAccountId(selected.id);
+          setAdsAccountDisplayName(selected.displayName);
+        }
       } else if (!res.ok && data?.error) {
-        // #region agent log
-        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8f1d02" },
-          body: JSON.stringify({
-            sessionId: "8f1d02",
-            location: "ConfiguracoesPage.tsx:fetchAdsAccountInfo-error",
-            message: "Erro ao carregar conta Google Ads",
-            data: { status: res.status, error: data?.error, hint: data?.hint, code: (data as { code?: string })?.code },
-            hypothesisId: "H-ads",
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         toast({
           variant: "destructive",
-          title: "Erro ao carregar conta Google Ads",
+          title: "Erro ao carregar contas Google Ads",
           description: data.hint ?? data.error,
         });
       }
-    } catch {
-      // Silencioso - não bloqueia a UI
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao carregar contas",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsLoadingAdsAccounts(false);
     }
   }, [companyId, getToken, toast]);
+
+  const handleSelectAdsAccount = useCallback(
+    async (accountOverride?: GoogleAdsAccountOption) => {
+      if (!companyId) return;
+      const selected =
+        accountOverride ?? adsAccounts.find((a) => a.id === selectedAdsAccountId) ?? null;
+      if (!selected) {
+        toast({
+          variant: "destructive",
+          title: "Selecione uma conta",
+          description: "Escolha qual conta Google Ads será vinculada a esta empresa.",
+        });
+        return;
+      }
+      try {
+        const token = await getToken();
+        if (!token) throw new Error("Token indisponível.");
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/google-oauth`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            action: "selectAdsAccount",
+            company_id: companyId,
+            accountId: selected.id,
+            accountDisplayName: selected.displayName,
+            token,
+          }),
+        });
+        const data = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          error?: string;
+          hint?: string;
+        } | null;
+        if (!res.ok || data?.error || !data?.success) {
+          throw new Error(data?.hint ?? data?.error ?? "Erro ao salvar.");
+        }
+        setAdsAccounts((current) =>
+          current.map((a) => ({ ...a, isSelected: a.id === selected.id })),
+        );
+        setSelectedAdsAccountId(selected.id);
+        setAdsAccountDisplayName(selected.displayName);
+        toast({
+          title: "Conta Google Ads vinculada",
+          description: "A conta selecionada será usada como padrão para esta empresa.",
+        });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao vincular conta",
+          description: getErrorMessage(err),
+        });
+      }
+    },
+    [companyId, getToken, toast, adsAccounts, selectedAdsAccountId],
+  );
 
   const handleLoadGoogleAnalyticsProperties = useCallback(async () => {
     if (!companyId) {
@@ -1414,11 +1482,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- handleLoadMetaAccounts é estável; deps intencionais
   }, [section, companyId, isInstagramConnected, isFacebookConnected, isMetaAdsConnected]);
 
-  useEffect(() => {
-    if (section === "integracoes" && companyId && isAdsConnected && !adsAccountDisplayName) {
-      void fetchAdsAccountInfo();
-    }
-  }, [section, companyId, isAdsConnected, adsAccountDisplayName, fetchAdsAccountInfo]);
 
   useEffect(() => {
     if (section !== "integracoes" || !companyId) return;
@@ -3241,7 +3304,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                     int.id === "google-analytics"
                                       ? selectedGoogleAnalyticsPropertyName ?? ""
                                       : int.id === "google-ads"
-                                        ? (adsAccountDisplayName ? "ads_account" : "")
+                                        ? (selectedAdsAccountId ?? "")
                                         : selectedMyBusinessPropertyName ?? ""
                                   }
                                   onOpenChange={(open) => {
@@ -3250,14 +3313,17 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                         void handleLoadGoogleAnalyticsProperties();
                                       if (int.id === "google-meu-negocio" && myBusinessLocations.length === 0)
                                         void handleLoadMyBusinessLocations();
-                                      if (int.id === "google-ads" && !adsAccountDisplayName) void fetchAdsAccountInfo();
+                                      if (int.id === "google-ads" && adsAccounts.length === 0) void handleLoadAdsAccounts();
                                     }
                                   }}
                                   onValueChange={(value) => {
                                     if (value === "__load__") {
                                       if (int.id === "google-analytics") void handleLoadGoogleAnalyticsProperties();
                                       else if (int.id === "google-meu-negocio") void handleLoadMyBusinessLocations();
-                                      else if (int.id === "google-ads") void fetchAdsAccountInfo();
+                                      else if (int.id === "google-ads") void handleLoadAdsAccounts();
+                                    } else if (int.id === "google-ads") {
+                                      const acc = adsAccounts.find((a) => a.id === value);
+                                      if (acc) void handleSelectAdsAccount(acc);
                                       return;
                                     }
                                     if (int.id === "google-analytics") {
@@ -3270,6 +3336,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                   }}
                                   disabled={
                                     (int.id === "google-analytics" && isLoadingGoogleAnalyticsProperties) ||
+                                    (int.id === "google-ads" && isLoadingAdsAccounts) ||
                                     (int.id === "google-meu-negocio" && isLoadingMyBusinessLocations) ||
                                     !companyId
                                   }
@@ -3284,7 +3351,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                               ? "Clique para carregar"
                                               : "Selecione"
                                           : int.id === "google-ads"
-                                            ? adsAccountDisplayName || "Carregar número da conta"
+                                            ? isLoadingAdsAccounts
+                                              ? "Carregando…"
+                                              : adsAccounts.length === 0
+                                                ? adsAccountDisplayName || "Carregar contas"
+                                                : "Selecione"
                                             : isLoadingMyBusinessLocations
                                               ? "Carregando…"
                                               : myBusinessLocations.length === 0
@@ -3307,18 +3378,19 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                           </SelectItem>
                                         ))
                                       ))}
-                                    {int.id === "google-ads" && (
-                                      <>
-                                        {!adsAccountDisplayName && (
-                                          <SelectItem value="__load__" onSelect={() => void fetchAdsAccountInfo()}>
-                                            Carregar número da conta
+                                    {int.id === "google-ads" &&
+                                      (adsAccounts.length === 0 && !isLoadingAdsAccounts ? (
+                                        <SelectItem value="__load__" onSelect={() => void handleLoadAdsAccounts()}>
+                                          Carregar contas
+                                        </SelectItem>
+                                      ) : (
+                                        adsAccounts.map((acc) => (
+                                          <SelectItem key={acc.id} value={acc.id}>
+                                            {acc.displayName}
+                                            {acc.isSelected ? " ✓" : ""}
                                           </SelectItem>
-                                        )}
-                                        {adsAccountDisplayName && (
-                                          <SelectItem value="ads_account">{adsAccountDisplayName}</SelectItem>
-                                        )}
-                                      </>
-                                    )}
+                                        ))
+                                      ))}
                                     {int.id === "google-meu-negocio" &&
                                       (myBusinessLocations.length === 0 && !isLoadingMyBusinessLocations ? (
                                         <SelectItem value="__load__" onSelect={() => void handleLoadMyBusinessLocations()}>

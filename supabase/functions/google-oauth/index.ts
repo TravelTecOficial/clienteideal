@@ -62,7 +62,8 @@ type GoogleAction =
   | "selectAnalyticsProperty"
   | "listMyBusinessLocations"
   | "selectMyBusinessLocation"
-  | "getAdsAccountInfo"
+  | "listAdsAccounts"
+  | "selectAdsAccount"
   | "disconnect"
 
 interface BaseRequestBody {
@@ -117,9 +118,16 @@ interface SelectMyBusinessLocationBody extends BaseRequestBody {
   propertyDisplayName?: string
 }
 
-interface GetAdsAccountInfoBody extends BaseRequestBody {
-  action: "getAdsAccountInfo"
+interface ListAdsAccountsBody extends BaseRequestBody {
+  action: "listAdsAccounts"
   company_id?: string
+}
+
+interface SelectAdsAccountBody extends BaseRequestBody {
+  action: "selectAdsAccount"
+  company_id?: string
+  accountId?: string
+  accountDisplayName?: string
 }
 
 interface DisconnectBody extends BaseRequestBody {
@@ -136,7 +144,8 @@ type RequestBody =
   | SelectAnalyticsPropertyBody
   | ListMyBusinessLocationsBody
   | SelectMyBusinessLocationBody
-  | GetAdsAccountInfoBody
+  | ListAdsAccountsBody
+  | SelectAdsAccountBody
   | DisconnectBody
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -1194,7 +1203,12 @@ async function handleSelectMyBusinessLocation(
   })
 }
 
-async function handleGetAdsAccountInfo(
+function formatAdsAccountDisplayName(resourceName: string): string {
+  const id = resourceName.replace(/^customers\//, "")
+  return id.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
+}
+
+async function handleListAdsAccounts(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ): Promise<Response> {
@@ -1225,14 +1239,13 @@ async function handleGetAdsAccountInfo(
   if (!adsDeveloperToken) {
     return jsonResponse(
       {
-        error: "Erro ao obter conta Google Ads.",
+        error: "Erro ao obter contas Google Ads.",
         hint: "GOOGLE_ADS_DEVELOPER_TOKEN não configurado. Configure nas Secrets do Supabase.",
       },
       503,
     )
   }
 
-  // Verifica se o token tem o escopo adwords antes de chamar a API (diagnóstico)
   const tokenInfoRes = await fetch(
     `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
   )
@@ -1287,45 +1300,87 @@ async function handleGetAdsAccountInfo(
         ? `${errMsg} Desconecte e reconecte o Google Ads em Configurações > Integrações para renovar as permissões.`
         : errMsg
       if (isAuthError) {
-        console.error("[google-oauth] Google Ads API rejeitou token:", errMsg, "| Verifique: 1) GOOGLE_ADS_DEVELOPER_TOKEN nas Secrets 2) Token com escopo adwords 3) Reconectar")
+        console.error("[google-oauth] Google Ads API rejeitou token:", errMsg)
       }
       return jsonResponse(
         {
-          error: "Erro ao obter conta Google Ads.",
+          error: "Erro ao obter contas Google Ads.",
           hint,
           code: isAuthError ? "ADS_AUTH_REJECTED" : undefined,
         },
         502,
       )
     }
-    const first = adsData.resourceNames[0]
-    if (typeof first !== "string" || !first.startsWith("customers/")) {
-      return jsonResponse({ error: "Resposta inválida da API Google Ads." }, 502)
-    }
-    const id = first.replace(/^customers\//, "")
-    const displayName = id.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
 
-    await supabase
-      .from("google_connections")
-      .update({
-        selected_account_name: first,
-        selected_account_display_name: displayName,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("company_id", ctx.companyId)
-      .eq("service", "ads")
+    const selectedAccountName = row.selected_account_name ?? null
+    const accounts = adsData.resourceNames
+      .filter((r): r is string => typeof r === "string" && r.startsWith("customers/"))
+      .map((resourceName) => ({
+        id: resourceName,
+        displayName: formatAdsAccountDisplayName(resourceName),
+        isSelected: resourceName === selectedAccountName,
+      }))
 
-    return jsonResponse({
-      accountId: first,
-      accountDisplayName: displayName,
-    })
+    return jsonResponse({ accounts })
   } catch (err) {
-    console.error("[google-oauth] getAdsAccountInfo:", err)
+    console.error("[google-oauth] listAdsAccounts:", err)
     return jsonResponse(
-      { error: "Erro ao obter conta Google Ads.", hint: err instanceof Error ? err.message : String(err) },
+      { error: "Erro ao obter contas Google Ads.", hint: err instanceof Error ? err.message : String(err) },
       500,
     )
   }
+}
+
+async function handleSelectAdsAccount(
+  body: SelectAdsAccountBody,
+  ctx: AuthContext,
+  supabase: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const accountId = typeof body.accountId === "string" ? body.accountId.trim() : ""
+  const accountDisplayName =
+    typeof body.accountDisplayName === "string" ? body.accountDisplayName.trim() : ""
+
+  if (!accountId || !accountId.startsWith("customers/")) {
+    return jsonResponse(
+      {
+        error: "Selecione uma conta Google Ads antes de confirmar.",
+        code: "MISSING_ADS_ACCOUNT",
+      },
+      400,
+    )
+  }
+
+  const displayName =
+    accountDisplayName || formatAdsAccountDisplayName(accountId)
+
+  const { error } = await supabase
+    .from("google_connections")
+    .update({
+      selected_account_name: accountId,
+      selected_account_display_name: displayName,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("company_id", ctx.companyId)
+    .eq("service", "ads")
+
+  if (error) {
+    console.error("[google-oauth] Erro ao salvar conta Ads:", error)
+    return jsonResponse(
+      {
+        error: "Erro ao salvar a conta Google Ads selecionada.",
+        hint: error.message,
+      },
+      500,
+    )
+  }
+
+  return jsonResponse({
+    success: true,
+    selected: {
+      accountId,
+      accountDisplayName: displayName,
+    },
+  })
 }
 
 async function handleDisconnect(
@@ -1425,8 +1480,10 @@ Deno.serve(async (req: Request) => {
     }
     case "selectMyBusinessLocation":
       return handleSelectMyBusinessLocation(body as SelectMyBusinessLocationBody, ctx, supabase)
-    case "getAdsAccountInfo":
-      return handleGetAdsAccountInfo(ctx, supabase)
+    case "listAdsAccounts":
+      return handleListAdsAccounts(ctx, supabase)
+    case "selectAdsAccount":
+      return handleSelectAdsAccount(body as SelectAdsAccountBody, ctx, supabase)
     case "disconnect":
       return handleDisconnect(body as DisconnectBody, ctx, supabase)
     default:
