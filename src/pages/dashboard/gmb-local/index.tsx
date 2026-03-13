@@ -1,10 +1,10 @@
 /**
  * GMB Local - Business Intelligence
  *
- * IntegraÃ§Ã£o Supabase com Clerk Bearer Token.
+ * Integração Supabase com Clerk Bearer Token.
  * Dados de gmb_health_checks e gmb_audit_items filtrados por company_id (useEffectiveCompanyId).
  * Reviews via Edge Function gmb-reviews (Google My Business API v4).
- * RLS garante isolamento por empresa. ValidaÃ§Ã£o frontend Ã© UX; API enforcement via RLS.
+ * RLS garante isolamento por empresa. Validação frontend é UX; API enforcement via RLS.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -99,7 +99,7 @@ interface GmbReview {
   reviewReply?: { comment?: string | null; updateTime?: string | null } | null;
 }
 
-// Fallback quando nÃ£o hÃ¡ dados no banco
+// Fallback quando não há dados no banco
 const DEFAULT_HEALTH: Pick<
   GmbHealthCheck,
   "score" | "fraco_count" | "razoavel_count" | "bom_count"
@@ -136,13 +136,16 @@ export default function GMBLocal({ className }: GMBLocalProps) {
   const [replyModal, setReplyModal] = useState<{ review: GmbReview; comment: string } | null>(null);
   const [replySubmitting, setReplySubmitting] = useState(false);
 
-  // ABA SaÃºde do NegÃ³cio: perfil GMB, mÃ­dia e serviÃ§os
+  // ABA Saúde do Negócio: perfil GMB, mídia e serviços
   const [gmbProfile, setGmbProfile] = useState<Record<string, unknown> | null>(null);
   const [gmbProfileLoading, setGmbProfileLoading] = useState(false);
   const [gmbMediaItems, setGmbMediaItems] = useState<unknown[]>([]);
   const [gmbMediaLoading, setGmbMediaLoading] = useState(false);
   const [gmbServices, setGmbServices] = useState<{ serviceItems: unknown[]; canModifyServiceList: boolean } | null>(null);
   const [gmbServicesLoading, setGmbServicesLoading] = useState(false);
+  const [gmbServicesUpdating, setGmbServicesUpdating] = useState(false);
+  const [gmbAvailableServiceTypes, setGmbAvailableServiceTypes] = useState<{ serviceTypeId: string; displayName?: string }[]>([]);
+  const [gmbAvailableServicesLoading, setGmbAvailableServicesLoading] = useState(false);
   const [gmbProfileUpdating, setGmbProfileUpdating] = useState(false);
   const [gmbMediaUploading, setGmbMediaUploading] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
@@ -215,11 +218,70 @@ export default function GMBLocal({ className }: GMBLocalProps) {
     }
   }, [effectiveCompanyId, getToken]);
 
+  const loadGmbAvailableServices = useCallback(
+    async (categoryId: string) => {
+      if (!effectiveCompanyId || !getToken || !categoryId?.trim()) return;
+      setGmbAvailableServicesLoading(true);
+      try {
+        const token = await getToken();
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-services`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+          body: JSON.stringify({
+            action: "listByCategory",
+            company_id: effectiveCompanyId,
+            categoryId: categoryId.trim(),
+            regionCode: "BR",
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { categories?: { serviceTypes?: { serviceTypeId?: string; displayName?: string }[] }[] };
+        if (!res.ok) return;
+        const cat = data?.categories?.[0];
+        const types = (cat?.serviceTypes ?? []).map((t) => ({
+          serviceTypeId: t?.serviceTypeId ?? "",
+          displayName: t?.displayName,
+        })).filter((t) => t.serviceTypeId);
+        setGmbAvailableServiceTypes(types);
+      } catch {
+        setGmbAvailableServiceTypes([]);
+      } finally {
+        setGmbAvailableServicesLoading(false);
+      }
+    },
+    [effectiveCompanyId, getToken]
+  );
+
+  const handleServicesUpdate = useCallback(
+    async (serviceItems: unknown[]) => {
+      if (!effectiveCompanyId || !getToken) return;
+      setGmbServicesUpdating(true);
+      try {
+        const token = await getToken();
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-services`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+          body: JSON.stringify({ action: "update", company_id: effectiveCompanyId, serviceItems }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(data?.error ?? "Erro ao atualizar serviços");
+        toast({ title: "Serviços atualizados com sucesso." });
+        void loadGmbServices();
+      } catch (err) {
+        toast({ variant: "destructive", title: "Erro ao atualizar serviços", description: getErrorMessage(err) });
+      } finally {
+        setGmbServicesUpdating(false);
+      }
+    },
+    [effectiveCompanyId, getToken, loadGmbServices, toast]
+  );
+
   const loadSaudeNegocioData = useCallback(() => {
     void loadGmbProfile();
     void loadGmbMedia();
     void loadGmbServices();
-  }, [loadGmbProfile, loadGmbMedia, loadGmbServices]);
+    const categoryId = companyData?.gmb_place_type?.trim();
+    if (categoryId) void loadGmbAvailableServices(categoryId);
+  }, [loadGmbProfile, loadGmbMedia, loadGmbServices, loadGmbAvailableServices, companyData?.gmb_place_type]);
 
   const handleProfileUpdate = useCallback(
     async (updates: Record<string, unknown>) => {
@@ -255,7 +317,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
         if (uploadErr) throw uploadErr;
         const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(path);
         const sourceUrl = urlData?.publicUrl;
-        if (!sourceUrl) throw new Error("URL pÃºblica nÃ£o obtida");
+        if (!sourceUrl) throw new Error("URL pública não obtida");
         const token = await getToken();
         const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-media`, {
           method: "POST",
@@ -324,7 +386,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
         toast({
           variant: "destructive",
           title: "Acesso negado",
-          description: "Verifique suas permissÃµes ou faÃ§a login novamente.",
+          description: "Verifique suas permissões ou faça login novamente.",
         });
       } else {
         toast({
@@ -478,8 +540,8 @@ export default function GMBLocal({ className }: GMBLocalProps) {
         if (code === "NOT_CONNECTED" || code === "NO_LOCATION_SELECTED") {
           toast({
             variant: "destructive",
-            title: "Google Meu NegÃ³cio nÃ£o conectado",
-            description: "Conecte e selecione o perfil em ConfiguraÃ§Ãµes > IntegraÃ§Ãµes > Google Meu NegÃ³cio.",
+            title: "Google Meu Negócio não conectado",
+            description: "Conecte e selecione o perfil em Configurações > Integrações > Google Meu Negócio.",
           });
         } else {
           toast({
@@ -562,7 +624,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
   const razoavelCount = healthCheck?.razoavel_count ?? DEFAULT_HEALTH.razoavel_count;
   const bomCount = healthCheck?.bom_count ?? DEFAULT_HEALTH.bom_count;
 
-  // VelocÃ­metro: rotaÃ§Ã£o do arco (0â€“100 â†’ -45deg a 225deg)
+  // Velocímetro: rotação do arco (0-100 → -45deg a 225deg)
   const speedometerRotation = (score / 100) * 270 - 45;
 
   return (
@@ -575,7 +637,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
           </h1>
         </div>
         <Badge variant="outline" className="text-primary-foreground border-primary-foreground/50 bg-transparent">
-          LicenÃ§a Ativa
+          Licença Ativa
         </Badge>
       </header>
 
@@ -601,7 +663,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
             <BarChart3 className="w-4 h-4" /> 2. GMB Audit
           </TabsTrigger>
           <TabsTrigger value="gestao" className="gap-2">
-            <Activity className="w-4 h-4" /> 3. SaÃºde do NegÃ³cio
+            <Activity className="w-4 h-4" /> 3. Saúde do Negócio
           </TabsTrigger>
         </TabsList>
 
@@ -633,7 +695,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
           <Card className="w-1/3 min-w-[280px] overflow-y-auto bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between border-b border-border">
               <CardTitle className="text-xs uppercase text-muted-foreground">
-                Resultados PrÃ³ximos
+                Resultados Próximos
               </CardTitle>
               {companyData?.gmb_place_type ? (
                 <span className="text-[10px] text-muted-foreground">
@@ -653,9 +715,9 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                   <p className="text-sm text-muted-foreground">
                     Cadastre a categoria GMB em{" "}
                     <span className="font-medium">
-                      ConfiguraÃ§Ãµes &rarr; IntegraÃ§Ãµes &rarr; Google Meu NegÃ³cio
+                      Configurações → Integrações → Google Meu Negócio
                     </span>{" "}
-                    para listar concorrentes prÃ³ximos.
+                    para listar concorrentes próximos.
                   </p>
                 </div>
               ) : competitorsLoading ? (
@@ -668,8 +730,8 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                     Nenhum concorrente encontrado.
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Verifique: 1) EndereÃ§o completo em ConfiguraÃ§Ãµes (o mapa deve exibir sua localizaÃ§Ã£o);
-                    2) Categoria correta; 3) HÃ¡ negÃ³cios do tipo na regiÃ£o.
+                    Verifique: 1) Endereço completo em Configurações (o mapa deve exibir sua localização);
+                    2) Categoria correta; 3) Há negócios do tipo na região.
                   </p>
                 </div>
               ) : (
@@ -699,8 +761,8 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                         </div>
                         <p className="text-xs text-accent">
                           {c.rating != null
-                            ? `${c.rating.toFixed(1)} â˜… (${c.userRatingCount ?? 0})`
-                            : "Sem avaliaÃ§Ãµes"}
+                            ? `${c.rating.toFixed(1)} ★ (${c.userRatingCount ?? 0})`
+                            : "Sem avaliações"}
                         </p>
                         {c.address && (
                           <p className="text-[10px] text-muted-foreground mt-1">{c.address}</p>
@@ -718,7 +780,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                         Anterior
                       </button>
                       <span className="text-xs text-muted-foreground">
-                        PÃ¡gina {competitorsPage} de {Math.ceil(competitors.length / COMPETITORS_PER_PAGE)}
+                        Página {competitorsPage} de {Math.ceil(competitors.length / COMPETITORS_PER_PAGE)}
                       </span>
                       <button
                         type="button"
@@ -730,7 +792,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                         disabled={competitorsPage >= Math.ceil(competitors.length / COMPETITORS_PER_PAGE)}
                         className="text-xs font-medium text-accent hover:text-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        PrÃ³xima
+                        Próxima
                       </button>
                     </div>
                   )}
@@ -762,7 +824,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
 
         {/* ABA 2: GMB AUDIT (REVIEWS) */}
         <TabsContent value="audit" className="flex-1 min-h-0 flex flex-col gap-6 py-6 overflow-auto mt-0 data-[state=inactive]:hidden">
-          {/* SeÃ§Ã£o Reviews */}
+          {/* Seção Reviews */}
           <Card className="w-full max-w-2xl border-border shrink-0">
             <CardHeader className="border-b border-border">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -770,12 +832,12 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                 Reviews do Google
                 {reviewsAverageRating != null && (
                   <span className="text-sm font-normal text-muted-foreground">
-                    ({reviewsAverageRating.toFixed(1)} â˜… mÃ©dia)
+                    ({reviewsAverageRating.toFixed(1)} ★ média)
                   </span>
                 )}
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Responda Ã s avaliaÃ§Ãµes dos clientes diretamente pelo painel.
+                Responda às avaliações dos clientes diretamente pelo painel.
               </p>
             </CardHeader>
             <CardContent className="p-4">
@@ -786,7 +848,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
               ) : reviews.length === 0 ? (
                 <div className="p-6 rounded-lg border border-dashed border-border bg-muted/30 text-center text-sm text-muted-foreground">
                   {reviewsTotalCount === 0 && !reviewsLoading
-                    ? "Nenhum review encontrado. Conecte o Google Meu NegÃ³cio em ConfiguraÃ§Ãµes > IntegraÃ§Ãµes se ainda nÃ£o conectou."
+                    ? "Nenhum review encontrado. Conecte o Google Meu Negócio em Configurações > Integrações se ainda não conectou."
                     : "Nenhum review para exibir."}
                 </div>
               ) : (
@@ -816,7 +878,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                                 </span>
                               )}
                               <span className="text-sm font-medium text-foreground">
-                                {r.reviewer?.displayName ?? "AnÃ´nimo"}
+                                {r.reviewer?.displayName ?? "Anônimo"}
                               </span>
                             </div>
                             {r.comment && (
@@ -869,7 +931,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
             <DialogHeader>
               <DialogTitle>Responder ao review</DialogTitle>
               <DialogDescription>
-                Sua resposta serÃ¡ publicada no Google e visÃ­vel para outros clientes.
+                Sua resposta será publicada no Google e visível para outros clientes.
               </DialogDescription>
             </DialogHeader>
             {replyModal && (
@@ -877,7 +939,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
                     Review: &quot;{replyModal.review.comment?.slice(0, 100)}
-                    {replyModal.review.comment && replyModal.review.comment.length > 100 ? "â€¦" : ""}&quot;
+                    {replyModal.review.comment && replyModal.review.comment.length > 100 ? "…" : ""}&quot;
                   </p>
                   <Textarea
                     placeholder="Digite sua resposta..."
@@ -918,7 +980,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
           </DialogContent>
         </Dialog>
 
-        {/* ABA 3: SAÃšDE DO NEGÃ“CIO - Perfil, Imagens e ServiÃ§os GMB */}
+        {/* ABA 3: SAÚDE DO NEGÓCIO - Perfil, Imagens e Serviços GMB */}
         <TabsContent value="gestao" className="flex-1 min-h-0 overflow-auto mt-0 data-[state=inactive]:hidden">
           <GmbSaudeNegocioTab
             companyData={companyData}
@@ -933,11 +995,16 @@ export default function GMBLocal({ className }: GMBLocalProps) {
             gmbServicesLoading={gmbServicesLoading}
             gmbProfileUpdating={gmbProfileUpdating}
             gmbMediaUploading={gmbMediaUploading}
+            gmbServicesUpdating={gmbServicesUpdating}
+            gmbAvailableServiceTypes={gmbAvailableServiceTypes}
+            gmbAvailableServicesLoading={gmbAvailableServicesLoading}
             onLoadProfile={loadGmbProfile}
             onLoadMedia={loadGmbMedia}
             onLoadServices={loadGmbServices}
+            onLoadAvailableServices={(catId) => void loadGmbAvailableServices(catId)}
             onProfileUpdate={handleProfileUpdate}
             onMediaUpload={handleMediaUpload}
+            onServicesUpdate={handleServicesUpdate}
             reviewsAverageRating={reviewsAverageRating}
             reviewsTotalCount={reviewsTotalCount}
             toast={toast}

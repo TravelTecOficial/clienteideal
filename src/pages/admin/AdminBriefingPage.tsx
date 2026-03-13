@@ -237,7 +237,7 @@ export function AdminBriefingPage() {
     action: "create" | "update" | "delete" | "reorder",
     payload: Record<string, unknown>
   ) => {
-    const token = (await getToken({ template: "supabase" })) ?? (await getToken())
+    const token = (await getToken()) ?? (await getToken({ template: "supabase" }))
     if (!token) throw new Error("Token indisponível. Faça login novamente.")
 
     // #region agent log

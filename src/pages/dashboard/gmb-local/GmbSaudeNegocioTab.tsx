@@ -2,7 +2,7 @@
  * Aba Saúde do Negócio - Gestão de perfil GMB, imagens e serviços.
  * Substitui o conteúdo anterior (Health Score, audit checklist).
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { MapPin, Phone, Loader2, ImagePlus, Pencil, ExternalLink, Briefcase } from "lucide-react";
 import { getErrorMessage, cn } from "@/lib/utils";
 import type { CompanyData } from "./types";
@@ -48,11 +49,16 @@ interface GmbSaudeNegocioTabProps {
   gmbServicesLoading: boolean;
   gmbProfileUpdating: boolean;
   gmbMediaUploading: boolean;
+  gmbServicesUpdating: boolean;
+  gmbAvailableServiceTypes: { serviceTypeId: string; displayName?: string }[];
+  gmbAvailableServicesLoading: boolean;
   onLoadProfile: () => void;
   onLoadMedia: () => void;
   onLoadServices: () => void;
+  onLoadAvailableServices: (categoryId: string) => void;
   onProfileUpdate: (updates: Record<string, unknown>) => Promise<void>;
   onMediaUpload: (file: File, category: "COVER" | "ADDITIONAL") => Promise<void>;
+  onServicesUpdate: (serviceItems: unknown[]) => Promise<void>;
   reviewsAverageRating: number | null;
   reviewsTotalCount: number;
   toast: (p: { variant?: "destructive" | "default"; title: string; description?: string }) => void;
@@ -88,11 +94,16 @@ export function GmbSaudeNegocioTab({
   gmbServicesLoading,
   gmbProfileUpdating,
   gmbMediaUploading,
+  gmbServicesUpdating,
+  gmbAvailableServiceTypes,
+  gmbAvailableServicesLoading,
   onLoadProfile,
   onLoadMedia,
   onLoadServices,
+  onLoadAvailableServices,
   onProfileUpdate,
   onMediaUpload,
+  onServicesUpdate,
   reviewsAverageRating,
   reviewsTotalCount,
   toast,
@@ -103,7 +114,49 @@ export function GmbSaudeNegocioTab({
   const [editAddress, setEditAddress] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const freeFormItems = useMemo(() => {
+    if (!gmbServices?.serviceItems) return [];
+    return gmbServices.serviceItems.filter(
+      (item: unknown) => (item as { freeFormServiceItem?: unknown }).freeFormServiceItem != null
+    );
+  }, [gmbServices?.serviceItems]);
+
+  const currentStructuredIds = useMemo(() => {
+    if (!gmbServices?.serviceItems) return new Set<string>();
+    const ids = new Set<string>();
+    for (const item of gmbServices.serviceItems) {
+      const sid = (item as { structuredServiceItem?: { serviceTypeId?: string } })?.structuredServiceItem?.serviceTypeId;
+      if (sid) ids.add(sid);
+    }
+    return ids;
+  }, [gmbServices?.serviceItems]);
+
+  useEffect(() => {
+    setSelectedServiceIds(currentStructuredIds);
+  }, [currentStructuredIds]);
+
+  useEffect(() => {
+    if (gmbServices?.canModifyServiceList && companyData?.gmb_place_type?.trim()) {
+      onLoadAvailableServices(companyData.gmb_place_type.trim());
+    }
+  }, [gmbServices?.canModifyServiceList, companyData?.gmb_place_type, onLoadAvailableServices]);
+
+  const handleSaveServices = async () => {
+    try {
+      const structuredItems = Array.from(selectedServiceIds).map((id) => ({
+        structuredServiceItem: { serviceTypeId: id },
+      }));
+      const payload = [...structuredItems, ...freeFormItems];
+      await onServicesUpdate(payload);
+      toast({ title: "Serviços atualizados com sucesso." });
+      onLoadServices();
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro ao atualizar serviços", description: getErrorMessage(err) });
+    }
+  };
 
   const profile = gmbProfile as GmbProfile | null;
   const title = profile?.title ?? companyData?.nome_fantasia ?? "Sua Empresa";
@@ -265,17 +318,70 @@ export function GmbSaudeNegocioTab({
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
                     {gmbServices?.canModifyServiceList
-                      ? "Gerencie os serviços oferecidos no seu perfil."
+                      ? "Marque os serviços oferecidos no seu perfil e clique em Salvar."
                       : "A gestão de serviços não está disponível para sua categoria de negócio."}
                   </p>
-                  {gmbServices && gmbServices.serviceItems.length > 0 && (
-                    <ul className="list-disc list-inside text-sm text-foreground space-y-1">
-                      {gmbServices.serviceItems.map((item: unknown, i: number) => {
-                        const s = item as { structuredServiceItem?: { serviceTypeId?: string }; freeFormServiceItem?: { label?: { displayName?: string } } };
-                        const name = s?.structuredServiceItem?.serviceTypeId ?? s?.freeFormServiceItem?.label?.displayName ?? `Serviço ${i + 1}`;
-                        return <li key={i}>{name}</li>;
-                      })}
-                    </ul>
+                  {gmbServices?.canModifyServiceList ? (
+                    <>
+                      {gmbAvailableServicesLoading ? (
+                        <div className="flex justify-center py-4">
+                          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : gmbAvailableServiceTypes.length > 0 ? (
+                        <div className="space-y-3">
+                          {gmbAvailableServiceTypes.map((svc) => {
+                            const label = svc.displayName ?? svc.serviceTypeId?.replace(/^[^_]+_/, "").replace(/_/g, " ") ?? svc.serviceTypeId;
+                            const isChecked = selectedServiceIds.has(svc.serviceTypeId);
+                            return (
+                              <div key={svc.serviceTypeId} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">
+                                <span className="text-sm font-medium capitalize">{label}</span>
+                                <Switch
+                                  checked={isChecked}
+                                  onCheckedChange={(checked) =>
+                                    setSelectedServiceIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (checked) next.add(svc.serviceTypeId);
+                                      else next.delete(svc.serviceTypeId);
+                                      return next;
+                                    })
+                                  }
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Nenhum serviço disponível para esta categoria. Cadastre a categoria GMB em Configurações &gt; Integrações &gt; Google Meu Negócio.
+                        </p>
+                      )}
+                      {gmbAvailableServiceTypes.length > 0 && (
+                        <Button
+                          size="sm"
+                          disabled={gmbServicesUpdating || !onServicesUpdate}
+                          onClick={handleSaveServices}
+                        >
+                          {gmbServicesUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar serviços"}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    gmbServices &&
+                    gmbServices.serviceItems.length > 0 && (
+                      <ul className="list-disc list-inside text-sm text-foreground space-y-1">
+                        {gmbServices.serviceItems.map((item: unknown, i: number) => {
+                          const s = item as {
+                            structuredServiceItem?: { serviceTypeId?: string };
+                            freeFormServiceItem?: { label?: { displayName?: string } };
+                          };
+                          const name =
+                            s?.structuredServiceItem?.serviceTypeId ??
+                            s?.freeFormServiceItem?.label?.displayName ??
+                            `Serviço ${i + 1}`;
+                          return <li key={i}>{name}</li>;
+                        })}
+                      </ul>
+                    )
                   )}
                 </div>
               )}

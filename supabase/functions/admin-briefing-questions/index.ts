@@ -102,7 +102,10 @@ Deno.serve(async (req) => {
 
   let sub: string
   try {
-    const verified = await verifyToken(token, { secretKey: clerkSecret })
+    const verified = await verifyToken(token, {
+      secretKey: clerkSecret,
+      clockSkewInMs: 60_000, // 60s de tolerância para dessincronia de relógio
+    })
     sub = verified.sub as string
   } catch {
     return new Response(
