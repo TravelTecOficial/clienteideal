@@ -317,6 +317,7 @@ Deno.serve(async (req: Request) => {
         "regularHours",
         "specialHours",
         "openInfo",
+        "serviceArea",
         "metadata.placeId",
         "metadata.mapsUri",
         "metadata.newReviewUri",
@@ -358,6 +359,7 @@ Deno.serve(async (req: Request) => {
       "regularHours",
       "specialHours",
       "openInfo",
+      "serviceArea",
       "serviceItems",
     ]
     const updateMask = Object.keys(updates).filter((k) => allowedMask.includes(k))

@@ -15,6 +15,13 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -23,16 +30,43 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { MapPin, Phone, Loader2, ImagePlus, Pencil, ExternalLink, Briefcase } from "lucide-react";
+import { MapPin, Phone, Loader2, ImagePlus, Pencil, ExternalLink, Briefcase, Clock } from "lucide-react";
 import { getErrorMessage, cn } from "@/lib/utils";
 import type { CompanyData } from "./types";
 
+const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] as const;
+const DAY_LABELS: Record<(typeof DAYS)[number], string> = {
+  MONDAY: "Segunda",
+  TUESDAY: "Terça",
+  WEDNESDAY: "Quarta",
+  THURSDAY: "Quinta",
+  FRIDAY: "Sexta",
+  SATURDAY: "Sábado",
+  SUNDAY: "Domingo",
+};
+
+type OpenInfoStatus = "OPEN" | "CLOSED_TEMPORARILY" | "CLOSED_PERMANENTLY";
+
+interface TimeOfDay {
+  hours: number;
+  minutes: number;
+}
+
 interface GmbProfile {
   title?: string;
-  storefrontAddress?: { addressLines?: string[]; locality?: string; administrativeArea?: string };
+  storefrontAddress?: {
+    addressLines?: string[];
+    locality?: string;
+    administrativeArea?: string;
+    postalCode?: string;
+    regionCode?: string;
+  };
   phoneNumbers?: { primaryPhone?: string };
   websiteUri?: string;
   profile?: { description?: string };
+  regularHours?: { periods?: { openDay: string; openTime?: TimeOfDay; closeDay: string; closeTime?: TimeOfDay }[] };
+  openInfo?: { status?: OpenInfoStatus };
+  serviceArea?: { businessType?: string; regionCode?: string };
   metadata?: { mapsUri?: string; placeId?: string };
 }
 
@@ -71,6 +105,21 @@ function formatAddress(addr: GmbProfile["storefrontAddress"]): string {
   if (addr.locality) parts.push(addr.locality);
   if (addr.administrativeArea) parts.push(addr.administrativeArea);
   return parts.join(" - ");
+}
+
+function timeToStr(t?: TimeOfDay): string {
+  if (!t) return "";
+  const h = String(t.hours).padStart(2, "0");
+  const m = String(t.minutes).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+function strToTime(s: string): TimeOfDay | undefined {
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return undefined;
+  const h = Math.min(23, Math.max(0, parseInt(m[1]!, 10)));
+  const min = Math.min(59, Math.max(0, parseInt(m[2]!, 10)));
+  return { hours: h, minutes: min };
 }
 
 function formatAddressFromCompany(c: CompanyData | null): string {
@@ -116,12 +165,20 @@ export function GmbSaudeNegocioTab({
   reviewsTotalCount,
   toast,
 }: GmbSaudeNegocioTabProps) {
-  const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editPhone, setEditPhone] = useState("");
-  const [editAddress, setEditAddress] = useState("");
+  const [editAddressLine1, setEditAddressLine1] = useState("");
+  const [editAddressLine2, setEditAddressLine2] = useState("");
+  const [editLocality, setEditLocality] = useState("");
+  const [editAdministrativeArea, setEditAdministrativeArea] = useState("");
+  const [editPostalCode, setEditPostalCode] = useState("");
+  const [editRegionCode, setEditRegionCode] = useState("BR");
   const [editWebsite, setEditWebsite] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editOpenInfo, setEditOpenInfo] = useState<OpenInfoStatus>("OPEN");
+  const [editHours, setEditHours] = useState<Record<string, { open: string; close: string }>>({});
+  const [editServiceAreaType, setEditServiceAreaType] = useState<string>("");
+  const [editServiceAreaRegion, setEditServiceAreaRegion] = useState("");
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
   const [serviceDescriptions, setServiceDescriptions] = useState<Record<string, string>>({});
   const [serviceDescriptionModal, setServiceDescriptionModal] = useState<{ serviceTypeId: string; displayName: string } | null>(null);
@@ -164,6 +221,38 @@ export function GmbSaudeNegocioTab({
   useEffect(() => {
     setSelectedServiceIds(currentStructuredIds);
   }, [currentStructuredIds]);
+
+  /** Sincroniza formulário de perfil com dados do GMB ou companyData quando carregados. */
+  useEffect(() => {
+    const p = gmbProfile as GmbProfile | null;
+    setEditTitle(p?.title ?? companyData?.nome_fantasia ?? "");
+    setEditPhone(p?.phoneNumbers?.primaryPhone ?? companyData?.celular_atendimento ?? "");
+    const addr = p?.storefrontAddress;
+    setEditAddressLine1(addr?.addressLines?.[0] ?? "");
+    setEditAddressLine2(addr?.addressLines?.[1] ?? "");
+    setEditLocality(addr?.locality ?? companyData?.cidade ?? "");
+    setEditAdministrativeArea(addr?.administrativeArea ?? companyData?.uf ?? "");
+    setEditPostalCode(addr?.postalCode ?? companyData?.cep ?? "");
+    setEditRegionCode(addr?.regionCode ?? "BR");
+    setEditWebsite(p?.websiteUri ?? companyData?.site_oficial ?? "");
+    setEditDescription(p?.profile?.description ?? "");
+    setEditOpenInfo((p?.openInfo?.status as OpenInfoStatus) ?? "OPEN");
+    const hours: Record<string, { open: string; close: string }> = {};
+    for (const d of DAYS) hours[d] = { open: "", close: "" };
+    for (const period of p?.regularHours?.periods ?? []) {
+      const day = period.openDay ?? period.closeDay;
+      if (day && DAYS.includes(day as (typeof DAYS)[number])) {
+        hours[day] = {
+          open: timeToStr(period.openTime),
+          close: timeToStr(period.closeTime),
+        };
+      }
+    }
+    setEditHours(hours);
+    const sa = p?.serviceArea;
+    setEditServiceAreaType(sa?.businessType ?? "");
+    setEditServiceAreaRegion(sa?.regionCode ?? "");
+  }, [gmbProfile, companyData]);
 
   /** Sincroniza descrições dos serviços vindas da API. */
   useEffect(() => {
@@ -231,15 +320,6 @@ export function GmbSaudeNegocioTab({
   ) as { thumbnailUrl?: string; sourceUrl?: string } | undefined;
   const coverSrc = coverImage?.thumbnailUrl ?? coverImage?.sourceUrl ?? "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=400";
 
-  const openEdit = () => {
-    setEditTitle(title);
-    setEditPhone(phone);
-    setEditAddress(address);
-    setEditWebsite(website);
-    setEditDescription(description);
-    setProfileEditOpen(true);
-  };
-
   const handleSaveProfile = async () => {
     try {
       const updates: Record<string, unknown> = {};
@@ -247,10 +327,44 @@ export function GmbSaudeNegocioTab({
       if (editPhone.trim()) updates.phoneNumbers = { primaryPhone: editPhone.trim() };
       if (editWebsite.trim()) updates.websiteUri = editWebsite.trim();
       if (editDescription.trim()) updates.profile = { description: editDescription.trim() };
+
+      const addressLines: string[] = [];
+      if (editAddressLine1.trim()) addressLines.push(editAddressLine1.trim());
+      if (editAddressLine2.trim()) addressLines.push(editAddressLine2.trim());
+      if (addressLines.length > 0 || editLocality.trim() || editAdministrativeArea.trim() || editPostalCode.trim()) {
+        updates.storefrontAddress = {
+          ...(addressLines.length > 0 && { addressLines }),
+          ...(editLocality.trim() && { locality: editLocality.trim() }),
+          ...(editAdministrativeArea.trim() && { administrativeArea: editAdministrativeArea.trim() }),
+          ...(editPostalCode.trim() && { postalCode: editPostalCode.trim() }),
+          regionCode: editRegionCode.trim() || "BR",
+        };
+      }
+
+      updates.openInfo = { status: editOpenInfo };
+
+      const periods: { openDay: string; openTime?: TimeOfDay; closeDay: string; closeTime?: TimeOfDay }[] = [];
+      for (const day of DAYS) {
+        const row = editHours[day];
+        if (!row) continue;
+        const openT = strToTime(row.open);
+        const closeT = strToTime(row.close);
+        if (openT && closeT) {
+          periods.push({ openDay: day, openTime: openT, closeDay: day, closeTime: closeT });
+        }
+      }
+      if (periods.length > 0) updates.regularHours = { periods };
+
+      if (editServiceAreaType.trim()) {
+        updates.serviceArea = {
+          businessType: editServiceAreaType.trim(),
+          ...(editServiceAreaRegion.trim() && { regionCode: editServiceAreaRegion.trim() }),
+        };
+      }
+
       if (Object.keys(updates).length === 0) return;
       await onProfileUpdate(updates);
       toast({ title: "Perfil atualizado com sucesso." });
-      setProfileEditOpen(false);
       onLoadProfile();
     } catch (err) {
       toast({ variant: "destructive", title: "Erro ao atualizar", description: getErrorMessage(err) });
@@ -295,14 +409,161 @@ export function GmbSaudeNegocioTab({
                   <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Edite nome, telefone, site e descrição do perfil no Google Business.
-                  </p>
-                  <Button onClick={openEdit} variant="outline" size="sm">
-                    Editar perfil
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleSaveProfile();
+                  }}
+                  className="space-y-6"
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="edit-title">Nome do negócio</Label>
+                      <Input id="edit-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Ex: Loja Exemplo" />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-phone">Telefone</Label>
+                      <Input id="edit-phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="(11) 99999-9999" />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-website">Site</Label>
+                      <Input id="edit-website" value={editWebsite} onChange={(e) => setEditWebsite(e.target.value)} placeholder="https://" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Endereço
+                    </h4>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <Label htmlFor="edit-addr1">Logradouro</Label>
+                        <Input id="edit-addr1" value={editAddressLine1} onChange={(e) => setEditAddressLine1(e.target.value)} placeholder="Rua, número" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Label htmlFor="edit-addr2">Complemento (opcional)</Label>
+                        <Input id="edit-addr2" value={editAddressLine2} onChange={(e) => setEditAddressLine2(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-locality">Cidade</Label>
+                        <Input id="edit-locality" value={editLocality} onChange={(e) => setEditLocality(e.target.value)} placeholder="São Paulo" />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-admin">Estado (UF)</Label>
+                        <Input id="edit-admin" value={editAdministrativeArea} onChange={(e) => setEditAdministrativeArea(e.target.value)} placeholder="SP" maxLength={2} />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-postal">CEP</Label>
+                        <Input id="edit-postal" value={editPostalCode} onChange={(e) => setEditPostalCode(e.target.value)} placeholder="01234-567" />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-region">Código do país</Label>
+                        <Input id="edit-region" value={editRegionCode} onChange={(e) => setEditRegionCode(e.target.value)} placeholder="BR" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Horário de funcionamento
+                    </h4>
+                    <div className="rounded-md border border-border overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="text-left p-2 font-medium">Dia</th>
+                            <th className="text-left p-2 font-medium">Abertura</th>
+                            <th className="text-left p-2 font-medium">Fechamento</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {DAYS.map((day) => (
+                            <tr key={day} className="border-t border-border">
+                              <td className="p-2">{DAY_LABELS[day]}</td>
+                              <td className="p-2">
+                                <Input
+                                  type="time"
+                                  className="h-8 w-28"
+                                  value={editHours[day]?.open ?? ""}
+                                  onChange={(e) =>
+                                    setEditHours((prev) => ({
+                                      ...prev,
+                                      [day]: { ...prev[day], open: e.target.value, close: prev[day]?.close ?? "" },
+                                    }))
+                                  }
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="time"
+                                  className="h-8 w-28"
+                                  value={editHours[day]?.close ?? ""}
+                                  onChange={(e) =>
+                                    setEditHours((prev) => ({
+                                      ...prev,
+                                      [day]: { open: prev[day]?.open ?? "", ...prev[day], close: e.target.value },
+                                    }))
+                                  }
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <Label>Status do negócio</Label>
+                    <Select value={editOpenInfo} onValueChange={(v) => setEditOpenInfo(v as OpenInfoStatus)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OPEN">Aberto</SelectItem>
+                        <SelectItem value="CLOSED_TEMPORARILY">Fechado temporariamente</SelectItem>
+                        <SelectItem value="CLOSED_PERMANENTLY">Fechado permanentemente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium">Área de atendimento</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Para negócios que atendem no local do cliente (ex: encanador, eletricista).
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor="edit-sa-type">Tipo</Label>
+                        <Select value={editServiceAreaType || "none"} onValueChange={(v) => setEditServiceAreaType(v === "none" ? "" : v)}>
+                          <SelectTrigger id="edit-sa-type">
+                            <SelectValue placeholder="Nenhum" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhum</SelectItem>
+                            <SelectItem value="CUSTOMER_LOCATION_ONLY">Somente no local do cliente</SelectItem>
+                            <SelectItem value="CUSTOMER_AND_BUSINESS_LOCATION">Cliente e endereço fixo</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-sa-region">Código da região</Label>
+                        <Input id="edit-sa-region" value={editServiceAreaRegion} onChange={(e) => setEditServiceAreaRegion(e.target.value)} placeholder="BR" disabled={!editServiceAreaType} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="edit-desc">Descrição</Label>
+                    <Textarea id="edit-desc" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} placeholder="Descreva seu negócio..." className="mt-2" />
+                  </div>
+
+                  <Button type="submit" disabled={gmbProfileUpdating}>
+                    {gmbProfileUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar perfil"}
                   </Button>
-                </div>
+                </form>
               )}
             </AccordionContent>
           </AccordionItem>
@@ -515,43 +776,6 @@ export function GmbSaudeNegocioTab({
           </div>
         </CardContent>
       </Card>
-
-      <Dialog open={profileEditOpen} onOpenChange={setProfileEditOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Editar perfil no Google</DialogTitle>
-            <DialogDescription>
-              As alterações serão enviadas ao Google Business Profile.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="edit-title">Nome</Label>
-              <Input id="edit-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="edit-phone">Telefone</Label>
-              <Input id="edit-phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="edit-website">Site</Label>
-              <Input id="edit-website" value={editWebsite} onChange={(e) => setEditWebsite(e.target.value)} placeholder="https://" />
-            </div>
-            <div>
-              <Label htmlFor="edit-desc">Descrição</Label>
-              <Textarea id="edit-desc" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setProfileEditOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => void handleSaveProfile()} disabled={gmbProfileUpdating}>
-              {gmbProfileUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={!!serviceDescriptionModal}
