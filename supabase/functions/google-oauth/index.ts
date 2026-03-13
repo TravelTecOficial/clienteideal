@@ -1232,6 +1232,37 @@ async function handleGetAdsAccountInfo(
     )
   }
 
+  // Verifica se o token tem o escopo adwords antes de chamar a API (diagnóstico)
+  const tokenInfoRes = await fetch(
+    `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+  )
+  const tokenInfo = (await tokenInfoRes.json().catch(() => ({}))) as {
+    error?: string
+    error_description?: string
+    scope?: string
+  }
+  if (tokenInfo.error) {
+    return jsonResponse(
+      {
+        error: "Token OAuth inválido ou expirado.",
+        hint: `${tokenInfo.error_description ?? tokenInfo.error} Desconecte e reconecte o Google Ads em Configurações > Integrações.`,
+        code: "TOKEN_INVALID",
+      },
+      401,
+    )
+  }
+  const scope = tokenInfo.scope ?? ""
+  if (!scope.includes("adwords") && !scope.includes("https://www.googleapis.com/auth/adwords")) {
+    return jsonResponse(
+      {
+        error: "O token não possui permissão para o Google Ads.",
+        hint: "Desconecte e reconecte o Google Ads em Configurações > Integrações para solicitar o escopo correto.",
+        code: "SCOPE_MISSING",
+      },
+      403,
+    )
+  }
+
   try {
     const adsRes = await fetch("https://googleads.googleapis.com/v20/customers:listAccessibleCustomers", {
       method: "GET",
