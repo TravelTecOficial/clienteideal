@@ -24,8 +24,9 @@ interface HookState<T> {
   error: string | null
 }
 
-export function useInstagramOverview(options?: { enabled?: boolean }): HookState<InstagramOverview> {
+export function useInstagramOverview(options?: { enabled?: boolean; companyId?: string | null }): HookState<InstagramOverview> {
   const enabled = options?.enabled !== false
+  const companyId = options?.companyId
   const { getToken } = useAuth()
   const [state, setState] = useState<HookState<InstagramOverview>>({
     data: null,
@@ -82,6 +83,7 @@ export function useInstagramOverview(options?: { enabled?: boolean }): HookState
           body: JSON.stringify({
             action: "getInstagramOverview",
             token,
+            company_id: companyId ?? undefined,
           }),
         })
         const raw = await res.text()
@@ -189,13 +191,14 @@ export function useInstagramOverview(options?: { enabled?: boolean }): HookState
     return () => {
       cancelled = true
     }
-  }, [getToken, enabled])
+  }, [getToken, enabled, companyId])
 
   return state
 }
 
-export function useFacebookOverview(options?: { enabled?: boolean }): HookState<FacebookOverview> {
+export function useFacebookOverview(options?: { enabled?: boolean; companyId?: string | null }): HookState<FacebookOverview> {
   const enabled = options?.enabled !== false
+  const companyId = options?.companyId
   const { getToken } = useAuth()
   const [state, setState] = useState<HookState<FacebookOverview>>({
     data: null,
@@ -252,6 +255,7 @@ export function useFacebookOverview(options?: { enabled?: boolean }): HookState<
           body: JSON.stringify({
             action: "getFacebookOverview",
             token,
+            company_id: companyId ?? undefined,
           }),
         })
         const raw = await res.text()
@@ -363,7 +367,7 @@ export function useFacebookOverview(options?: { enabled?: boolean }): HookState<
     return () => {
       cancelled = true
     }
-  }, [getToken, enabled])
+  }, [getToken, enabled, companyId])
 
   return state
 }

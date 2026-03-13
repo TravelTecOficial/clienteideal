@@ -1116,7 +1116,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
             apikey: SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({ action: "disconnect", service, token }),
+          body: JSON.stringify({ action: "disconnect", service, token, company_id: companyId ?? undefined }),
         });
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
         if (!res.ok || data?.error) throw new Error(data?.error ?? "Erro");
@@ -1155,7 +1155,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           apikey: SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ action: "getConnectionStatus", token }),
+        body: JSON.stringify({ action: "getConnectionStatus", token, company_id: companyId ?? undefined }),
       });
       const data = (await res.json().catch(() => null)) as {
         instagram?: boolean;
@@ -1828,6 +1828,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           action: "listAccounts",
           service,
           token,
+          company_id: companyId ?? undefined,
         }),
       });
       const raw = await res.text();
@@ -1907,6 +1908,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
             adAccountName: account.name,
             service: "meta_ads",
             token,
+            company_id: companyId ?? undefined,
           }),
         });
         const raw = await res.text();
@@ -1964,6 +1966,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           instagramId: account.instagramBusinessId,
           service,
           token,
+          company_id: companyId ?? undefined,
         }),
       });
       const raw = await res.text();
@@ -2024,6 +2027,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           action: "getInsights",
           instagramId,
           token,
+          company_id: companyId ?? undefined,
         }),
       });
       const raw = await res.text();
@@ -3484,143 +3488,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                             <>Confirmar número</>
                           )}
                         </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {(isInstagramConnected || isFacebookConnected || isMetaAdsConnected) && (
-                    <div className="mt-6 flex flex-col items-start gap-2">
-                      <div className="flex flex-wrap gap-2">
-                        {(isInstagramConnected || isFacebookConnected) && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={isLoadingMetaAccounts}
-                            onClick={() => void handleLoadMetaAccounts(isInstagramConnected ? "instagram" : "facebook")}
-                          >
-                            {isLoadingMetaAccounts && metaAccountsService !== "meta_ads" ? (
-                              <>
-                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                Buscando…
-                              </>
-                            ) : (
-                              <>Ver páginas Facebook</>
-                            )}
-                          </Button>
-                        )}
-                        {isMetaAdsConnected && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={isLoadingMetaAccounts}
-                            onClick={() => void handleLoadMetaAccounts("meta_ads")}
-                          >
-                            {isLoadingMetaAccounts && metaAccountsService === "meta_ads" ? (
-                              <>
-                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                Buscando…
-                              </>
-                            ) : (
-                              <>Ver contas Meta Ads</>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                      {metaAccounts.length === 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          {metaAccountsService === "meta_ads"
-                            ? "Carregue as contas de anúncios para vincular uma à empresa."
-                            : "Carregue as páginas Facebook conectadas para vincular uma conta à empresa."}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {metaAccounts.length > 0 && (
-                    <div className="mt-6 space-y-3">
-                      <h3 className="text-sm font-medium">
-                        {metaAccountsService === "meta_ads"
-                          ? "Contas de anúncios Meta conectadas"
-                          : "Páginas Facebook conectadas"}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {metaAccountsService === "meta_ads"
-                          ? "Selecione qual conta de anúncios será vinculada a esta empresa."
-                          : "Clique em uma conta com Instagram vinculado para métricas. Use o botão para definir qual conta será vinculada à empresa."}
-                      </p>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {metaAccounts.map((account) => (
-                          <div
-                            key={account.id}
-                            className="flex h-full flex-col items-stretch rounded-lg border border-border bg-muted/30 px-3 py-3 text-left transition-colors hover:bg-muted"
-                          >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                metaAccountsService !== "meta_ads" &&
-                                void handleLoadMetaInsights(account.instagramBusinessId)
-                              }
-                              className="flex flex-1 flex-col items-stretch text-left"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div>
-                                  <p className="text-sm font-semibold text-foreground">
-                                    {account.name || (metaAccountsService === "meta_ads" ? "Conta sem nome" : "Página sem nome")}
-                                  </p>
-                                  <p className="text-[11px] text-muted-foreground">
-                                    {metaAccountsService === "meta_ads" ? "Account ID: " : "Page ID: "}
-                                    <span className="font-mono text-[11px]">{account.id}</span>
-                                  </p>
-                                </div>
-                                <div className="flex flex-col items-end gap-1">
-                                  {metaAccountsService !== "meta_ads" && (
-                                    <div className="rounded-full bg-background px-2 py-1 text-[10px] font-medium text-muted-foreground">
-                                      {account.instagramBusinessId
-                                        ? "Instagram vinculado"
-                                        : "Sem Instagram vinculado"}
-                                    </div>
-                                  )}
-                                  {account.isSelected && (
-                                    <Badge variant="outline" className="text-[10px] px-2 py-0.5">
-                                      Conta da empresa
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                              {metaAccountsService !== "meta_ads" && account.instagramBusinessId && (
-                                <p className="mt-1 text-[11px] text-muted-foreground">
-                                  Instagram Business ID:{" "}
-                                  <span className="font-mono text-[11px]">
-                                    {account.instagramBusinessId}
-                                  </span>
-                                </p>
-                              )}
-                            </button>
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                              <p className="text-[11px] text-muted-foreground">
-                                {account.isSelected
-                                  ? "Esta é a conta atualmente vinculada à empresa."
-                                  : metaAccountsService === "meta_ads"
-                                    ? "Defina esta conta como padrão."
-                                    : account.instagramBusinessId
-                                      ? "Defina esta conta como padrão para os insights."
-                                      : "Vincule um Instagram Business a esta página para utilizá-la."}
-                              </p>
-                              <Button
-                                size="sm"
-                                variant={account.isSelected ? "outline" : "default"}
-                                disabled={
-                                  isLoadingMetaAccounts ||
-                                  (metaAccountsService !== "meta_ads" && !account.instagramBusinessId)
-                                }
-                                onClick={() => void handleSelectMetaAccount(account)}
-                                className="shrink-0"
-                              >
-                                {account.isSelected ? "Conta vinculada" : "Vincular à empresa"}
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
                       </div>
                     </div>
                   )}

@@ -55,6 +55,7 @@ import {
   MOCK_KPI_COMERCIAL,
   MOCK_TEMPERATURA,
 } from "./mock-data"
+import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id"
 import {
   useDashboardKpis,
   type DashboardKpis,
@@ -161,6 +162,7 @@ function FunilVendas({ kpis, isLoading }: FunilVendasProps) {
 }
 
 export default function IndicadoresPageContent() {
+  const companyId = useEffectiveCompanyId()
   const [periodoKey, setPeriodoKey] = useState<PeriodoKey>("todo")
   const [activeTab, setActiveTab] = useState<string>("comercial")
   const periodo = getPeriodRange(periodoKey)
@@ -168,9 +170,9 @@ export default function IndicadoresPageContent() {
   const showVariacao = hasVariacao(periodoKey)
   const socialTabActive = activeTab === "social"
   const { data: instagramOverview, isLoading: isLoadingIg, error: instagramError } =
-    useInstagramOverview({ enabled: socialTabActive })
+    useInstagramOverview({ enabled: socialTabActive, companyId })
   const { data: facebookOverview, isLoading: isLoadingFb, error: facebookError } =
-    useFacebookOverview({ enabled: socialTabActive })
+    useFacebookOverview({ enabled: socialTabActive, companyId })
 
   return (
     <div className="space-y-6">

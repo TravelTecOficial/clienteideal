@@ -126,6 +126,7 @@ interface ExchangeCodeBody extends BaseRequestBody {
 
 interface GetConnectionStatusBody extends BaseRequestBody {
   action: "getConnectionStatus"
+  company_id?: string
 }
 
 interface GetConnectionSummaryBody extends BaseRequestBody {
@@ -136,16 +137,19 @@ interface GetConnectionSummaryBody extends BaseRequestBody {
 interface DisconnectBody extends BaseRequestBody {
   action: "disconnect"
   service?: MetaService
+  company_id?: string
 }
 
 interface ListAccountsBody extends BaseRequestBody {
   action: "listAccounts"
   service?: MetaService
+  company_id?: string
 }
 
 interface GetInsightsBody extends BaseRequestBody {
   action: "getInsights"
   instagramId?: string
+  company_id?: string
 }
 
 interface SelectAccountBody extends BaseRequestBody {
@@ -157,16 +161,19 @@ interface SelectAccountBody extends BaseRequestBody {
   adAccountId?: string
   adAccountName?: string
   service?: MetaService
+  company_id?: string
 }
 
 interface InstagramOverviewBody extends BaseRequestBody {
   action: "getInstagramOverview"
   instagramId?: string
+  company_id?: string
 }
 
 interface FacebookOverviewBody extends BaseRequestBody {
   action: "getFacebookOverview"
   pageId?: string
+  company_id?: string
 }
 
 type RequestBody =
@@ -185,6 +192,17 @@ interface AuthContext {
   sub: string
   companyId: string
   isSaasAdmin: boolean
+}
+
+/** Resolve company_id para admin preview: usa body.company_id se admin, senão ctx.companyId */
+function resolveCompanyId(
+  ctx: AuthContext,
+  bodyCompanyId: string | undefined,
+): string {
+  if (ctx.isSaasAdmin && typeof bodyCompanyId === "string" && bodyCompanyId.trim().length > 0) {
+    return bodyCompanyId.trim()
+  }
+  return ctx.companyId
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -544,13 +562,15 @@ async function handleExchangeCode(body: ExchangeCodeBody, ctx: AuthContext, supa
 }
 
 async function handleGetConnectionStatus(
+  body: GetConnectionStatusBody,
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ): Promise<Response> {
+  const companyId = resolveCompanyId(ctx, body.company_id)
   const { data, error } = await supabase
     .from("meta_connections")
     .select("provider_type")
-    .eq("company_id", ctx.companyId)
+    .eq("company_id", companyId)
     .in("provider_type", ["instagram", "facebook", "meta_ads"])
 
   if (error) {
@@ -727,6 +747,7 @@ async function handleListAccounts(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ) {
+  const companyId = resolveCompanyId(ctx, body.company_id)
   const service =
     typeof body.service === "string" && VALID_META_SERVICES.includes(body.service as MetaService)
       ? (body.service as MetaService)
@@ -738,7 +759,7 @@ async function handleListAccounts(
   let selectedAdAccountId: string | null = null
 
   if (service && (service === "instagram" || service === "facebook")) {
-    const result = await getActiveMetaConnectionForService(ctx.companyId, service, supabase)
+    const result = await getActiveMetaConnectionForService(companyId, service, supabase)
     if (result.error) return result.error
     if (!result.accessTokenEncrypted || !result.metaConfig) {
       return jsonResponse({ error: "Integração não encontrada para este serviço." }, 404)
@@ -755,7 +776,7 @@ async function handleListAccounts(
       )
     }
   } else if (service && service === "meta_ads") {
-    const result = await getActiveMetaConnectionForService(ctx.companyId, "meta_ads", supabase)
+    const result = await getActiveMetaConnectionForService(companyId, "meta_ads", supabase)
     if (result.error) return result.error
     if (!result.accessTokenEncrypted || !result.metaConfig) {
       return jsonResponse({ error: "Integração não encontrada para Meta Ads." }, 404)
@@ -771,8 +792,8 @@ async function handleListAccounts(
       )
     }
   } else {
-    const instagramResult = await getActiveMetaConnectionForService(ctx.companyId, "instagram", supabase)
-    const facebookResult = await getActiveMetaConnectionForService(ctx.companyId, "facebook", supabase)
+    const instagramResult = await getActiveMetaConnectionForService(companyId, "instagram", supabase)
+    const facebookResult = await getActiveMetaConnectionForService(companyId, "facebook", supabase)
     const result = instagramResult.accessTokenEncrypted ? instagramResult : facebookResult
     if (result.error) return result.error
     if (!result.accessTokenEncrypted || !result.metaConfig) {
@@ -867,9 +888,10 @@ async function handleGetInsights(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ) {
-  const instagramResult = await getActiveMetaConnectionForService(ctx.companyId, "instagram", supabase)
+  const companyId = resolveCompanyId(ctx, body.company_id)
+  const instagramResult = await getActiveMetaConnectionForService(companyId, "instagram", supabase)
   const facebookResult = instagramResult.error
-    ? await getActiveMetaConnectionForService(ctx.companyId, "facebook", supabase)
+    ? await getActiveMetaConnectionForService(companyId, "facebook", supabase)
     : instagramResult
 
   const result = instagramResult.error ? facebookResult : instagramResult
@@ -963,6 +985,7 @@ async function handleInstagramOverview(
     action: "getInsights",
     instagramId: body.instagramId,
     token: body.token,
+    company_id: body.company_id,
   }
   return handleGetInsights(delegateBody, ctx, supabase)
 }
@@ -976,9 +999,10 @@ async function handleFacebookOverview(
   if ("error" in metaConfigCheck) {
     return jsonResponse({ pageId: "", metrics: [] })
   }
-  const facebookResult = await getActiveMetaConnectionForService(ctx.companyId, "facebook", supabase)
+  const companyId = resolveCompanyId(ctx, body.company_id)
+  const facebookResult = await getActiveMetaConnectionForService(companyId, "facebook", supabase)
   const instagramResult = facebookResult.error
-    ? await getActiveMetaConnectionForService(ctx.companyId, "instagram", supabase)
+    ? await getActiveMetaConnectionForService(companyId, "instagram", supabase)
     : facebookResult
 
   const result = facebookResult.error ? instagramResult : facebookResult
@@ -1173,6 +1197,7 @@ async function handleSelectAccount(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ) {
+  const companyId = resolveCompanyId(ctx, body.company_id)
   const pageIdRaw = body.pageId
   const instagramIdRaw = body.instagramId
   const adAccountIdRaw = body.adAccountId
@@ -1200,7 +1225,7 @@ async function handleSelectAccount(
         selected_ad_account_name: adAccountName,
         updated_at: new Date().toISOString(),
       })
-      .eq("company_id", ctx.companyId)
+      .eq("company_id", companyId)
       .eq("provider_type", "meta_ads")
 
     if (updateError) {
@@ -1244,7 +1269,7 @@ async function handleSelectAccount(
         selected_instagram_username: instagramUsername,
         updated_at: new Date().toISOString(),
       })
-      .eq("company_id", ctx.companyId)
+      .eq("company_id", companyId)
       .eq("provider_type", service)
 
     if (updateError) {
@@ -1272,6 +1297,7 @@ async function handleDisconnect(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ): Promise<Response> {
+  const companyId = resolveCompanyId(ctx, body.company_id)
   const service =
     typeof body.service === "string" && VALID_META_SERVICES.includes(body.service as MetaService)
       ? (body.service as MetaService)
@@ -1280,7 +1306,7 @@ async function handleDisconnect(
   const { error } = await supabase
     .from("meta_connections")
     .delete()
-    .eq("company_id", ctx.companyId)
+    .eq("company_id", companyId)
     .eq("provider_type", service)
 
   if (error) {
@@ -1348,7 +1374,7 @@ Deno.serve(async (req) => {
     case "exchangeCode":
       return handleExchangeCode(body as ExchangeCodeBody, ctx, supabase)
     case "getConnectionStatus":
-      return handleGetConnectionStatus(ctx, supabase)
+      return handleGetConnectionStatus(body as GetConnectionStatusBody, ctx, supabase)
     case "getConnectionSummary":
       return handleGetConnectionSummary(body as GetConnectionSummaryBody, ctx, supabase)
     case "listAccounts":
