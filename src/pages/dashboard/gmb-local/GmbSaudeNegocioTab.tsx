@@ -139,8 +139,12 @@ export function GmbSaudeNegocioTab({
   }, [currentStructuredIds]);
 
   useEffect(() => {
-    if (gmbServices?.canModifyServiceList && companyData?.gmb_place_type?.trim()) {
-      onLoadAvailableServices(companyData.gmb_place_type.trim());
+    const shouldCall = !!(gmbServices?.canModifyServiceList && companyData?.gmb_place_type?.trim());
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ada811'},body:JSON.stringify({sessionId:'ada811',location:'GmbSaudeNegocioTab.tsx:useEffect',message:'useEffect onLoadAvailableServices deps',data:{shouldCall,canModify:!!gmbServices?.canModifyServiceList,hasPlaceType:!!companyData?.gmb_place_type?.trim()},hypothesisId:'A','timestamp':Date.now()})}).catch(()=>{});
+    // #endregion
+    if (shouldCall) {
+      onLoadAvailableServices(companyData!.gmb_place_type!.trim());
     }
   }, [gmbServices?.canModifyServiceList, companyData?.gmb_place_type, onLoadAvailableServices]);
 

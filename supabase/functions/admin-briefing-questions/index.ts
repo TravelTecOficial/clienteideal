@@ -48,6 +48,64 @@ function isValidSlug(s: string): boolean {
   return /^[a-z0-9_]+$/.test(s) && s.length >= 2 && s.length <= 80
 }
 
+async function debugLog(params: {
+  runId: string
+  hypothesisId: string
+  location: string
+  message: string
+  data?: Record<string, unknown>
+}) {
+  // #region agent log
+  await fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "d58bde",
+    },
+    body: JSON.stringify({
+      sessionId: "d58bde",
+      runId: params.runId,
+      hypothesisId: params.hypothesisId,
+      location: params.location,
+      message: params.message,
+      data: params.data ?? {},
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
+}
+
+function decodeJwtPart(part: string): Record<string, unknown> {
+  try {
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/")
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4)
+    return JSON.parse(atob(padded)) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
+function getTokenDebugData(token: string) {
+  const [headerPart = "", payloadPart = ""] = token.split(".")
+  const header = decodeJwtPart(headerPart)
+  const payload = decodeJwtPart(payloadPart)
+  const nowSec = Math.floor(Date.now() / 1000)
+
+  return {
+    alg: typeof header.alg === "string" ? header.alg : null,
+    kidPrefix: typeof header.kid === "string" ? header.kid.slice(0, 12) : null,
+    iss: typeof payload.iss === "string" ? payload.iss : null,
+    iat: typeof payload.iat === "number" ? payload.iat : null,
+    nbf: typeof payload.nbf === "number" ? payload.nbf : null,
+    exp: typeof payload.exp === "number" ? payload.exp : null,
+    nowSec,
+    expDeltaSec: typeof payload.exp === "number" ? payload.exp - nowSec : null,
+    nbfDeltaSec: typeof payload.nbf === "number" ? payload.nbf - nowSec : null,
+    role: typeof payload.role === "string" ? payload.role : null,
+    hasSid: typeof payload.sid === "string",
+  }
+}
+
 interface RequestBody {
   action: "create" | "update" | "delete" | "reorder"
   token?: string
@@ -102,12 +160,48 @@ Deno.serve(async (req) => {
 
   let sub: string
   try {
-    const verified = await verifyToken(token, {
-      secretKey: clerkSecret,
-      clockSkewInMs: 60_000, // 60s de tolerância para dessincronia de relógio
+    await debugLog({
+      runId: "pre-fix",
+      hypothesisId: "C",
+      location: "admin-briefing-questions/index.ts:verifyToken",
+      message: "Antes do verifyToken",
+      data: {
+        ...getTokenDebugData(token),
+        secretEnv: clerkSecret.startsWith("sk_test_") ? "sk_test" : "sk_live",
+      },
     })
+
+    const verified = await verifyToken(token, { secretKey: clerkSecret })
+
+    await debugLog({
+      runId: "pre-fix",
+      hypothesisId: "D",
+      location: "admin-briefing-questions/index.ts:verifyToken",
+      message: "verifyToken ok",
+      data: {
+        ...getTokenDebugData(token),
+        hasSub: typeof verified.sub === "string" && verified.sub.length > 0,
+      },
+    })
+
     sub = verified.sub as string
-  } catch {
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    const errName = err instanceof Error ? err.name : "UnknownError"
+
+    await debugLog({
+      runId: "pre-fix",
+      hypothesisId: "E",
+      location: "admin-briefing-questions/index.ts:verifyToken",
+      message: "verifyToken falhou",
+      data: {
+        ...getTokenDebugData(token),
+        secretEnv: clerkSecret.startsWith("sk_test_") ? "sk_test" : "sk_live",
+        errorName: errName,
+        errorMessage: errMsg,
+      },
+    })
+
     return new Response(
       JSON.stringify({ error: "Token inválido ou expirado. Faça login novamente." }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
