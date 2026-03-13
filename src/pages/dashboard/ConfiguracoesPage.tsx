@@ -5,7 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
-import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2, Trash2, Pencil, Plug2, MapPin, MessageSquare, Sparkles, Search } from "lucide-react";
+import { Plus, Loader2, Check, Database, Megaphone, Smartphone, ImagePlus, Building2, Trash2, Pencil, Plug2, MapPin, MessageSquare, Sparkles, Search, RefreshCw } from "lucide-react";
 import { SiWhatsapp, SiGoogleads, SiMeta, SiInstagram, SiGoogleanalytics, SiGoogle, SiFacebook, SiWordpress } from "react-icons/si";
 
 import { Separator } from "@/components/ui/separator";
@@ -272,6 +272,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
   const [isFetchingEmpresa, setIsFetchingEmpresa] = useState(true);
   const [isSavingEmpresa, setIsSavingEmpresa] = useState(false);
+  const [isGmbSyncLoading, setIsGmbSyncLoading] = useState(false);
   const [isFetchingDados, setIsFetchingDados] = useState(true);
   const [isSavingDados, setIsSavingDados] = useState(false);
   const [supportAccessEnabled, setSupportAccessEnabled] = useState(true);
@@ -2163,6 +2164,48 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
   }
 
+  // Sincronizar categorias e Place ID do perfil Google Meu Negócio
+  async function handleSyncGmbCategories() {
+    if (!companyId) return;
+    setIsGmbSyncLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        toast({
+          variant: "destructive",
+          title: "Sessão inválida",
+          description: "Faça login novamente para sincronizar.",
+        });
+        return;
+      }
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/gmb-sync-profile`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ company_id: companyId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; success?: boolean; synced?: Record<string, string | null> };
+      if (!res.ok) {
+        throw new Error(data?.error ?? `Erro ${res.status}`);
+      }
+      toast({
+        title: "Categorias sincronizadas",
+        description: "Place ID e categorias foram atualizados a partir do perfil Google.",
+      });
+      void loadEmpresa();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao sincronizar",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsGmbSyncLoading(false);
+    }
+  }
+
   // Salvar informações da empresa (aba Empresa)
   async function onEmpresaSubmit(values: EmpresaFormValues) {
     if (!companyId) {
@@ -2175,29 +2218,34 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
     setIsSavingEmpresa(true);
     try {
+      // Quando GMB está conectado, categorias e Place ID vêm do perfil Google — não sobrescrever
+      const gmbLocked = isMyBusinessConnected && !!selectedMyBusinessPropertyName;
+      const updatePayload: Record<string, string | null> = {
+        name: values.name?.trim() || null,
+        nome_fantasia: values.nome_fantasia?.trim() || null,
+        cnpj: values.cnpj?.trim() || null,
+        logradouro: values.logradouro?.trim() || null,
+        numero: values.numero?.trim() || null,
+        bairro: values.bairro?.trim() || null,
+        cidade: values.cidade?.trim() || null,
+        uf: values.uf?.trim() || null,
+        cep: values.cep?.trim() || null,
+        site_oficial: values.site_oficial?.trim() || null,
+        celular_atendimento: values.celular_atendimento?.trim() || null,
+        email_atendimento: values.email_atendimento?.trim() || null,
+        horario_funcionamento: values.horario_funcionamento?.trim() || null,
+        instagram_url: values.instagram_url?.trim() || null,
+        facebook_url: values.facebook_url?.trim() || null,
+        linkedin_url: values.linkedin_url?.trim() || null,
+      };
+      if (!gmbLocked) {
+        updatePayload.gmb_place_type = values.gmb_place_type?.trim() || null;
+        updatePayload.gmb_place_type_secondary = values.gmb_place_type_secondary?.trim() || null;
+        updatePayload.gmb_place_id = values.gmb_place_id?.trim() || null;
+      }
       const { error } = await supabase
         .from("companies")
-        .update({
-          name: values.name?.trim() || null,
-          nome_fantasia: values.nome_fantasia?.trim() || null,
-          cnpj: values.cnpj?.trim() || null,
-          logradouro: values.logradouro?.trim() || null,
-          numero: values.numero?.trim() || null,
-          bairro: values.bairro?.trim() || null,
-          cidade: values.cidade?.trim() || null,
-          uf: values.uf?.trim() || null,
-          cep: values.cep?.trim() || null,
-          site_oficial: values.site_oficial?.trim() || null,
-          celular_atendimento: values.celular_atendimento?.trim() || null,
-          email_atendimento: values.email_atendimento?.trim() || null,
-          horario_funcionamento: values.horario_funcionamento?.trim() || null,
-          instagram_url: values.instagram_url?.trim() || null,
-          facebook_url: values.facebook_url?.trim() || null,
-          linkedin_url: values.linkedin_url?.trim() || null,
-          gmb_place_type: values.gmb_place_type?.trim() || null,
-          gmb_place_type_secondary: values.gmb_place_type_secondary?.trim() || null,
-          gmb_place_id: values.gmb_place_id?.trim() || null,
-        })
+        .update(updatePayload)
         .eq("id", companyId);
 
       if (error) throw error;
@@ -2906,7 +2954,25 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
 
                       {/* Google Business (avançado) */}
                       <div className="space-y-4">
-                        <h4 className="text-sm font-medium text-foreground">Google Business (avançado)</h4>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-medium text-foreground">Google Business (avançado)</h4>
+                          {isMyBusinessConnected && selectedMyBusinessPropertyName && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={isGmbSyncLoading}
+                              onClick={handleSyncGmbCategories}
+                            >
+                              {isGmbSyncLoading ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                              )}
+                              Sincronizar categorias do Google
+                            </Button>
+                          )}
+                        </div>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2 sm:col-span-2">
                             <Label htmlFor="empresa_gmb_place_id">Place ID (somente leitura)</Label>

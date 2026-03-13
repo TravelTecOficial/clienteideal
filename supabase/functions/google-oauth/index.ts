@@ -9,7 +9,7 @@
  *
  * selectMyBusinessLocation: ao selecionar perfil, busca placeId e categorias via Business
  * Information API (metadata.placeId, categories.primaryCategory, categories.additionalCategories)
- * e atualiza companies. Usa displayName das categorias (ex: "Agência de marketing digital").
+ * e atualiza companies. Usa name (ID estável) das categorias para compatibilidade com Places API.
  *
  * Scopes: GA4, Ads, My Business.
  * refresh_token é armazenado criptografado para renovação automática de access_token no futuro.
@@ -1229,16 +1229,28 @@ async function handleSelectMyBusinessLocation(
               }
             } | null
             const placeId = locData?.metadata?.placeId?.trim() ?? null
-            const primaryDisplayName =
-              locData?.categories?.primaryCategory?.displayName?.trim() ?? null
-            const secondaryDisplayName =
-              locData?.categories?.additionalCategories?.[0]?.displayName?.trim() ?? null
+            // Usar name (ID estável) para compatibilidade com Places API; fallback para displayName
+            const toPlaceType = (raw: string | undefined): string | null => {
+              const s = raw?.trim()
+              if (!s) return null
+              // Formato gcid:xxx -> extrair xxx para Places API
+              if (s.startsWith("gcid:")) return s.slice(5).trim() || null
+              return s
+            }
+            const primaryRaw =
+              locData?.categories?.primaryCategory?.name ??
+              locData?.categories?.primaryCategory?.displayName
+            const secondaryRaw =
+              locData?.categories?.additionalCategories?.[0]?.name ??
+              locData?.categories?.additionalCategories?.[0]?.displayName
+            const primaryType = toPlaceType(primaryRaw)
+            const secondaryType = toPlaceType(secondaryRaw)
             const { error: updateErr } = await supabase
               .from("companies")
               .update({
                 gmb_place_id: placeId,
-                gmb_place_type: primaryDisplayName,
-                gmb_place_type_secondary: secondaryDisplayName,
+                gmb_place_type: primaryType,
+                gmb_place_type_secondary: secondaryType,
               })
               .eq("id", ctx.companyId)
             if (updateErr) {

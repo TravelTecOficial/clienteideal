@@ -292,6 +292,19 @@ Arquivo: `supabase/functions/gmb-qa/index.ts`
   - Secrets: `CLERK_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`.
 - Deploy: `npx supabase functions deploy gmb-qa --no-verify-jwt`.
 
+### Edge Function `gmb-sync-profile`
+
+Arquivo: `supabase/functions/gmb-sync-profile/index.ts`
+
+- Sincroniza Place ID e categorias do perfil Google Meu Negócio para a empresa.
+- Busca dados via Business Information API e atualiza `companies.gmb_place_id`, `gmb_place_type`, `gmb_place_type_secondary`.
+- Requisitos:
+  - Header `Authorization: Bearer <clerk_jwt>` (JWT do Clerk).
+  - Body: `{ company_id?: string }`.
+  - Secrets: `CLERK_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`.
+- Usado quando o perfil GMB está conectado e o usuário quer atualizar categorias a partir do Google (botão "Sincronizar categorias do Google" em Configurações).
+- Deploy: `npx supabase functions deploy gmb-sync-profile --no-verify-jwt`.
+
 ---
 
 ## Boas práticas ao consumir integrações no frontend
