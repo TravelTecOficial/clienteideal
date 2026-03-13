@@ -818,6 +818,7 @@ async function handleListAccounts(
   if (service && service === "meta_ads") {
     const url = new URL(`https://graph.facebook.com/${metaConfig.graphVersion}/me/adaccounts`)
     url.searchParams.set("fields", "name,account_id")
+    url.searchParams.set("limit", "500")
     url.searchParams.set("access_token", token)
 
     let payload: MeAdAccountsResponse = {}

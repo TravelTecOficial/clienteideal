@@ -1881,7 +1881,10 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     }
   }
 
-  async function handleSelectMetaAccount(account: MetaAccount) {
+  async function handleSelectMetaAccount(
+    account: MetaAccount,
+    serviceOverride?: "instagram" | "facebook" | "meta_ads",
+  ) {
     if (!companyId) {
       toast({
         variant: "destructive",
@@ -1890,7 +1893,10 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       });
       return;
     }
-    const service = metaAccountsService ?? (isInstagramConnected ? "instagram" : isFacebookConnected ? "facebook" : "meta_ads");
+    const service =
+      serviceOverride ??
+      metaAccountsService ??
+      (isInstagramConnected ? "instagram" : isFacebookConnected ? "facebook" : "meta_ads");
     if (service === "meta_ads") {
       try {
         const token = await getToken();
@@ -1938,7 +1944,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       }
       return;
     }
-    if (!account.instagramBusinessId) {
+    // Instagram exige página com IG vinculado; Facebook aceita qualquer página
+    if (service === "instagram" && !account.instagramBusinessId) {
       toast({
         variant: "destructive",
         title: "Instagram não vinculado",
@@ -1963,7 +1970,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           action: "selectAccount",
           pageId: account.id,
           pageName: account.name,
-          instagramId: account.instagramBusinessId,
+          instagramId: account.instagramBusinessId ?? undefined,
           service,
           token,
           company_id: companyId ?? undefined,
@@ -3125,13 +3132,22 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                     selectedMetaAccount?.id ??
                                     (metaAccountsForCard.length > 0 ? metaAccountsForCard[0].id : "")
                                   }
+                                  onOpenChange={(open) => {
+                                    if (open && metaAccountsForCard.length === 0 && !isLoadingMetaForCard && companyId) {
+                                      void handleLoadMetaAccounts(int.id === "meta-ads" ? "meta_ads" : (int.id as "instagram" | "facebook"));
+                                    }
+                                  }}
                                   onValueChange={(value) => {
                                     if (value === "__load__") {
                                       void handleLoadMetaAccounts(int.id === "meta-ads" ? "meta_ads" : (int.id as "instagram" | "facebook"));
                                       return;
                                     }
                                     const acc = metaAccountsForCard.find((a) => a.id === value);
-                                    if (acc) void handleSelectMetaAccount(acc);
+                                    if (acc)
+                                      void handleSelectMetaAccount(
+                                        acc,
+                                        int.id === "meta-ads" ? "meta_ads" : (int.id as "instagram" | "facebook"),
+                                      );
                                   }}
                                   disabled={isLoadingMetaForCard || !companyId}
                                 >
