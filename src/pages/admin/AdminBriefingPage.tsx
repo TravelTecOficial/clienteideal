@@ -240,6 +240,21 @@ export function AdminBriefingPage() {
     const token = (await getToken({ template: "supabase" })) ?? (await getToken())
     if (!token) throw new Error("Token indisponível. Faça login novamente.")
 
+    // #region agent log
+    fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "d58bde" },
+      body: JSON.stringify({
+        sessionId: "d58bde",
+        location: "AdminBriefingPage.tsx:callEdgeFunction",
+        message: "Antes do fetch",
+        data: { action, hasToken: !!token, tokenPrefix: token?.slice(0, 20) },
+        timestamp: Date.now(),
+        hypothesisId: "A",
+      }),
+    }).catch(() => {})
+    // #endregion
+
     const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-briefing-questions`, {
       method: "POST",
       headers: {
@@ -250,6 +265,22 @@ export function AdminBriefingPage() {
       body: JSON.stringify({ action, token, ...payload }),
     })
     const data = (await res.json().catch(() => ({}))) as { error?: string }
+
+    // #region agent log
+    fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "d58bde" },
+      body: JSON.stringify({
+        sessionId: "d58bde",
+        location: "AdminBriefingPage.tsx:callEdgeFunction",
+        message: "Resposta da API",
+        data: { status: res.status, ok: res.ok, body: data },
+        timestamp: Date.now(),
+        hypothesisId: "B",
+      }),
+    }).catch(() => {})
+    // #endregion
+
     if (!res.ok) throw new Error(data?.error ?? `Erro ${res.status}`)
     if (data?.error) throw new Error(data.error)
   }

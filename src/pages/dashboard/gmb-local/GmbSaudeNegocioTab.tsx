@@ -93,6 +93,8 @@ export function GmbSaudeNegocioTab({
   onLoadServices,
   onProfileUpdate,
   onMediaUpload,
+  reviewsAverageRating,
+  reviewsTotalCount,
   toast,
 }: GmbSaudeNegocioTabProps) {
   const [profileEditOpen, setProfileEditOpen] = useState(false);

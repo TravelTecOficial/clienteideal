@@ -4,6 +4,11 @@
  * CRUD de perguntas do Questionário de Briefing Estratégico.
  * Apenas admin do SaaS (Clerk publicMetadata.role === "admin") pode acessar.
  *
+ * Auth: --no-verify-jwt (validação via Clerk verifyToken na função).
+ * Secret: CLERK_SECRET_KEY.
+ * Deploy DEV: npx supabase functions deploy admin-briefing-questions --project-ref mrkvvgofjyvlutqpvedt --no-verify-jwt
+ * Deploy PROD: npx supabase functions deploy admin-briefing-questions --project-ref bctjodobbsxieywgulvl --no-verify-jwt
+ *
  * POST body: { action: "create" | "update" | "delete" | "reorder", token?, ... }
  * - create: { category, question_text, help_text?, input_type, slug, is_atrito?, options?, ordem? }
  * - update: { id, question_text?, help_text?, input_type?, slug?, is_atrito?, options?, ordem? }
