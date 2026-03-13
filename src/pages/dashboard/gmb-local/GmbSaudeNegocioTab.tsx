@@ -123,6 +123,9 @@ export function GmbSaudeNegocioTab({
   const [editWebsite, setEditWebsite] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
+  const [serviceDescriptions, setServiceDescriptions] = useState<Record<string, string>>({});
+  const [serviceDescriptionModal, setServiceDescriptionModal] = useState<{ serviceTypeId: string; displayName: string } | null>(null);
+  const [serviceDescriptionDraft, setServiceDescriptionDraft] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const freeFormItems = useMemo(() => {
@@ -162,6 +165,19 @@ export function GmbSaudeNegocioTab({
     setSelectedServiceIds(currentStructuredIds);
   }, [currentStructuredIds]);
 
+  /** Sincroniza descrições dos serviços vindas da API. */
+  useEffect(() => {
+    if (!gmbServices?.serviceItems?.length) return;
+    const next: Record<string, string> = {};
+    for (const item of gmbServices.serviceItems) {
+      const s = item as { structuredServiceItem?: { serviceTypeId?: string; description?: string } };
+      const sid = s?.structuredServiceItem?.serviceTypeId;
+      const desc = s?.structuredServiceItem?.description?.trim();
+      if (sid && desc) next[sid] = desc;
+    }
+    setServiceDescriptions((prev) => ({ ...prev, ...next }));
+  }, [gmbServices?.serviceItems]);
+
   useEffect(() => {
     const shouldCall = !!(gmbServices?.canModifyServiceList && companyData?.gmb_place_type?.trim());
     if (shouldCall) {
@@ -171,9 +187,14 @@ export function GmbSaudeNegocioTab({
 
   const handleSaveServices = async () => {
     try {
-      const structuredItems = Array.from(selectedServiceIds).map((id) => ({
-        structuredServiceItem: { serviceTypeId: id },
-      }));
+      const structuredItems = Array.from(selectedServiceIds).map((id) => {
+        const desc = serviceDescriptions[id]?.trim();
+        return {
+          structuredServiceItem: desc
+            ? { serviceTypeId: id, description: desc }
+            : { serviceTypeId: id },
+        };
+      });
       const payload = [...structuredItems, ...freeFormItems];
       await onServicesUpdate(payload);
       toast({ title: "Serviços atualizados com sucesso." });
@@ -181,6 +202,19 @@ export function GmbSaudeNegocioTab({
     } catch (err) {
       toast({ variant: "destructive", title: "Erro ao atualizar serviços", description: getErrorMessage(err) });
     }
+  };
+
+  const openServiceDescriptionModal = (svc: { serviceTypeId: string; displayName?: string }) => {
+    const displayName = svc.displayName ?? formatServiceTypeDisplayName(svc.serviceTypeId);
+    setServiceDescriptionModal({ serviceTypeId: svc.serviceTypeId, displayName });
+    setServiceDescriptionDraft(serviceDescriptions[svc.serviceTypeId] ?? "");
+  };
+
+  const handleSaveServiceDescription = () => {
+    if (!serviceDescriptionModal) return;
+    const trimmed = serviceDescriptionDraft.trim().slice(0, 300);
+    setServiceDescriptions((prev) => ({ ...prev, [serviceDescriptionModal.serviceTypeId]: trimmed }));
+    setServiceDescriptionModal(null);
   };
 
   const profile = gmbProfile as GmbProfile | null;
@@ -343,7 +377,7 @@ export function GmbSaudeNegocioTab({
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
                     {gmbServices?.canModifyServiceList
-                      ? "Marque os serviços oferecidos no seu perfil e clique em Salvar."
+                      ? "Marque os serviços oferecidos, clique no ícone de lápis para adicionar um texto em cada um e depois em Salvar."
                       : "A gestão de serviços não está disponível para sua categoria de negócio."}
                   </p>
                   {gmbServices?.canModifyServiceList ? (
@@ -357,9 +391,36 @@ export function GmbSaudeNegocioTab({
                           {effectiveServiceTypes.map((svc) => {
                             const label = svc.displayName ?? formatServiceTypeDisplayName(svc.serviceTypeId);
                             const isChecked = selectedServiceIds.has(svc.serviceTypeId);
+                            const hasDesc = Boolean(serviceDescriptions[svc.serviceTypeId]?.trim());
                             return (
-                              <div key={svc.serviceTypeId} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">
-                                <span className="text-sm font-medium">{label}</span>
+                              <div
+                                key={svc.serviceTypeId}
+                                className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0"
+                              >
+                                <div className="flex flex-1 min-w-0 items-center gap-2">
+                                  <span className="text-sm font-medium">{label}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => openServiceDescriptionModal(svc)}
+                                    className={cn(
+                                      "shrink-0 rounded p-1 transition-colors",
+                                      hasDesc
+                                        ? "text-primary hover:bg-primary/10"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    )}
+                                    title={hasDesc ? "Editar descrição" : "Adicionar descrição"}
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  {hasDesc && (
+                                    <span className="text-[10px] text-muted-foreground truncate max-w-[140px]" title={serviceDescriptions[svc.serviceTypeId]}>
+                                      {(() => {
+                                        const d = serviceDescriptions[svc.serviceTypeId] ?? "";
+                                        return d.length > 35 ? `${d.slice(0, 35)}…` : d;
+                                      })()}
+                                    </span>
+                                  )}
+                                </div>
                                 <Switch
                                   checked={isChecked}
                                   onCheckedChange={(checked) =>
@@ -487,6 +548,49 @@ export function GmbSaudeNegocioTab({
             </Button>
             <Button onClick={() => void handleSaveProfile()} disabled={gmbProfileUpdating}>
               {gmbProfileUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!serviceDescriptionModal}
+        onOpenChange={(open) => !open && setServiceDescriptionModal(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Descrição do serviço</DialogTitle>
+            <DialogDescription>
+              {serviceDescriptionModal && (
+                <>
+                  Adicione um texto para &quot;{serviceDescriptionModal.displayName}&quot;. Máximo 300 caracteres.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="service-desc">Texto da descrição</Label>
+              <Textarea
+                id="service-desc"
+                value={serviceDescriptionDraft}
+                onChange={(e) => setServiceDescriptionDraft(e.target.value.slice(0, 300))}
+                placeholder="Ex: Consultoria personalizada para estratégias de marketing digital."
+                rows={4}
+                maxLength={300}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {serviceDescriptionDraft.length}/300 caracteres
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setServiceDescriptionModal(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveServiceDescription}>
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>
