@@ -7,9 +7,9 @@
  * - action: "getConnectionStatus" -> retorna se há conexão ativa (sem expor tokens)
  * - action: "disconnect"     -> remove conexão da empresa
  *
- * selectMyBusinessLocation: ao selecionar perfil, busca placeId via Business Information API,
- * chama Place Details para primaryType/types e atualiza companies (gmb_place_id, gmb_place_type,
- * gmb_place_type_secondary). Requer GOOGLE_PLACES_API_KEY nas secrets.
+ * selectMyBusinessLocation: ao selecionar perfil, busca placeId e categorias via Business
+ * Information API (metadata.placeId, categories.primaryCategory, categories.additionalCategories)
+ * e atualiza companies. Usa displayName das categorias (ex: "Agência de marketing digital").
  *
  * Scopes: GA4, Ads, My Business.
  * refresh_token é armazenado criptografado para renovação automática de access_token no futuro.
@@ -1196,7 +1196,7 @@ async function handleSelectMyBusinessLocation(
     )
   }
 
-  // Buscar placeId e categorias do perfil para atualizar companies (GMB Local)
+  // Buscar placeId e categorias do perfil via Business Information API (não Place Details)
   try {
     const connectionResult = await getGoogleConnectionForService(ctx, supabase, "mybusiness")
     if (!connectionResult.error && connectionResult.row) {
@@ -1213,48 +1213,36 @@ async function handleSelectMyBusinessLocation(
           const locUrl = new URL(
             `https://mybusinessbusinessinformation.googleapis.com/v1/${propertyName}`,
           )
-          locUrl.searchParams.set("readMask", "metadata.placeId")
+          locUrl.searchParams.set(
+            "readMask",
+            "metadata.placeId,categories.primaryCategory,categories.additionalCategories",
+          )
           const locRes = await fetch(locUrl.toString(), {
             headers: { Authorization: `Bearer ${tokenResult.accessToken}` },
           })
           if (locRes.ok) {
             const locData = (await locRes.json().catch(() => null)) as {
               metadata?: { placeId?: string }
-            } | null
-            const placeId = locData?.metadata?.placeId?.trim()
-            if (placeId) {
-              const placesApiKey = Deno.env.get("GOOGLE_PLACES_API_KEY")?.trim()
-              if (placesApiKey) {
-                const detailsRes = await fetch(
-                  `https://places.googleapis.com/v1/places/${placeId}`,
-                  {
-                    headers: {
-                      "X-Goog-Api-Key": placesApiKey,
-                      "X-Goog-FieldMask": "primaryType,types",
-                    },
-                  },
-                )
-                if (detailsRes.ok) {
-                  const details = (await detailsRes.json().catch(() => null)) as {
-                    primaryType?: string
-                    types?: string[]
-                  } | null
-                  const primaryType = details?.primaryType?.trim() ?? null
-                  const secondaryType =
-                    details?.types?.filter((t) => t && t !== primaryType)[0]?.trim() ?? null
-                  const { error: updateErr } = await supabase
-                    .from("companies")
-                    .update({
-                      gmb_place_id: placeId,
-                      gmb_place_type: primaryType,
-                      gmb_place_type_secondary: secondaryType,
-                    })
-                    .eq("id", ctx.companyId)
-                  if (updateErr) {
-                    console.error("[google-oauth] Erro ao atualizar companies com gmb_place:", updateErr)
-                  }
-                }
+              categories?: {
+                primaryCategory?: { displayName?: string; name?: string }
+                additionalCategories?: Array<{ displayName?: string; name?: string }>
               }
+            } | null
+            const placeId = locData?.metadata?.placeId?.trim() ?? null
+            const primaryDisplayName =
+              locData?.categories?.primaryCategory?.displayName?.trim() ?? null
+            const secondaryDisplayName =
+              locData?.categories?.additionalCategories?.[0]?.displayName?.trim() ?? null
+            const { error: updateErr } = await supabase
+              .from("companies")
+              .update({
+                gmb_place_id: placeId,
+                gmb_place_type: primaryDisplayName,
+                gmb_place_type_secondary: secondaryDisplayName,
+              })
+              .eq("id", ctx.companyId)
+            if (updateErr) {
+              console.error("[google-oauth] Erro ao atualizar companies com gmb_place:", updateErr)
             }
           }
         }
