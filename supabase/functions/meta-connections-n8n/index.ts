@@ -23,7 +23,12 @@ const corsHeaders = {
 
 interface MetaConnectionRow {
   provider_type: string
-  metadata?: Record<string, unknown> | null
+  selected_page_id?: string | null
+  selected_page_name?: string | null
+  selected_instagram_id?: string | null
+  selected_instagram_username?: string | null
+  selected_ad_account_id?: string | null
+  selected_ad_account_name?: string | null
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -90,7 +95,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: rows, error } = await supabase
     .from("meta_connections")
-    .select("provider_type, metadata")
+    .select("provider_type, selected_page_id, selected_page_name, selected_instagram_id, selected_instagram_username, selected_ad_account_id, selected_ad_account_name")
     .eq("company_id", companyId)
     .in("provider_type", ["instagram", "facebook", "meta_ads"])
 
@@ -112,20 +117,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   for (const row of list as MetaConnectionRow[]) {
     const providerType = row?.provider_type
-    const metadata = (typeof row?.metadata === "object" && row.metadata !== null
-      ? row.metadata
-      : {}) as Record<string, unknown>
-
-    const pageId = typeof metadata.selected_page_id === "string" ? metadata.selected_page_id : undefined
-    const pageName = typeof metadata.selected_page_name === "string" ? metadata.selected_page_name : undefined
-    const instagramBusinessId =
-      typeof metadata.selected_instagram_id === "string" ? metadata.selected_instagram_id : undefined
-    const instagramUsername =
-      typeof metadata.selected_instagram_username === "string" ? metadata.selected_instagram_username : undefined
-    const adAccountId =
-      typeof metadata.selected_ad_account_id === "string" ? metadata.selected_ad_account_id : undefined
-    const adAccountName =
-      typeof metadata.selected_ad_account_name === "string" ? metadata.selected_ad_account_name : undefined
+    const pageId = typeof row?.selected_page_id === "string" ? row.selected_page_id : undefined
+    const pageName = typeof row?.selected_page_name === "string" ? row.selected_page_name : undefined
+    const instagramBusinessId = typeof row?.selected_instagram_id === "string" ? row.selected_instagram_id : undefined
+    const instagramUsername = typeof row?.selected_instagram_username === "string" ? row.selected_instagram_username : undefined
+    const adAccountId = typeof row?.selected_ad_account_id === "string" ? row.selected_ad_account_id : undefined
+    const adAccountName = typeof row?.selected_ad_account_name === "string" ? row.selected_ad_account_name : undefined
 
     if (providerType === "instagram") {
       result.instagram = {

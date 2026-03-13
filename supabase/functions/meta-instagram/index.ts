@@ -586,7 +586,7 @@ async function handleGetConnectionSummary(
   }
   const { data, error } = await supabase
     .from("meta_connections")
-    .select("provider_type, metadata")
+    .select("provider_type, selected_page_id, selected_page_name, selected_instagram_id, selected_instagram_username, selected_ad_account_id, selected_ad_account_name")
     .eq("company_id", companyId)
     .in("provider_type", ["instagram", "facebook", "meta_ads"])
 
@@ -606,20 +606,14 @@ async function handleGetConnectionSummary(
   } = {}
 
   for (const row of rows) {
-    const providerType = row?.provider_type as string | undefined
-    const metadata = (typeof row?.metadata === "object" && row.metadata !== null
-      ? row.metadata
-      : {}) as Record<string, unknown>
-
-    const pageId = typeof metadata.selected_page_id === "string" ? metadata.selected_page_id : undefined
-    const pageName = typeof metadata.selected_page_name === "string" ? metadata.selected_page_name : undefined
-    const instagramId = typeof metadata.selected_instagram_id === "string" ? metadata.selected_instagram_id : undefined
-    const instagramUsername =
-      typeof metadata.selected_instagram_username === "string" ? metadata.selected_instagram_username : undefined
-    const adAccountId =
-      typeof metadata.selected_ad_account_id === "string" ? metadata.selected_ad_account_id : undefined
-    const adAccountName =
-      typeof metadata.selected_ad_account_name === "string" ? metadata.selected_ad_account_name : undefined
+    const r = row as Record<string, unknown>
+    const providerType = r?.provider_type as string | undefined
+    const pageId = typeof r.selected_page_id === "string" ? r.selected_page_id : undefined
+    const pageName = typeof r.selected_page_name === "string" ? r.selected_page_name : undefined
+    const instagramId = typeof r.selected_instagram_id === "string" ? r.selected_instagram_id : undefined
+    const instagramUsername = typeof r.selected_instagram_username === "string" ? r.selected_instagram_username : undefined
+    const adAccountId = typeof r.selected_ad_account_id === "string" ? r.selected_ad_account_id : undefined
+    const adAccountName = typeof r.selected_ad_account_name === "string" ? r.selected_ad_account_name : undefined
 
     if (providerType === "instagram") {
       summary.instagram = { page_id: pageId, page_name: pageName, instagram_id: instagramId, instagram_username: instagramUsername }
@@ -652,7 +646,7 @@ async function getActiveMetaConnectionForService(
 
   const { data, error } = await supabase
     .from("meta_connections")
-    .select("access_token, metadata")
+    .select("access_token, selected_page_id, selected_page_name, selected_instagram_id, selected_instagram_username, selected_ad_account_id, selected_ad_account_name")
     .eq("company_id", companyId)
     .eq("provider_type", service)
     .maybeSingle()
@@ -670,17 +664,15 @@ async function getActiveMetaConnectionForService(
     return { metaConfig }
   }
 
-  const metadata = (typeof data.metadata === "object" && data.metadata !== null
-    ? data.metadata
-    : {}) as Record<string, unknown>
+  const row = data as Record<string, unknown>
   return {
     accessTokenEncrypted: data.access_token as string,
     metaConfig,
-    selectedPageId: (metadata.selected_page_id as string) ?? null,
-    selectedPageName: (metadata.selected_page_name as string) ?? null,
-    selectedInstagramId: (metadata.selected_instagram_id as string) ?? null,
-    selectedInstagramUsername: (metadata.selected_instagram_username as string) ?? null,
-    selectedAdAccountId: (metadata.selected_ad_account_id as string) ?? null,
+    selectedPageId: (typeof row.selected_page_id === "string" ? row.selected_page_id : null) ?? null,
+    selectedPageName: (typeof row.selected_page_name === "string" ? row.selected_page_name : null) ?? null,
+    selectedInstagramId: (typeof row.selected_instagram_id === "string" ? row.selected_instagram_id : null) ?? null,
+    selectedInstagramUsername: (typeof row.selected_instagram_username === "string" ? row.selected_instagram_username : null) ?? null,
+    selectedAdAccountId: (typeof row.selected_ad_account_id === "string" ? row.selected_ad_account_id : null) ?? null,
   }
 }
 
@@ -779,14 +771,15 @@ async function handleListAccounts(
       )
     }
   } else {
-    const result = await getActiveIntegrationForCompany(ctx.companyId, supabase)
+    const instagramResult = await getActiveMetaConnectionForService(ctx.companyId, "instagram", supabase)
+    const facebookResult = await getActiveMetaConnectionForService(ctx.companyId, "facebook", supabase)
+    const result = instagramResult.accessTokenEncrypted ? instagramResult : facebookResult
     if (result.error) return result.error
-    const { row, metaConfig } = result
-    if (!row || !metaConfig) {
-      return jsonResponse({ error: "Integração não encontrada." }, 404)
+    if (!result.accessTokenEncrypted || !result.metaConfig) {
+      return jsonResponse({ error: "Integração Meta não encontrada. Conecte Instagram ou Facebook na aba Integrações." }, 404)
     }
     try {
-      token = await decryptToken(row.access_token_encrypted, metaConfig.encryptionKey)
+      token = await decryptToken(result.accessTokenEncrypted, result.metaConfig.encryptionKey)
     } catch (err) {
       console.error("[meta-instagram] Falha ao descriptografar token:", err)
       return jsonResponse(
@@ -794,8 +787,8 @@ async function handleListAccounts(
         500,
       )
     }
-    selectedPageId = row.selected_page_id ?? null
-    selectedInstagramId = row.selected_instagram_id ?? null
+    selectedPageId = result.selectedPageId ?? null
+    selectedInstagramId = result.selectedInstagramId ?? null
   }
 
   const metaConfig = getMetaConfig()
@@ -874,16 +867,20 @@ async function handleGetInsights(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ) {
-  const result = await getActiveIntegrationForCompany(ctx.companyId, supabase)
+  const instagramResult = await getActiveMetaConnectionForService(ctx.companyId, "instagram", supabase)
+  const facebookResult = instagramResult.error
+    ? await getActiveMetaConnectionForService(ctx.companyId, "facebook", supabase)
+    : instagramResult
+
+  const result = instagramResult.error ? facebookResult : instagramResult
   if (result.error) return result.error
-  const { row, metaConfig } = result
-  if (!row || !metaConfig) {
-    return jsonResponse({ error: "Integração não encontrada." }, 404)
+  if (!result.accessTokenEncrypted || !result.metaConfig) {
+    return jsonResponse({ error: "Integração Meta/Instagram não encontrada para esta empresa." }, 404)
   }
 
   let instagramId = typeof body.instagramId === "string" ? body.instagramId.trim() : ""
   if (!instagramId) {
-    const selectedIg = typeof row.selected_instagram_id === "string" ? row.selected_instagram_id.trim() : ""
+    const selectedIg = result.selectedInstagramId?.trim() ?? ""
     if (!selectedIg) {
       return jsonResponse(
         {
@@ -898,7 +895,7 @@ async function handleGetInsights(
 
   let token: string
   try {
-    token = await decryptToken(row.access_token_encrypted, metaConfig.encryptionKey)
+    token = await decryptToken(result.accessTokenEncrypted, result.metaConfig.encryptionKey)
   } catch (err) {
     console.error("[meta-instagram] Falha ao descriptografar token para insights:", err)
     return jsonResponse(
@@ -975,23 +972,23 @@ async function handleFacebookOverview(
   ctx: AuthContext,
   supabase: ReturnType<typeof createClient>,
 ) {
-  // Se a Meta não estiver configurada (secrets), retorna 200 com dados vazios para o dashboard não quebrar.
   const metaConfigCheck = getMetaConfig()
   if ("error" in metaConfigCheck) {
     return jsonResponse({ pageId: "", metrics: [] })
   }
-  const result = await getActiveIntegrationForCompany(ctx.companyId, supabase)
+  const facebookResult = await getActiveMetaConnectionForService(ctx.companyId, "facebook", supabase)
+  const instagramResult = facebookResult.error
+    ? await getActiveMetaConnectionForService(ctx.companyId, "instagram", supabase)
+    : facebookResult
+
+  const result = facebookResult.error ? instagramResult : facebookResult
   if (result.error) return result.error
-  const { row, metaConfig } = result
-  if (!row || !metaConfig) {
-    return jsonResponse({ error: "Integração não encontrada." }, 404)
+  if (!result.accessTokenEncrypted || !result.metaConfig) {
+    return jsonResponse({ error: "Integração Meta/Facebook não encontrada para esta empresa." }, 404)
   }
 
   const pageIdFromBody = typeof body.pageId === "string" ? body.pageId.trim() : ""
-  const selectedPageId =
-    typeof row.selected_page_id === "string" && row.selected_page_id.trim().length > 0
-      ? row.selected_page_id.trim()
-      : null
+  const selectedPageId = result.selectedPageId?.trim() ?? null
   const pageId = pageIdFromBody || selectedPageId
 
   if (!pageId) {
@@ -1006,7 +1003,7 @@ async function handleFacebookOverview(
 
   let userToken: string
   try {
-    userToken = await decryptToken(row.access_token_encrypted, metaConfig.encryptionKey)
+    userToken = await decryptToken(result.accessTokenEncrypted, result.metaConfig.encryptionKey)
   } catch (err) {
     console.error("[meta-instagram] Falha ao descriptografar token para Facebook overview:", err)
     return jsonResponse(
@@ -1196,35 +1193,13 @@ async function handleSelectAccount(
         ? body.adAccountName.trim()
         : null
 
-    const { data: conn, error } = await supabase
-      .from("meta_connections")
-      .select("id, metadata")
-      .eq("company_id", ctx.companyId)
-      .eq("provider_type", "meta_ads")
-      .maybeSingle()
-
-    if (error || !conn) {
-      return jsonResponse(
-        {
-          error: "Integração Meta Ads não encontrada.",
-          hint: "Conecte o Meta Ads na aba Integrações antes de selecionar a conta.",
-        },
-        404,
-      )
-    }
-
-    const metadata = (typeof conn.metadata === "object" && conn.metadata !== null
-      ? conn.metadata
-      : {}) as Record<string, unknown>
-    const updatedMetadata = {
-      ...metadata,
-      selected_ad_account_id: adAccountId,
-      selected_ad_account_name: adAccountName,
-    }
-
     const { error: updateError } = await supabase
       .from("meta_connections")
-      .update({ metadata: updatedMetadata, updated_at: new Date().toISOString() })
+      .update({
+        selected_ad_account_id: adAccountId,
+        selected_ad_account_name: adAccountName,
+        updated_at: new Date().toISOString(),
+      })
       .eq("company_id", ctx.companyId)
       .eq("provider_type", "meta_ads")
 
@@ -1260,37 +1235,15 @@ async function handleSelectAccount(
       : null
 
   if (service && (service === "instagram" || service === "facebook")) {
-    const { data: conn, error } = await supabase
-      .from("meta_connections")
-      .select("id, metadata")
-      .eq("company_id", ctx.companyId)
-      .eq("provider_type", service)
-      .maybeSingle()
-
-    if (error || !conn) {
-      return jsonResponse(
-        {
-          error: "Integração Meta não encontrada para este serviço.",
-          hint: "Conecte a Meta na aba Integrações antes de selecionar a conta.",
-        },
-        404,
-      )
-    }
-
-    const metadata = (typeof conn.metadata === "object" && conn.metadata !== null
-      ? conn.metadata
-      : {}) as Record<string, unknown>
-    const updatedMetadata = {
-      ...metadata,
-      selected_page_id: pageId,
-      selected_page_name: pageName,
-      selected_instagram_id: instagramId,
-      selected_instagram_username: instagramUsername,
-    }
-
     const { error: updateError } = await supabase
       .from("meta_connections")
-      .update({ metadata: updatedMetadata, updated_at: new Date().toISOString() })
+      .update({
+        selected_page_id: pageId,
+        selected_page_name: pageName,
+        selected_instagram_id: instagramId,
+        selected_instagram_username: instagramUsername,
+        updated_at: new Date().toISOString(),
+      })
       .eq("company_id", ctx.companyId)
       .eq("provider_type", service)
 
@@ -1308,51 +1261,10 @@ async function handleSelectAccount(
     })
   }
 
-  const updatePayload: Partial<MetaIntegrationRow> & { updated_at: string } = {
-    selected_page_id: pageId,
-    selected_page_name: pageName,
-    selected_instagram_id: instagramId,
-    selected_instagram_username: instagramUsername,
-    updated_at: new Date().toISOString(),
-  }
-
-  const { data, error } = await supabase
-    .from("meta_instagram_integrations")
-    .update(updatePayload)
-    .eq("company_id", ctx.companyId)
-    .select("id")
-    .maybeSingle()
-
-  if (error) {
-    console.error("[meta-instagram] Erro ao salvar seleção de conta:", error)
-    return jsonResponse(
-      {
-        error: "Erro ao salvar conta Meta selecionada para a empresa.",
-        hint: "Verifique se a tabela meta_instagram_integrations existe e se a integração foi conectada.",
-      },
-      500,
-    )
-  }
-
-  if (!data) {
-    return jsonResponse(
-      {
-        error: "Integração Meta/Instagram não encontrada para esta empresa.",
-        hint: "Conecte a Meta na aba Integrações antes de selecionar a conta.",
-      },
-      404,
-    )
-  }
-
-  return jsonResponse({
-    success: true,
-    selected: {
-      pageId,
-      pageName,
-      instagramId,
-      instagramUsername,
-    },
-  })
+  return jsonResponse(
+    { error: "Parâmetro service inválido. Use 'instagram', 'facebook' ou 'meta_ads'." },
+    400,
+  )
 }
 
 async function handleDisconnect(

@@ -319,6 +319,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [isLoadingMetaAccounts, setIsLoadingMetaAccounts] = useState(false);
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
   const [metaAccountsService, setMetaAccountsService] = useState<"instagram" | "facebook" | "meta_ads" | null>(null);
+  const [metaAccountsInstagram, setMetaAccountsInstagram] = useState<MetaAccount[]>([]);
+  const [metaAccountsFacebook, setMetaAccountsFacebook] = useState<MetaAccount[]>([]);
+  const [metaAccountsMetaAds, setMetaAccountsMetaAds] = useState<MetaAccount[]>([]);
   const [isLoadingMetaInsights, setIsLoadingMetaInsights] = useState(false);
   const [selectedInstagramId, setSelectedInstagramId] = useState<string | null>(null);
   const [metaInsights, setMetaInsights] = useState<InstagramMetric[] | null>(null);
@@ -1348,6 +1351,15 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     loadMetaConnectionSummary,
   ]);
 
+  // Auto-carregar contas Meta ao abrir aba Integrações (para popular combos)
+  useEffect(() => {
+    if (section !== "integracoes" || !companyId) return;
+    if (isInstagramConnected) void handleLoadMetaAccounts("instagram");
+    if (isFacebookConnected) void handleLoadMetaAccounts("facebook");
+    if (isMetaAdsConnected) void handleLoadMetaAccounts("meta_ads");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleLoadMetaAccounts é estável; deps intencionais
+  }, [section, companyId, isInstagramConnected, isFacebookConnected, isMetaAdsConnected]);
+
   useEffect(() => {
     if (section === "integracoes" && companyId && isAdsConnected && !adsAccountDisplayName) {
       void fetchAdsAccountInfo();
@@ -1837,6 +1849,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       const accounts = data?.accounts ?? [];
       setMetaAccounts(accounts);
       setMetaAccountsService(service);
+      if (service === "instagram") setMetaAccountsInstagram(accounts);
+      else if (service === "facebook") setMetaAccountsFacebook(accounts);
+      else if (service === "meta_ads") setMetaAccountsMetaAds(accounts);
 
       if (service === "instagram" || service === "facebook") {
         const selected = accounts.find((a) => a.isSelected && a.instagramBusinessId);
@@ -3010,6 +3025,27 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                       },
                     ].map((int) => {
                       const Icon = int.icon;
+                      const isMetaCard = int.id === "instagram" || int.id === "facebook" || int.id === "meta-ads";
+                      const metaAccountsForCard =
+                        int.id === "instagram"
+                          ? metaAccountsInstagram
+                          : int.id === "facebook"
+                            ? metaAccountsFacebook
+                            : int.id === "meta-ads"
+                              ? metaAccountsMetaAds
+                              : [];
+                      const selectedMetaAccount =
+                        int.id === "instagram"
+                          ? metaAccountsInstagram.find((a) => a.isSelected)
+                          : int.id === "facebook"
+                            ? metaAccountsFacebook.find((a) => a.isSelected)
+                            : int.id === "meta-ads"
+                              ? metaAccountsMetaAds.find((a) => a.isSelected)
+                              : null;
+                      const isLoadingMetaForCard =
+                        isLoadingMetaAccounts &&
+                        (metaAccountsService === int.id.replace("-", "_") || metaAccountsService === (int.id === "meta-ads" ? "meta_ads" : int.id));
+
                       return (
                         <Card
                           key={int.id}
@@ -3023,32 +3059,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           <div className="flex flex-col items-center gap-2">
                             <Icon className="h-10 w-10 shrink-0 text-foreground" style={{ width: 40, height: 40 }} />
                             <p className="text-sm font-medium text-foreground">{int.name}</p>
-                            {int.id === "instagram" && int.connected && (
-                              <>
-                                {metaInstagramDisplay?.page_name && (
-                                  <p className="text-xs text-muted-foreground">Página: {metaInstagramDisplay.page_name}</p>
-                                )}
-                                {(metaInstagramDisplay?.instagram_username || metaInstagramDisplay?.instagram_id) && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Perfil: {metaInstagramDisplay.instagram_username
-                                      ? `@${metaInstagramDisplay.instagram_username}`
-                                      : metaInstagramDisplay.instagram_id}
-                                  </p>
-                                )}
-                              </>
-                            )}
-                            {int.id === "facebook" && int.connected && metaFacebookDisplay?.page_name && (
-                              <p className="text-xs text-muted-foreground">Página: {metaFacebookDisplay.page_name}</p>
-                            )}
-                            {int.id === "meta-ads" && int.connected && (
-                              <>
-                                {metaAdsDisplay?.ad_account_name ? (
-                                  <p className="text-xs font-mono text-muted-foreground">Conta: {metaAdsDisplay.ad_account_name}</p>
-                                ) : metaAdsDisplay?.ad_account_id ? (
-                                  <p className="text-xs font-mono text-muted-foreground">Conta: {metaAdsDisplay.ad_account_id}</p>
-                                ) : null}
-                              </>
-                            )}
                             {int.id === "google-ads" && (
                               <>
                                 {adsAccountDisplayName ? (
@@ -3069,22 +3079,27 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                               </>
                             )}
                           </div>
-                          <div className="flex w-full flex-col gap-1">
+                          <div className="flex w-full flex-col gap-2">
                             <Button
                               size="sm"
-                              variant={int.connected ? "outline" : "default"}
+                              variant={int.connected && isMetaCard ? "warning" : int.connected ? "outline" : "default"}
                               disabled={int.connecting || (int.disabled ?? false) || !companyId}
-                              className={cn(
-                                "w-full",
-                                int.connected && "border-primary text-primary hover:bg-primary/10"
-                              )}
-                              onClick={int.reloadHint ? () => window.location.reload() : int.onConnect}
+                              className="w-full"
+                              onClick={
+                                int.connected && isMetaCard && int.onDisconnect
+                                  ? int.onDisconnect
+                                  : int.reloadHint
+                                    ? () => window.location.reload()
+                                    : int.onConnect
+                              }
                             >
                               {int.connecting ? (
                                 <>
                                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                   Conectando…
                                 </>
+                              ) : int.connected && isMetaCard ? (
+                                "Desconectar"
                               ) : int.connected ? (
                                 <>
                                   <Check className="mr-1 h-4 w-4" />
@@ -3096,7 +3111,54 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                 int.connectLabel ?? "Conectar"
                               )}
                             </Button>
-                            {int.connected && int.onDisconnect && (
+                            {int.connected && isMetaCard && int.onDisconnect && (
+                              <div className="w-full space-y-1">
+                                <Label className="text-xs text-muted-foreground">
+                                  {int.id === "meta-ads" ? "Conta" : "Página"}
+                                </Label>
+                                <Select
+                                  value={
+                                    selectedMetaAccount?.id ??
+                                    (metaAccountsForCard.length > 0 ? metaAccountsForCard[0].id : "")
+                                  }
+                                  onValueChange={(value) => {
+                                    if (value === "__load__") {
+                                      void handleLoadMetaAccounts(int.id === "meta-ads" ? "meta_ads" : (int.id as "instagram" | "facebook"));
+                                      return;
+                                    }
+                                    const acc = metaAccountsForCard.find((a) => a.id === value);
+                                    if (acc) void handleSelectMetaAccount(acc);
+                                  }}
+                                  disabled={isLoadingMetaForCard || !companyId}
+                                >
+                                  <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue
+                                      placeholder={
+                                        isLoadingMetaForCard
+                                          ? "Carregando…"
+                                          : metaAccountsForCard.length === 0
+                                            ? "Clique para carregar"
+                                            : "Selecione"
+                                      }
+                                    />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {metaAccountsForCard.length === 0 && !isLoadingMetaForCard && (
+                                      <SelectItem value="__load__" onSelect={() => void handleLoadMetaAccounts(int.id === "meta-ads" ? "meta_ads" : int.id as "instagram" | "facebook")}>
+                                        Carregar {int.id === "meta-ads" ? "contas" : "páginas"}
+                                      </SelectItem>
+                                    )}
+                                    {metaAccountsForCard.map((acc) => (
+                                      <SelectItem key={acc.id} value={acc.id}>
+                                        {acc.name || acc.id}
+                                        {acc.isSelected ? " ✓" : ""}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                            {int.connected && !isMetaCard && int.onDisconnect && (
                               <Button
                                 variant="ghost"
                                 size="sm"
