@@ -1212,7 +1212,13 @@ async function handleGetAdsAccountInfo(
   if (tokenResult.error) return tokenResult.error
   const accessToken = tokenResult.accessToken!
   if (!accessToken) {
-    return jsonResponse({ error: "Erro ao obter token de acesso." }, 500)
+    return jsonResponse(
+      {
+        error: "Erro ao obter token de acesso.",
+        hint: "Desconecte e reconecte o Google Ads em Configurações > Integrações.",
+      },
+      500,
+    )
   }
 
   const adsDeveloperToken = Deno.env.get("GOOGLE_ADS_DEVELOPER_TOKEN")?.trim()
@@ -1249,8 +1255,15 @@ async function handleGetAdsAccountInfo(
       const hint = isAuthError
         ? `${errMsg} Desconecte e reconecte o Google Ads em Configurações > Integrações para renovar as permissões.`
         : errMsg
+      if (isAuthError) {
+        console.error("[google-oauth] Google Ads API rejeitou token:", errMsg, "| Verifique: 1) GOOGLE_ADS_DEVELOPER_TOKEN nas Secrets 2) Token com escopo adwords 3) Reconectar")
+      }
       return jsonResponse(
-        { error: "Erro ao obter conta Google Ads.", hint },
+        {
+          error: "Erro ao obter conta Google Ads.",
+          hint,
+          code: isAuthError ? "ADS_AUTH_REJECTED" : undefined,
+        },
         502,
       )
     }

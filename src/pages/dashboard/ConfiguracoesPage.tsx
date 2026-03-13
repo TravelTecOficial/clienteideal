@@ -780,6 +780,20 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
             : null);
         if (display) setAdsAccountDisplayName(display);
       } else if (!res.ok && data?.error) {
+        // #region agent log
+        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8f1d02" },
+          body: JSON.stringify({
+            sessionId: "8f1d02",
+            location: "ConfiguracoesPage.tsx:fetchAdsAccountInfo-error",
+            message: "Erro ao carregar conta Google Ads",
+            data: { status: res.status, error: data?.error, hint: data?.hint, code: (data as { code?: string })?.code },
+            hypothesisId: "H-ads",
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         toast({
           variant: "destructive",
           title: "Erro ao carregar conta Google Ads",
@@ -928,9 +942,24 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           isSelected: property.propertyName === selectedProperty.propertyName,
         })),
       );
+      setSelectedGoogleAnalyticsPropertyName(selectedProperty.propertyName);
       setSelectedGoogleAnalyticsPropertyLabel(
         `${selectedProperty.accountDisplayName} — ${selectedProperty.propertyDisplayName}`,
       );
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8f1d02" },
+        body: JSON.stringify({
+          sessionId: "8f1d02",
+          location: "ConfiguracoesPage.tsx:handleSelectGA4-success",
+          message: "GA4 selecionado",
+          data: { propertyName: selectedProperty.propertyName },
+          hypothesisId: "H-combo",
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       toast({
         title: "Propriedade GA4 vinculada",
         description: "A propriedade selecionada será usada como padrão para esta empresa.",
@@ -1090,9 +1119,24 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           isSelected: loc.propertyName === selectedLocation.propertyName,
         })),
       );
+      setSelectedMyBusinessPropertyName(selectedLocation.propertyName);
       setSelectedMyBusinessPropertyLabel(
         `${selectedLocation.accountDisplayName} — ${selectedLocation.propertyDisplayName}`,
       );
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8f1d02" },
+        body: JSON.stringify({
+          sessionId: "8f1d02",
+          location: "ConfiguracoesPage.tsx:handleSelectMyBusiness-success",
+          message: "Meu Negócio selecionado",
+          data: { propertyName: selectedLocation.propertyName },
+          hypothesisId: "H-combo",
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       toast({
         title: "Perfil Meu Negócio vinculado",
         description: "O perfil selecionado será usada como padrão para esta empresa.",
