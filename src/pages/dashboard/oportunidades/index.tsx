@@ -529,13 +529,7 @@ export default function OportunidadesPage() {
   }
 
   async function onSubmitEdit(values: OpportunityFormValues) {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'onSubmitEdit called',data:{hasEditingOpp:!!editingOpportunity,editingOppId:editingOpportunity?.id,oppCompanyId:editingOpportunity?.company_id,effectiveCompanyId,companyIdMatch:editingOpportunity?.company_id===effectiveCompanyId},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!editingOpportunity || !effectiveCompanyId) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'EARLY RETURN - editingOpportunity or effectiveCompanyId null',data:{editingOpportunity:!!editingOpportunity,effectiveCompanyId:!!effectiveCompanyId},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return;
     }
     setIsSaving(true);
@@ -577,9 +571,6 @@ export default function OportunidadesPage() {
       });
 
       const fnData = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'Edge fn update-opportunity result',data:{status:res.status,fnData},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       if (!res.ok) {
         throw new Error(fnData?.error ?? `Erro ao atualizar (${res.status})`);
@@ -595,9 +586,6 @@ export default function OportunidadesPage() {
           null;
         notifyCrmWebhook(supabase, idLead ?? null, externalId ?? null, values.stage);
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'SUCCESS - update completed, closing dialog',data:{},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       toast({
         title: "Oportunidade atualizada",
         description: "As alterações foram salvas.",
@@ -606,9 +594,6 @@ export default function OportunidadesPage() {
       setEditingOpportunity(null);
       loadOpportunities();
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'662675'},body:JSON.stringify({sessionId:'662675',location:'oportunidades/index.tsx:onSubmitEdit',message:'CATCH - update failed',data:{errMsg:String(err)},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       toast({
         variant: "destructive",
         title: "Erro ao atualizar",

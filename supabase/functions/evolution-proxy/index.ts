@@ -149,9 +149,6 @@ Deno.serve(async (req) => {
 
   const action = body?.action
   const instanceName = body?.instanceName?.trim() || storedInstanceName
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H1',location:'evolution-proxy/index.ts:154',message:'Ação recebida no proxy',data:{action:action ?? null,hasBodyInstance:!!body?.instanceName,hasStoredInstance:!!storedInstanceName,segmentType:companyRow?.segment_type ?? null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   if (!action) {
     return errorResponse("Ação obrigatória (create, connect, connectionState, fetchInstances, logout, setWebhook, delete).", 400)
@@ -253,9 +250,6 @@ Deno.serve(async (req) => {
       { endpoint: `${url}/webhook/instance/${encodeURIComponent(instance)}`, body: payloadFlat },
       { endpoint: `${url}/webhook/instance`, body: { ...payloadFlat, instanceName: instance } },
     ]
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H3',location:'evolution-proxy/index.ts:196',message:'Início configuração webhook por instância',data:{instance,targetCount:targets.length,firstEndpoint:targets[0]?.endpoint ?? null,usesCamelCase:true,usesSnakeCase:true,event:'MESSAGES_UPSERT'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     for (const target of targets) {
       try {
@@ -271,9 +265,6 @@ Deno.serve(async (req) => {
           ok: webhookRes.ok,
           responsePreview: responseText.slice(0, 300),
         })
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H4',location:'evolution-proxy/index.ts:213',message:'Resposta tentativa webhook',data:{instance,endpoint:target.endpoint,status:webhookRes.status,ok:webhookRes.ok,responsePreview:responseText.slice(0,120)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
 
         if (webhookRes.ok) {
           const verification = await isWebhookApplied()
@@ -286,9 +277,6 @@ Deno.serve(async (req) => {
             })
             continue
           }
-          // #region agent log
-          fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5cace'},body:JSON.stringify({sessionId:'a5cace',runId:'pre-fix-1',hypothesisId:'H5',location:'evolution-proxy/index.ts:217',message:'Webhook configurado com sucesso',data:{instance,endpoint:target.endpoint,status:webhookRes.status,attemptsSoFar:attempts.length},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           return { configured: true, attempts }
         }
       } catch (err) {

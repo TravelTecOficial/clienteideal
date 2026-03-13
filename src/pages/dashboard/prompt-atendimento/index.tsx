@@ -57,30 +57,6 @@ import { useEffectiveCompanyId } from "@/hooks/use-effective-company-id"
 import { useCompanyPreview } from "@/lib/company-preview-context"
 import { getAdminPreviewCompanyId } from "@/lib/admin-preview-storage"
 
-// #region agent log
-function debugLog(
-  location: string,
-  message: string,
-  data: Record<string, unknown>,
-  hypothesisId: string,
-  runId = "pre-fix"
-) {
-  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "27da24" },
-    body: JSON.stringify({
-      sessionId: "27da24",
-      runId,
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-}
-// #endregion
-
 const CATEGORIA_OBJETIVO_OPTIONS = [
   { value: "atendimento", label: "Apenas Atendimento" },
   { value: "atendimento_agendamento", label: "Atendimento + Agendamento" },
@@ -640,28 +616,8 @@ export function PromptAtendimentoPage() {
       profileCompanyId = profile?.company_id ?? null
       profileSaasAdmin = profile?.saas_admin ?? false
 
-      const { data: fnData, error: fnError } = await supabase.rpc("is_saas_admin")
+      const { data: fnData } = await supabase.rpc("is_saas_admin")
       dbSaasAdminByFn = typeof fnData === "boolean" ? fnData : null
-
-      // #region agent log
-      debugLog(
-        "prompt-atendimento/index.tsx:handleSave:context",
-        "Admin preview context before save",
-        {
-          userId,
-          effectiveCompanyId: companyId,
-          previewCompanyId: previewCompanyId ?? null,
-          storagePreviewId: storagePreviewId ?? null,
-          profileCompanyId,
-          profileSaasAdmin,
-          dbSaasAdminByFn,
-          profileErrorCode: profileError?.code ?? null,
-          fnErrorCode: fnError?.code ?? null,
-          isInsert: !id,
-        },
-        "H1"
-      )
-      // #endregion
     }
 
     const newPersonaId = values.persona_id?.trim() || null
@@ -708,19 +664,6 @@ export function PromptAtendimentoPage() {
 
       toast({ title: "Atualizado", description: "Prompt atualizado com sucesso." })
     } else {
-      // #region agent log
-      debugLog(
-        "prompt-atendimento/index.tsx:handleSave:beforeInsert",
-        "Attempting INSERT into prompt_atendimento",
-        {
-          payloadCompanyId: payload.company_id,
-          payloadPersonaId: payload.persona_id,
-          payloadName: payload.name,
-          companyMatchesProfile: profileCompanyId ? payload.company_id === profileCompanyId : null,
-        },
-        "H2"
-      )
-      // #endregion
       const { data: inserted, error } = await supabase
         .from("prompt_atendimento")
         .insert(payload)
@@ -728,19 +671,6 @@ export function PromptAtendimentoPage() {
         .single()
 
       if (error) {
-        // #region agent log
-        debugLog(
-          "prompt-atendimento/index.tsx:handleSave:insertError",
-          "INSERT rejected by database",
-          {
-            code: error.code ?? null,
-            message: error.message ?? null,
-            details: error.details ?? null,
-            hint: error.hint ?? null,
-          },
-          "H3"
-        )
-        // #endregion
         throw error
       }
 

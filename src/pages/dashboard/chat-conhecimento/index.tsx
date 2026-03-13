@@ -218,21 +218,6 @@ export default function ChatConhecimento({ companyIdOverride, compact = false, c
       const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
       const proxyUrl = isLocalhost ? "/api/chat-conhecimento" : `${SUPABASE_URL}/functions/v1/chat-conhecimento-proxy`;
 
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "aeea2e" },
-        body: JSON.stringify({
-          sessionId: "aeea2e",
-          location: "chat-conhecimento/index.tsx:before-fetch",
-          message: "Chat request payload",
-          data: { companyId, hasCompanyIdOverride: !!companyIdOverride, proxyUrl: proxyUrl.slice(0, 50) },
-          timestamp: Date.now(),
-          hypothesisId: "E",
-        }),
-      }).catch(() => {});
-      // #endregion
-
       const response = await fetch(proxyUrl, {
         method: "POST",
         headers: {

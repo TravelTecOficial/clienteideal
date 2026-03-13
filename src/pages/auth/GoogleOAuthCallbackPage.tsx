@@ -97,23 +97,6 @@ export function GoogleOAuthCallbackPage() {
           }
         })()
         if (!res.ok || data?.error) {
-          // #region agent log
-          const logPayload = {
-            sessionId: "d1d2fb",
-            location: "GoogleOAuthCallbackPage.tsx:exchangeCode-error",
-            message: "Erro ao salvar credenciais Google",
-            data: { status: res.status, error: data?.error, hint: data?.hint, supabaseError: data?.supabaseError, rawPreview: raw.slice(0, 800) },
-            runId: "exchangeCode",
-            hypothesisId: "H1",
-            timestamp: Date.now(),
-          }
-          console.error("[google-oauth-callback] 500 response:", logPayload)
-          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "d1d2fb" },
-            body: JSON.stringify(logPayload),
-          }).catch(() => {})
-          // #endregion
           let msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`)
           if (data?.supabaseError) msg += ` [Supabase: ${data.supabaseError}]`
           else if (data?.supabaseErrorCode) msg += ` [Supabase code: ${data.supabaseErrorCode}]`

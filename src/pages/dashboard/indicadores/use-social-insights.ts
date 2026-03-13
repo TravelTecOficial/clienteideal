@@ -49,30 +49,6 @@ export function useInstagramOverview(options?: { enabled?: boolean; companyId?: 
           throw new Error("Token de autenticação indisponível. Faça login novamente.")
         }
 
-        // #region agent log - meta-instagram fetch preflight
-        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "ab699e",
-          },
-          body: JSON.stringify({
-            sessionId: "ab699e",
-            runId: "pre-fix",
-            hypothesisId: "H-CORS-meta",
-            location:
-              "src/pages/dashboard/indicadores/use-social-insights.ts:useInstagramOverview:before-fetch",
-            message: "Instagram overview fetch about to run",
-            data: {
-              supabaseUrl: SUPABASE_URL || null,
-              locationOrigin: typeof window !== "undefined" ? window.location.origin : null,
-              hasAuthorizationHeader: true,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion agent log - meta-instagram fetch preflight
-
         const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
           method: "POST",
           headers: {
@@ -99,37 +75,6 @@ export function useInstagramOverview(options?: { enabled?: boolean; companyId?: 
           }
         })()
 
-        // #region agent log
-        if (!res.ok) {
-          const serverError = data?.error ?? raw.slice(0, 200)
-          const serverHint = data?.hint ?? null
-          console.error("[meta-instagram] Resposta de erro:", res.status, {
-            action: "getInstagramOverview",
-            error: serverError,
-            hint: serverHint,
-          })
-          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e89451" },
-            body: JSON.stringify({
-              sessionId: "e89451",
-              location: "use-social-insights.ts:meta-instagram response",
-              message: "meta-instagram non-ok response",
-              data: {
-                action: "getInstagramOverview",
-                status: res.status,
-                statusText: res.statusText,
-                error: data?.error ?? null,
-                hint: data?.hint ?? null,
-                rawPreview: raw.slice(0, 400),
-              },
-              hypothesisId: "H-500",
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {})
-        }
-        // #endregion agent log
-
         if (!res.ok || data?.error) {
           const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : data?.error ?? `Erro ${res.status}`
           throw new Error(msg)
@@ -149,34 +94,6 @@ export function useInstagramOverview(options?: { enabled?: boolean; companyId?: 
         })
       } catch (err) {
         if (cancelled) return
-
-        // #region agent log - meta-instagram fetch error
-        {
-          const errAny = err as unknown
-          const message = errAny instanceof Error ? errAny.message : String(errAny)
-          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "ab699e",
-            },
-            body: JSON.stringify({
-              sessionId: "ab699e",
-              runId: "pre-fix",
-              hypothesisId: "H-CORS-meta",
-              location:
-                "src/pages/dashboard/indicadores/use-social-insights.ts:useInstagramOverview:catch",
-              message: "Instagram overview fetch error",
-              data: {
-                errorMessage: message,
-                errorName: errAny instanceof Error ? errAny.name : typeof errAny,
-                isTypeError: errAny instanceof TypeError,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {})
-        }
-        // #endregion agent log - meta-instagram fetch error
 
         setState({
           data: null,
@@ -221,30 +138,6 @@ export function useFacebookOverview(options?: { enabled?: boolean; companyId?: s
           throw new Error("Token de autenticação indisponível. Faça login novamente.")
         }
 
-        // #region agent log - facebook overview fetch preflight
-        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "ab699e",
-          },
-          body: JSON.stringify({
-            sessionId: "ab699e",
-            runId: "pre-fix",
-            hypothesisId: "H-CORS-meta",
-            location:
-              "src/pages/dashboard/indicadores/use-social-insights.ts:useFacebookOverview:before-fetch",
-            message: "Facebook overview fetch about to run",
-            data: {
-              supabaseUrl: SUPABASE_URL || null,
-              locationOrigin: typeof window !== "undefined" ? window.location.origin : null,
-              hasAuthorizationHeader: true,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion agent log - facebook overview fetch preflight
-
         const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-instagram`, {
           method: "POST",
           headers: {
@@ -272,37 +165,6 @@ export function useFacebookOverview(options?: { enabled?: boolean; companyId?: s
           }
         })()
 
-        // #region agent log
-        if (!res.ok) {
-          const serverError = data?.error ?? raw.slice(0, 200)
-          const serverHint = data?.hint ?? null
-          console.error("[meta-instagram] Resposta de erro:", res.status, {
-            action: "getFacebookOverview",
-            error: serverError,
-            hint: serverHint,
-          })
-          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e89451" },
-            body: JSON.stringify({
-              sessionId: "e89451",
-              location: "use-social-insights.ts:meta-instagram Facebook response",
-              message: "meta-instagram non-ok response",
-              data: {
-                action: "getFacebookOverview",
-                status: res.status,
-                statusText: res.statusText,
-                error: data?.error ?? null,
-                hint: data?.hint ?? null,
-                rawPreview: raw.slice(0, 400),
-              },
-              hypothesisId: "H-500",
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {})
-        }
-        // #endregion agent log
-
         if (!res.ok || data?.error) {
           const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : data?.error ?? `Erro ${res.status}`
           throw new Error(msg)
@@ -325,34 +187,6 @@ export function useFacebookOverview(options?: { enabled?: boolean; companyId?: s
         })
       } catch (err) {
         if (cancelled) return
-
-        // #region agent log - facebook overview fetch error
-        {
-          const errAny = err as unknown
-          const message = errAny instanceof Error ? errAny.message : String(errAny)
-          fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "ab699e",
-            },
-            body: JSON.stringify({
-              sessionId: "ab699e",
-              runId: "pre-fix",
-              hypothesisId: "H-CORS-meta",
-              location:
-                "src/pages/dashboard/indicadores/use-social-insights.ts:useFacebookOverview:catch",
-              message: "Facebook overview fetch error",
-              data: {
-                errorMessage: message,
-                errorName: errAny instanceof Error ? errAny.name : typeof errAny,
-                isTypeError: errAny instanceof TypeError,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {})
-        }
-        // #endregion agent log - facebook overview fetch error
 
         setState({
           data: null,

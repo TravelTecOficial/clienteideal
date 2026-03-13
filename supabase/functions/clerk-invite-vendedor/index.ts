@@ -162,13 +162,7 @@ Deno.serve(async (req) => {
       ignoreExisting: true,
       ...(redirectUrl ? { redirectUrl } : {}),
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b7c1dd'},body:JSON.stringify({sessionId:'b7c1dd',runId:'invite-flow',hypothesisId:'H1',location:'supabase/functions/clerk-invite-vendedor/index.ts:createInvitation:before',message:'Criando convite Clerk',data:{hasCompanyId:Boolean(companyId),emailDomain:email.includes('@')?email.split('@')[1]:null,hasRedirectEnv:Boolean(Deno.env.get('CLERK_INVITE_REDIRECT_URL')),hasRedirectUrl:Boolean(redirectUrl),ignoreExisting:true},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     const invitation = await clerkClient.invitations.createInvitation(invitationPayload)
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b7c1dd'},body:JSON.stringify({sessionId:'b7c1dd',runId:'invite-flow',hypothesisId:'H1',location:'supabase/functions/clerk-invite-vendedor/index.ts:createInvitation:after',message:'Convite Clerk criado',data:{invitationId:invitation?.id ?? null,invitationStatus:(invitation as { status?: string } | null)?.status ?? null,hasPublicMetadata:Boolean((invitation as { publicMetadata?: unknown } | null)?.publicMetadata)},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
     console.error("[clerk-invite-vendedor] Erro ao criar convite:", err)

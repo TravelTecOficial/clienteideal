@@ -1101,28 +1101,6 @@ async function handleFacebookOverview(
       // Se a Meta retornar código 100 (métrica inválida), tratamos como "sem dados"
       // em vez de estourar erro 502 para o frontend.
       if (metaError && typeof metaError.code === "number" && metaError.code === 100) {
-        // #region agent log - meta-instagram facebook insights code 100
-        fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "f42ba2",
-          },
-          body: JSON.stringify({
-            sessionId: "f42ba2",
-            runId: "fb-soft-100",
-            hypothesisId: "FB-metric-100",
-            location: "supabase/functions/meta-instagram/index.ts:752",
-            message: "facebook insights metric invalid (code 100) - returning empty metrics",
-            data: {
-              metricsParam: facebookMetrics,
-              metaErrorMessage: metaError.message ?? null,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion agent log - meta-instagram facebook insights code 100
-
         return jsonResponse(
           {
             pageId,
@@ -1134,31 +1112,6 @@ async function handleFacebookOverview(
           200,
         )
       }
-
-      // #region agent log - meta-instagram facebook insights other error
-      fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "f42ba2",
-        },
-        body: JSON.stringify({
-          sessionId: "f42ba2",
-          runId: "fb-other-error",
-          hypothesisId: "FB-metric-other",
-          location: "supabase/functions/meta-instagram/index.ts:770",
-          message: "facebook insights other error from Meta",
-          data: {
-            status: res.status,
-            metricsParam: facebookMetrics,
-            metaErrorMessage: metaError?.message ?? null,
-            metaErrorType: metaError?.type ?? null,
-            metaErrorCode: metaError?.code ?? null,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion agent log - meta-instagram facebook insights other error
 
       const msg = metaError?.message ?? `Erro ${res.status} ao obter insights da página.`
       return jsonResponse({ error: msg }, 502)
@@ -1327,61 +1280,79 @@ async function handleDisconnect(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 200, headers: corsHeaders })
-  }
-
-  if (req.method !== "POST") {
-    return jsonResponse({ error: "Método não permitido. Use POST." }, 405)
-  }
-
-  let body: RequestBody
-  try {
-    body = (await req.json()) as RequestBody
-  } catch {
-    return jsonResponse({ error: "Body JSON inválido." }, 400)
-  }
-
-  const action = body?.action
-
-  if (!action) {
-    return jsonResponse({ error: "Parâmetro 'action' é obrigatório." }, 400)
-  }
+  const safeResponse = (data: unknown, status: number) =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
 
   try {
-    const authResult = await requireAuthAndCompany(req, body)
-    if (authResult.error) return authResult.error
-    const ctx = authResult.ctx as AuthContext
-    const supabase = authResult.supabase as ReturnType<typeof createClient>
-
-    switch (action) {
-    case "getLoginUrl":
-      return handleGetLoginUrl(body as GetLoginUrlBody)
-    case "exchangeCode":
-      return handleExchangeCode(body as ExchangeCodeBody, ctx, supabase)
-    case "getConnectionStatus":
-      return handleGetConnectionStatus(body as GetConnectionStatusBody, ctx, supabase)
-    case "getConnectionSummary":
-      return handleGetConnectionSummary(body as GetConnectionSummaryBody, ctx, supabase)
-    case "listAccounts":
-      return handleListAccounts(body as ListAccountsBody, ctx, supabase)
-    case "getInsights":
-      return handleGetInsights(body as GetInsightsBody, ctx, supabase)
-    case "getInstagramOverview":
-      return handleInstagramOverview(body as InstagramOverviewBody, ctx, supabase)
-    case "getFacebookOverview":
-      return handleFacebookOverview(body as FacebookOverviewBody, ctx, supabase)
-    case "selectAccount":
-      return handleSelectAccount(body as SelectAccountBody, ctx, supabase)
-    case "disconnect":
-      return handleDisconnect(body as DisconnectBody, ctx, supabase)
-    default:
-      return jsonResponse({ error: `Ação '${String(action)}' não suportada.` }, 400)
+    if (req.method === "OPTIONS") {
+      return new Response("ok", { status: 200, headers: corsHeaders })
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error("[meta-instagram] Erro não tratado:", msg, err)
-    return jsonResponse(
+
+    if (req.method !== "POST") {
+      return jsonResponse({ error: "Método não permitido. Use POST." }, 405)
+    }
+
+    let body: RequestBody
+    try {
+      body = (await req.json()) as RequestBody
+    } catch {
+      return jsonResponse({ error: "Body JSON inválido." }, 400)
+    }
+
+    const action = body?.action
+
+    if (!action) {
+      return jsonResponse({ error: "Parâmetro 'action' é obrigatório." }, 400)
+    }
+
+    try {
+      const authResult = await requireAuthAndCompany(req, body)
+      if (authResult.error) return authResult.error
+      const ctx = authResult.ctx as AuthContext
+      const supabase = authResult.supabase as ReturnType<typeof createClient>
+
+      switch (action) {
+      case "getLoginUrl":
+        return handleGetLoginUrl(body as GetLoginUrlBody)
+      case "exchangeCode":
+        return handleExchangeCode(body as ExchangeCodeBody, ctx, supabase)
+      case "getConnectionStatus":
+        return handleGetConnectionStatus(body as GetConnectionStatusBody, ctx, supabase)
+      case "getConnectionSummary":
+        return handleGetConnectionSummary(body as GetConnectionSummaryBody, ctx, supabase)
+      case "listAccounts":
+        return handleListAccounts(body as ListAccountsBody, ctx, supabase)
+      case "getInsights":
+        return handleGetInsights(body as GetInsightsBody, ctx, supabase)
+      case "getInstagramOverview":
+        return handleInstagramOverview(body as InstagramOverviewBody, ctx, supabase)
+      case "getFacebookOverview":
+        return handleFacebookOverview(body as FacebookOverviewBody, ctx, supabase)
+      case "selectAccount":
+        return handleSelectAccount(body as SelectAccountBody, ctx, supabase)
+      case "disconnect":
+        return handleDisconnect(body as DisconnectBody, ctx, supabase)
+      default:
+        return jsonResponse({ error: `Ação '${String(action)}' não suportada.` }, 400)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error("[meta-instagram] Erro não tratado:", msg, err)
+      return jsonResponse(
+        {
+          error: "Erro interno ao processar requisição Meta.",
+          hint: msg.slice(0, 200),
+        },
+        500,
+      )
+    }
+  } catch (outerErr) {
+    const msg = outerErr instanceof Error ? outerErr.message : String(outerErr)
+    console.error("[meta-instagram] Erro fatal (wrapper):", msg, outerErr)
+    return safeResponse(
       {
         error: "Erro interno ao processar requisição Meta.",
         hint: msg.slice(0, 200),

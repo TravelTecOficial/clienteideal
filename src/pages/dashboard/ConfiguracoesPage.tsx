@@ -49,6 +49,7 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useEvolutionProxy } from "@/hooks/use-evolution-proxy";
 import { ChatBriefingModal } from "@/components/chat-briefing/ChatBriefingModal";
+import { GMB_CATEGORIES } from "@/constants/gmb-categories";
 
 // --- Interfaces ---
 interface CompanyRow {
@@ -133,6 +134,7 @@ const empresaFormSchema = z.object({
   facebook_url: z.string().optional(),
   linkedin_url: z.string().optional(),
   gmb_place_type: z.string().optional(),
+  gmb_place_type_secondary: z.string().optional(),
   gmb_place_id: z.string().optional(),
 });
 
@@ -1014,20 +1016,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       setSelectedGoogleAnalyticsPropertyLabel(
         `${selectedProperty.accountDisplayName} — ${selectedProperty.propertyDisplayName}`,
       );
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8f1d02" },
-        body: JSON.stringify({
-          sessionId: "8f1d02",
-          location: "ConfiguracoesPage.tsx:handleSelectGA4-success",
-          message: "GA4 selecionado",
-          data: { propertyName: selectedProperty.propertyName },
-          hypothesisId: "H-combo",
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       toast({
         title: "Propriedade GA4 vinculada",
         description: "A propriedade selecionada será usada como padrão para esta empresa.",
@@ -1191,20 +1179,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       setSelectedMyBusinessPropertyLabel(
         `${selectedLocation.accountDisplayName} — ${selectedLocation.propertyDisplayName}`,
       );
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8f1d02" },
-        body: JSON.stringify({
-          sessionId: "8f1d02",
-          location: "ConfiguracoesPage.tsx:handleSelectMyBusiness-success",
-          message: "Meu Negócio selecionado",
-          data: { propertyName: selectedLocation.propertyName },
-          hypothesisId: "H-combo",
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       toast({
         title: "Perfil Meu Negócio vinculado",
         description: "O perfil selecionado será usada como padrão para esta empresa.",
@@ -2954,10 +2928,16 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                             <Input
                               id="empresa_gmb_place_type"
                               type="text"
+                              list="empresa_gmb_place_type_options"
                               placeholder="Ex: dentist, insurance_agent"
                               className="font-mono text-xs"
                               {...empresaForm.register("gmb_place_type")}
                             />
+                            <datalist id="empresa_gmb_place_type_options">
+                              {GMB_CATEGORIES.map((opt) => (
+                                <option key={opt.value} value={opt.value} label={opt.label} />
+                              ))}
+                            </datalist>
                             <p className="text-xs text-muted-foreground">
                               Categoria principal do Google Places. Usada para buscar concorrentes no GMB Local.
                             </p>
@@ -2967,10 +2947,16 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                             <Input
                               id="empresa_gmb_place_type_secondary"
                               type="text"
+                              list="empresa_gmb_place_type_secondary_options"
                               placeholder="Ex: doctor, health"
                               className="font-mono text-xs"
                               {...empresaForm.register("gmb_place_type_secondary")}
                             />
+                            <datalist id="empresa_gmb_place_type_secondary_options">
+                              {GMB_CATEGORIES.map((opt) => (
+                                <option key={opt.value} value={opt.value} label={opt.label} />
+                              ))}
+                            </datalist>
                             <p className="text-xs text-muted-foreground">
                               Categoria secundária opcional do Google Places. Pode ser usada para análises futuras.
                             </p>

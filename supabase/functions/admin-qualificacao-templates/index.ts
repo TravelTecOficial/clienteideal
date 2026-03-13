@@ -28,24 +28,7 @@ async function debugLog(params: {
   message: string
   data?: Record<string, unknown>
 }) {
-  // #region agent log
-  await fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "3aa62b",
-    },
-    body: JSON.stringify({
-      sessionId: "3aa62b",
-      runId: params.runId,
-      hypothesisId: params.hypothesisId,
-      location: params.location,
-      message: params.message,
-      data: params.data ?? {},
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
+  void params
 }
 
 const PONTOS_TIPO = { fria: 1, morna: 5, quente: 10 } as const

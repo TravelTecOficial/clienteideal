@@ -36,20 +36,6 @@ function hasAddressData(addr: CompanyAddress | null): boolean {
 
 async function geocodeAddress(addr: CompanyAddress): Promise<{ lat: number; lng: number } | null> {
   const url = `${SUPABASE_URL}/functions/v1/geocode-address`;
-  // #region agent log
-  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fe9ade" },
-    body: JSON.stringify({
-      sessionId: "fe9ade",
-      location: "CompanyMap.tsx:geocodeAddress",
-      message: "geocodeAddress before fetch",
-      data: { url, hasAnonKey: !!SUPABASE_ANON_KEY },
-      timestamp: Date.now(),
-      hypothesisId: "CORS",
-    }),
-  }).catch(() => {});
-  // #endregion
   let res: Response;
   try {
     res = await fetch(url, {
@@ -68,37 +54,8 @@ async function geocodeAddress(addr: CompanyAddress): Promise<{ lat: number; lng:
       }),
     });
   } catch (err) {
-    // #region agent log
-    const errMsg = err instanceof Error ? err.message : String(err);
-    fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fe9ade" },
-      body: JSON.stringify({
-        sessionId: "fe9ade",
-        location: "CompanyMap.tsx:geocodeAddress",
-        message: "geocodeAddress fetch threw (CORS/network)",
-        data: { url, error: errMsg },
-        timestamp: Date.now(),
-        hypothesisId: "CORS",
-      }),
-    }).catch(() => {});
-    // #endregion
     throw err;
   }
-  // #region agent log
-  fetch("http://127.0.0.1:7243/ingest/bc96f30d-a63c-4828-beaf-5cec801979c8", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fe9ade" },
-    body: JSON.stringify({
-      sessionId: "fe9ade",
-      location: "CompanyMap.tsx:geocodeAddress",
-      message: "geocodeAddress response",
-      data: { status: res.status, statusText: res.statusText, ok: res.ok },
-      timestamp: Date.now(),
-      hypothesisId: "CORS",
-    }),
-  }).catch(() => {});
-  // #endregion
   const rawText = await res.text();
   let parsed: { lat?: number; lng?: number; error?: string } | null = null;
   try {

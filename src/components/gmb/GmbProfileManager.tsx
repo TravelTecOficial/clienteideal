@@ -147,30 +147,6 @@ export function GmbProfileManager() {
     }
     setIsIdentifyingGmb(true);
     try {
-      // #region agent log - place-from-url fetch preflight
-      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "ab699e",
-        },
-        body: JSON.stringify({
-          sessionId: "ab699e",
-          runId: "pre-fix",
-          hypothesisId: "H-CORS-gmb",
-          location:
-            "src/components/gmb/GmbProfileManager.tsx:handleIdentifyGmb:before-fetch",
-          message: "place-from-url fetch about to run",
-          data: {
-            supabaseUrl: SUPABASE_URL || null,
-            locationOrigin: typeof window !== "undefined" ? window.location.origin : null,
-            hasAuthorizationHeader: true,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion agent log - place-from-url fetch preflight
-
       const res = await fetch(`${SUPABASE_URL}/functions/v1/place-from-url`, {
         method: "POST",
         headers: {
@@ -243,33 +219,6 @@ export function GmbProfileManager() {
         title: "Erro ao gravar",
         description: msg,
       });
-      // #region agent log - place-from-url fetch error
-      {
-        const errAny = err as unknown;
-        const message = errAny instanceof Error ? errAny.message : String(errAny);
-        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "ab699e",
-          },
-          body: JSON.stringify({
-            sessionId: "ab699e",
-            runId: "pre-fix",
-            hypothesisId: "H-CORS-gmb",
-            location:
-              "src/components/gmb/GmbProfileManager.tsx:handleIdentifyGmb:catch",
-            message: "place-from-url fetch error",
-            data: {
-              errorMessage: message,
-              errorName: errAny instanceof Error ? errAny.name : typeof errAny,
-              isTypeError: errAny instanceof TypeError,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-      }
-      // #endregion agent log - place-from-url fetch error
     } finally {
       setIsIdentifyingGmb(false);
     }
