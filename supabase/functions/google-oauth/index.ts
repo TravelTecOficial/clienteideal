@@ -7,6 +7,10 @@
  * - action: "getConnectionStatus" -> retorna se há conexão ativa (sem expor tokens)
  * - action: "disconnect"     -> remove conexão da empresa
  *
+ * selectMyBusinessLocation: ao selecionar perfil, busca placeId via Business Information API,
+ * chama Place Details para primaryType/types e atualiza companies (gmb_place_id, gmb_place_type,
+ * gmb_place_type_secondary). Requer GOOGLE_PLACES_API_KEY nas secrets.
+ *
  * Scopes: GA4, Ads, My Business.
  * refresh_token é armazenado criptografado para renovação automática de access_token no futuro.
  */
@@ -1190,6 +1194,74 @@ async function handleSelectMyBusinessLocation(
       },
       500,
     )
+  }
+
+  // Buscar placeId e categorias do perfil para atualizar companies (GMB Local)
+  try {
+    const connectionResult = await getGoogleConnectionForService(ctx, supabase, "mybusiness")
+    if (!connectionResult.error && connectionResult.row) {
+      const config = getGoogleConfig()
+      if (!("error" in config)) {
+        const tokenResult = await getValidAccessToken(
+          connectionResult.row,
+          config,
+          supabase,
+          ctx,
+          "mybusiness",
+        )
+        if (!tokenResult.error && tokenResult.accessToken) {
+          const locUrl = new URL(
+            `https://mybusinessbusinessinformation.googleapis.com/v1/${propertyName}`,
+          )
+          locUrl.searchParams.set("readMask", "metadata.placeId")
+          const locRes = await fetch(locUrl.toString(), {
+            headers: { Authorization: `Bearer ${tokenResult.accessToken}` },
+          })
+          if (locRes.ok) {
+            const locData = (await locRes.json().catch(() => null)) as {
+              metadata?: { placeId?: string }
+            } | null
+            const placeId = locData?.metadata?.placeId?.trim()
+            if (placeId) {
+              const placesApiKey = Deno.env.get("GOOGLE_PLACES_API_KEY")?.trim()
+              if (placesApiKey) {
+                const detailsRes = await fetch(
+                  `https://places.googleapis.com/v1/places/${placeId}`,
+                  {
+                    headers: {
+                      "X-Goog-Api-Key": placesApiKey,
+                      "X-Goog-FieldMask": "primaryType,types",
+                    },
+                  },
+                )
+                if (detailsRes.ok) {
+                  const details = (await detailsRes.json().catch(() => null)) as {
+                    primaryType?: string
+                    types?: string[]
+                  } | null
+                  const primaryType = details?.primaryType?.trim() ?? null
+                  const secondaryType =
+                    details?.types?.filter((t) => t && t !== primaryType)[0]?.trim() ?? null
+                  const { error: updateErr } = await supabase
+                    .from("companies")
+                    .update({
+                      gmb_place_id: placeId,
+                      gmb_place_type: primaryType,
+                      gmb_place_type_secondary: secondaryType,
+                    })
+                    .eq("id", ctx.companyId)
+                  if (updateErr) {
+                    console.error("[google-oauth] Erro ao atualizar companies com gmb_place:", updateErr)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[google-oauth] Erro ao buscar placeId/categorias do perfil:", err)
   }
 
   return jsonResponse({
