@@ -107,6 +107,19 @@ No workflow **[SDR] - Sistema de Atendimento - Fluxo Principal**, editar o nó `
 
 ---
 
+## Checagem de companies.use_sdr (desativar SDR por empresa)
+
+A coluna `companies.use_sdr` (boolean, default `true`) controla se a automação deve usar a IA de SDR para qualificação. Quando `use_sdr = false`, o fluxo principal **não deve** chamar este subworkflow de qualificação SDR.
+
+**Implementação no fluxo principal (antes de chamar qualifica_lead):**
+
+1. Consultar `companies` para o `company_id` do lead e ler `use_sdr`.
+2. Se `use_sdr = false`, pular a chamada ao subworkflow de qualificação SDR (ou não executar a lógica de IA de SDR).
+
+O checkbox "Não usar SDR" na página **Cliente Ideal** (Dashboard) permite que o usuário altere esse valor por empresa.
+
+---
+
 ## Fonte das perguntas (módulo existente)
 
 As perguntas vêm das tabelas **qualificadores**, **qualificacao_perguntas** e **qualificacao_respostas** — o mesmo módulo usado na página de Qualificação do frontend. A view `v_qualificacao_sdr` consolida essas tabelas no formato esperado pelo SDR.

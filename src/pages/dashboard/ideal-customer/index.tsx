@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { User, Loader2, Plus, Edit2, Trash2, ImageIcon, Copy } from "lucide-react";
 
@@ -78,6 +79,8 @@ export default function IdealCustomerPage() {
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [copyingTemplateId, setCopyingTemplateId] = useState<string | null>(null);
   const [companySegmentType, setCompanySegmentType] = useState<string>("produtos");
+  const [useSdr, setUseSdr] = useState<boolean>(true);
+  const [isUpdatingUseSdr, setIsUpdatingUseSdr] = useState(false);
   const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
   const [previewAvatarUrl, setPreviewAvatarUrl] = useState<string | null>(null);
   const [previewAvatarName, setPreviewAvatarName] = useState<string>("persona");
@@ -133,21 +136,22 @@ export default function IdealCustomerPage() {
   }, [loadClientes]);
 
   useEffect(() => {
-    async function loadCompanySegment() {
+    async function loadCompanyData() {
       if (!effectiveCompanyId) return;
       const { data, error } = await supabase
         .from("companies")
-        .select("segment_type")
+        .select("segment_type, use_sdr")
         .eq("id", effectiveCompanyId)
         .maybeSingle();
       if (error) {
-        console.error("Erro ao carregar segmento da empresa:", error);
+        console.error("Erro ao carregar dados da empresa:", error);
         return;
       }
-      const segment = (data as { segment_type?: string | null } | null)?.segment_type;
-      if (segment) setCompanySegmentType(segment);
+      const row = data as { segment_type?: string | null; use_sdr?: boolean | null } | null;
+      if (row?.segment_type) setCompanySegmentType(row.segment_type);
+      setUseSdr(row?.use_sdr ?? true);
     }
-    loadCompanySegment();
+    loadCompanyData();
   }, [effectiveCompanyId, supabase]);
 
   const loadTemplates = useCallback(async () => {
@@ -311,6 +315,35 @@ export default function IdealCustomerPage() {
     setIsAvatarPreviewOpen(true);
   }
 
+  async function handleToggleUseSdr() {
+    if (!effectiveCompanyId) return;
+    setIsUpdatingUseSdr(true);
+    const newValue = !useSdr;
+    try {
+      const { error } = await supabase
+        .from("companies")
+        .update({ use_sdr: newValue })
+        .eq("id", effectiveCompanyId);
+
+      if (error) throw error;
+      setUseSdr(newValue);
+      toast({
+        title: newValue ? "SDR ativado" : "SDR desativado",
+        description: newValue
+          ? "A automação voltará a usar a IA de SDR para qualificação."
+          : "A automação não usará a IA de SDR para qualificação.",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: getErrorMessage(err, "Falha ao atualizar configuração de SDR."),
+      });
+    } finally {
+      setIsUpdatingUseSdr(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -321,6 +354,23 @@ export default function IdealCustomerPage() {
           <p className="text-muted-foreground">
             Cadastre e gerencie os perfis de clientes ideais para a IA.
           </p>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="use_sdr"
+              checked={!useSdr}
+              onChange={handleToggleUseSdr}
+              disabled={!effectiveCompanyId || isUpdatingUseSdr}
+              className="h-4 w-4 rounded border-input"
+              aria-label="Não usar SDR"
+            />
+            <Label htmlFor="use_sdr" className="cursor-pointer font-normal">
+              Não usar SDR
+            </Label>
+            {isUpdatingUseSdr && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleOpenCopyModal} disabled={!effectiveCompanyId}>
