@@ -9,7 +9,8 @@
  *
  * Secrets: CLERK_SECRET_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_TOKEN_ENCRYPTION_KEY
  *
- * Deploy: npx supabase functions deploy gmb-sync-profile --project-ref mrkvvgofjyvlutqpvedt --no-verify-jwt
+ * Deploy DEV: npx supabase functions deploy gmb-sync-profile --project-ref mrkvvgofjyvlutqpvedt --no-verify-jwt
+ * Deploy PROD: npx supabase functions deploy gmb-sync-profile --project-ref bctjodobbsxieywgulvl --no-verify-jwt
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -126,20 +127,21 @@ function toPlaceType(raw: string | undefined): string | null {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("", { status: 200, headers: corsHeaders })
-  }
-
-  if (req.method !== "POST") {
-    return jsonResponse({ error: "Método não permitido." }, 405)
-  }
-
-  let body: RequestBody
   try {
-    body = (await req.json().catch(() => ({}))) as RequestBody
-  } catch {
-    body = {}
-  }
+    if (req.method === "OPTIONS") {
+      return new Response("", { status: 200, headers: corsHeaders })
+    }
+
+    if (req.method !== "POST") {
+      return jsonResponse({ error: "Método não permitido." }, 405)
+    }
+
+    let body: RequestBody
+    try {
+      body = (await req.json().catch(() => ({}))) as RequestBody
+    } catch {
+      body = {}
+    }
 
   const authHeader = req.headers.get("Authorization")
   const token = authHeader?.replace(/^Bearer\s+/i, "")?.trim() ||
@@ -353,4 +355,12 @@ Deno.serve(async (req: Request) => {
       gmb_place_type_secondary: secondaryType,
     },
   })
+  } catch (err) {
+    console.error("[gmb-sync-profile] Unhandled error:", err)
+    return jsonResponse({
+      error: "Erro interno ao sincronizar.",
+      hint: err instanceof Error ? err.message : String(err),
+      code: "INTERNAL_ERROR",
+    }, 500)
+  }
 })

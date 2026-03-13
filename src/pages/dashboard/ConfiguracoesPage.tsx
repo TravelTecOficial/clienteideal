@@ -2186,9 +2186,16 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         },
         body: JSON.stringify({ company_id: companyId }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; success?: boolean; synced?: Record<string, string | null> };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        hint?: string;
+        success?: boolean;
+        synced?: Record<string, string | null>;
+      };
       if (!res.ok) {
-        throw new Error(data?.error ?? `Erro ${res.status}`);
+        const msg = data?.error ?? `Erro ${res.status}`;
+        const hint = data?.hint ? ` ${data.hint}` : "";
+        throw new Error(msg + hint);
       }
       toast({
         title: "Categorias sincronizadas",

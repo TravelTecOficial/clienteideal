@@ -73,6 +73,11 @@ npx supabase functions deploy persona-generate-avatar --project-ref $PROJECT_REF
 npx supabase functions deploy persona-template-generate-avatar --project-ref $PROJECT_REF
 npx supabase functions deploy places-search-nearby --project-ref $PROJECT_REF --no-verify-jwt
 npx supabase functions deploy geocode-address --project-ref $PROJECT_REF --no-verify-jwt
+npx supabase functions deploy gmb-post-create --project-ref $PROJECT_REF --no-verify-jwt
+npx supabase functions deploy gmb-post-list --project-ref $PROJECT_REF --no-verify-jwt
+npx supabase functions deploy gmb-reviews --project-ref $PROJECT_REF --no-verify-jwt
+npx supabase functions deploy gmb-qa --project-ref $PROJECT_REF --no-verify-jwt
+npx supabase functions deploy gmb-sync-profile --project-ref $PROJECT_REF --no-verify-jwt
 ```
 
 **Importante (CORS)**: As funções `geocode-address` e `places-search-nearby` são chamadas pelo front (clienteideal.online) com anon key. Se forem deployadas **sem** `--no-verify-jwt`, o gateway do Supabase pode rejeitar o preflight OPTIONS com 401 e o navegador reporta erro de CORS ("preflight doesn't pass access control / doesn't have HTTP ok status"). Sempre use `--no-verify-jwt` para essas duas.
