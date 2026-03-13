@@ -735,7 +735,7 @@ export default function GMBLocal({ className }: GMBLocalProps) {
                   {[companyData?.gmb_place_type, companyData?.cidade, companyData?.uf]
                     .filter(Boolean)
                     .join(" • ")}
-                  {![companyData?.gmb_place_type, companyData?.cidade].some(Boolean)] && "—"}
+                  {![companyData?.gmb_place_type, companyData?.cidade].some(Boolean) && "—"}
                 </p>
               </div>
               <Badge
