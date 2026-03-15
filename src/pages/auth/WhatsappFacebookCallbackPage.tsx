@@ -23,26 +23,6 @@ export function WhatsappFacebookCallbackPage() {
         const url = new URL(window.location.href)
         const code = url.searchParams.get("code")
         const companyId = url.searchParams.get("state") ?? window.localStorage.getItem(STORAGE_KEY) ?? window.sessionStorage.getItem(STORAGE_KEY)
-        // #region agent log
-        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-          body: JSON.stringify({
-            sessionId: "9bd63d",
-            runId: "pre-fix-redirect",
-            hypothesisId: "H2",
-            location: "WhatsappFacebookCallbackPage.tsx:run:start",
-            message: "WhatsApp callback page mounted",
-            data: {
-              pathname: window.location.pathname,
-              hasCode: Boolean(code),
-              hasState: Boolean(url.searchParams.get("state")),
-              hasCompanyId: Boolean(companyId),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
 
         if (!code) {
           toast({
@@ -68,25 +48,6 @@ export function WhatsappFacebookCallbackPage() {
         if (!token) {
           throw new Error("Token de autenticação indisponível. Faça login novamente.")
         }
-        // #region agent log
-        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-          body: JSON.stringify({
-            sessionId: "9bd63d",
-            runId: "pre-fix-redirect",
-            hypothesisId: "H3",
-            location: "WhatsappFacebookCallbackPage.tsx:run:beforeExchange",
-            message: "Calling exchangeCode",
-            data: {
-              hasToken: Boolean(token),
-              hasCode: Boolean(code),
-              hasCompanyId: Boolean(companyId),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
 
         const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
           method: "POST",
@@ -121,25 +82,6 @@ export function WhatsappFacebookCallbackPage() {
           const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`)
           throw new Error(msg)
         }
-        // #region agent log
-        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-          body: JSON.stringify({
-            sessionId: "9bd63d",
-            runId: "pre-fix-redirect",
-            hypothesisId: "H3",
-            location: "WhatsappFacebookCallbackPage.tsx:run:afterExchange",
-            message: "exchangeCode finished successfully",
-            data: {
-              status: res.status,
-              hasPhoneNumbers: Boolean(data?.phoneNumbers?.length),
-              hasDisplayPhone: Boolean(data?.display_phone_number),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
 
         window.localStorage.removeItem(STORAGE_KEY)
         window.sessionStorage.removeItem(STORAGE_KEY)
@@ -147,7 +89,6 @@ export function WhatsappFacebookCallbackPage() {
         if (data?.phoneNumbers && data.phoneNumbers.length > 0) {
           window.sessionStorage.setItem("whatsapp_pending_phone_numbers", JSON.stringify(data.phoneNumbers))
         }
-        window.sessionStorage.setItem("whatsapp_just_connected", "1")
 
         toast({
           title: "WhatsApp conectado",
@@ -155,26 +96,11 @@ export function WhatsappFacebookCallbackPage() {
             ? `Número vinculado: ${data.display_phone_number}`
             : "A conta foi conectada com sucesso.",
         })
-        // #region agent log
-        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-          body: JSON.stringify({
-            sessionId: "9bd63d",
-            runId: "pre-fix-redirect",
-            hypothesisId: "H3",
-            location: "WhatsappFacebookCallbackPage.tsx:run:beforeNavigate",
-            message: "Navigating from callback to integrations",
-            data: {
-              target: "/dashboard/configuracoes/integracoes",
-              justConnected: window.sessionStorage.getItem("whatsapp_just_connected"),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
 
-        navigate("/dashboard/configuracoes/integracoes", { replace: true })
+        navigate("/dashboard/configuracoes/integracoes", {
+          replace: true,
+          state: { whatsappJustConnected: true },
+        })
       } catch (err) {
         toast({
           variant: "destructive",

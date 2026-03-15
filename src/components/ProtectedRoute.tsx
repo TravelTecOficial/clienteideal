@@ -164,31 +164,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) return
 
-    // #region agent log
-    if (location.pathname === "/auth/facebook/callback") {
-      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-        body: JSON.stringify({
-          sessionId: "9bd63d",
-          runId: "pre-fix-redirect",
-          hypothesisId: "H2",
-          location: "ProtectedRoute.tsx:callbackEffect",
-          message: "ProtectedRoute evaluating WhatsApp callback route",
-          data: {
-            pathname: location.pathname,
-            isLoaded,
-            isSignedIn,
-            hasUser: Boolean(user?.id),
-            planCheckStatus,
-            hasRecentPlanCheck: getPlanCheckPassed(),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-    }
-    // #endregion
-
     if (location.pathname === "/planos") {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- early exit para rota /planos
       setPlanCheckStatus("allowed")

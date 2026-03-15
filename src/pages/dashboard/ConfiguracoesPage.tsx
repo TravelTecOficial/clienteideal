@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -265,6 +265,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const { userId, getToken } = useAuth();
   const { user } = useUser();
   const navigate = useNavigate();
+  const location = useLocation();
   const supabase = useSupabaseClient();
   const { toast } = useToast();
   const effectiveFromHook = useEffectiveCompanyId();
@@ -1457,32 +1458,13 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           window.sessionStorage.removeItem("whatsapp_pending_phone_numbers");
         }
       }
-      const justConnected = window.sessionStorage.getItem("whatsapp_just_connected");
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-        body: JSON.stringify({
-          sessionId: "9bd63d",
-          runId: "pre-fix-redirect",
-          hypothesisId: "H4",
-          location: "ConfiguracoesPage.tsx:integracoesEffect",
-          message: "Integracoes page loaded WhatsApp redirect state",
-          data: {
-            section,
-            hasPendingPhones: Boolean(pending),
-            justConnected,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-      if (justConnected) {
-        window.sessionStorage.removeItem("whatsapp_just_connected");
+      const whatsappJustConnected = location.state?.whatsappJustConnected === true;
+      if (whatsappJustConnected) {
         setShowWhatsappPostConfirmDialog(true);
+        navigate(location.pathname, { replace: true });
       }
     }
-  }, [section, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState, loadWordpressConnection]);
+  }, [section, location.state, location.pathname, navigate, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState, loadWordpressConnection]);
 
   useEffect(() => {
     if (
@@ -1857,31 +1839,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
 
       // Backup do companyId para o callback (state vem na URL, mas storage garante fallback)
       window.sessionStorage.setItem("whatsapp_connect_company_id", companyId);
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-        body: JSON.stringify({
-          sessionId: "9bd63d",
-          runId: "pre-fix-redirect",
-          hypothesisId: "H1",
-          location: "ConfiguracoesPage.tsx:handleWhatsappConnectClick",
-          message: "Redirecting user to Meta login",
-          data: {
-            hasUrl: Boolean(data.url),
-            urlHost: (() => {
-              try {
-                return new URL(data.url).host;
-              } catch {
-                return "invalid-url";
-              }
-            })(),
-            hasCompanyId: Boolean(companyId),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
 
       window.location.href = data.url;
     } catch (err) {
@@ -3462,7 +3419,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                   Conectando…
                                 </>
-                              ) : int.connected && (isMetaCard || isGoogleCard || isWhatsappCard) ? (
+                              ) : int.connected && isWhatsappCard ? (
+                                "Desconectar"
+                              ) : int.connected && (isMetaCard || isGoogleCard) ? (
                                 "Desconectar"
                               ) : int.connected ? (
                                 <>
