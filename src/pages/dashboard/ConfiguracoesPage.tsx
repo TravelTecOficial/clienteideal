@@ -376,6 +376,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [isWhatsappConnected, setIsWhatsappConnected] = useState(false);
   const [whatsappSelectedDisplay, setWhatsappSelectedDisplay] = useState<string | null>(null);
   const [isSelectingWhatsappNumber, setIsSelectingWhatsappNumber] = useState(false);
+  const [isLoadingWhatsappPhoneNumbers, setIsLoadingWhatsappPhoneNumbers] = useState(false);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
   const evolutionForm = useForm<EvolutionFormValues>({
@@ -1442,6 +1443,19 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       void loadGoogleConnectionState();
       void loadMetaConnectionState();
       void loadWordpressConnection();
+      const pending = window.sessionStorage.getItem("whatsapp_pending_phone_numbers");
+      if (pending) {
+        try {
+          const phones = JSON.parse(pending) as { id: string; display_phone_number: string; verified_name?: string | null }[];
+          if (Array.isArray(phones) && phones.length > 0) {
+            setWhatsappPhoneNumbers(phones);
+            if (phones.length === 1) setSelectedWhatsappPhoneId(phones[0].id);
+            window.sessionStorage.removeItem("whatsapp_pending_phone_numbers");
+          }
+        } catch {
+          window.sessionStorage.removeItem("whatsapp_pending_phone_numbers");
+        }
+      }
     }
   }, [section, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState, loadWordpressConnection]);
 
@@ -1470,6 +1484,12 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
     if (isMetaAdsConnected) void handleLoadMetaAccounts("meta_ads");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- handleLoadMetaAccounts é estável; deps intencionais
   }, [section, companyId, isInstagramConnected, isFacebookConnected, isMetaAdsConnected]);
+
+  // Carregar números WhatsApp quando conectado mas lista vazia (ex.: após refresh)
+  useEffect(() => {
+    if (section !== "integracoes" || !companyId || !isWhatsappConnected || whatsappPhoneNumbers.length > 0) return;
+    void handleLoadWhatsappPhoneNumbers();
+  }, [section, companyId, isWhatsappConnected, whatsappPhoneNumbers.length]);
 
 
   useEffect(() => {
@@ -1852,6 +1872,13 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         throw new Error("Token de autenticação indisponível. Faça login novamente.");
       }
 
+      const selectedPhone = whatsappPhoneNumbers.find((p) => p.id === phoneNumberId) ?? null;
+      const displayPhone = selectedPhone
+        ? (selectedPhone.verified_name && selectedPhone.verified_name.length > 0
+            ? `${selectedPhone.display_phone_number} (${selectedPhone.verified_name})`
+            : selectedPhone.display_phone_number)
+        : "";
+
       const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
         method: "POST",
         headers: {
@@ -1861,6 +1888,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         body: JSON.stringify({
           action: "selectPhoneNumber" as const,
           phone_number_id: phoneNumberId,
+          company_id: companyId,
+          display_phone_number: selectedPhone?.display_phone_number ?? "",
           token,
         }),
       });
@@ -1889,15 +1918,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         return;
       }
 
-      const selectedPhone = whatsappPhoneNumbers.find((p) => p.id === phoneNumberId) ?? null;
       setIsWhatsappConnected(true);
-      if (selectedPhone) {
-        const display =
-          selectedPhone.verified_name && selectedPhone.verified_name.length > 0
-            ? `${selectedPhone.display_phone_number} (${selectedPhone.verified_name})`
-            : selectedPhone.display_phone_number;
-        setWhatsappSelectedDisplay(display);
-      }
+      if (displayPhone) setWhatsappSelectedDisplay(displayPhone);
 
       toast({
         title: "Número de WhatsApp selecionado",
@@ -1912,6 +1934,36 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       });
     } finally {
       setIsSelectingWhatsappNumber(false);
+    }
+  }
+
+  async function handleLoadWhatsappPhoneNumbers() {
+    if (!companyId) return;
+    setIsLoadingWhatsappPhoneNumbers(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "getPhoneNumbers" as const,
+          company_id: companyId,
+          token,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as { phoneNumbers?: WhatsappPhoneNumber[]; error?: string } | null;
+      if (res.ok && data?.phoneNumbers && Array.isArray(data.phoneNumbers)) {
+        setWhatsappPhoneNumbers(data.phoneNumbers);
+        if (data.phoneNumbers.length === 1) setSelectedWhatsappPhoneId(data.phoneNumbers[0].id);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingWhatsappPhoneNumbers(false);
     }
   }
 
@@ -3291,6 +3343,9 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                           <div className="flex flex-col items-center gap-2">
                             <Icon className="h-10 w-10 shrink-0 text-foreground" style={{ width: 40, height: 40 }} />
                             <p className="text-sm font-medium text-foreground">{int.name}</p>
+                            {int.id === "whatsapp" && int.connected && whatsappSelectedDisplay && (
+                              <p className="text-xs text-muted-foreground">{whatsappSelectedDisplay}</p>
+                            )}
                           </div>
                           <div className="flex w-full flex-col gap-2">
                             <Button
@@ -3384,6 +3439,64 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                     ))}
                                   </SelectContent>
                                 </Select>
+                              </div>
+                            )}
+                            {int.connected && int.id === "whatsapp" && (
+                              <div className="w-full space-y-1">
+                                <Label className="text-xs text-muted-foreground">Número</Label>
+                                <Select
+                                  value={selectedWhatsappPhoneId ?? ""}
+                                  onOpenChange={(open) => {
+                                    if (open && whatsappPhoneNumbers.length === 0 && !isLoadingWhatsappPhoneNumbers && companyId) {
+                                      void handleLoadWhatsappPhoneNumbers();
+                                    }
+                                  }}
+                                  onValueChange={(value) => setSelectedWhatsappPhoneId(value)}
+                                  disabled={isLoadingWhatsappPhoneNumbers || isSelectingWhatsappNumber || !companyId}
+                                >
+                                  <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue
+                                      placeholder={
+                                        isLoadingWhatsappPhoneNumbers
+                                          ? "Carregando…"
+                                          : whatsappPhoneNumbers.length === 0
+                                            ? "Carregar números"
+                                            : "Selecione o número"
+                                      }
+                                    />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {whatsappPhoneNumbers.length === 0 && !isLoadingWhatsappPhoneNumbers && (
+                                      <SelectItem value="__load__" onSelect={() => void handleLoadWhatsappPhoneNumbers()}>
+                                        Carregar números
+                                      </SelectItem>
+                                    )}
+                                    {whatsappPhoneNumbers.map((phone) => (
+                                      <SelectItem key={phone.id} value={phone.id}>
+                                        {phone.display_phone_number}
+                                        {phone.verified_name ? ` — ${phone.verified_name}` : ""}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {selectedWhatsappPhoneId && whatsappPhoneNumbers.some((p) => p.id === selectedWhatsappPhoneId) && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full mt-1"
+                                    disabled={isSelectingWhatsappNumber}
+                                    onClick={handleWhatsappSelectPhoneNumber}
+                                  >
+                                    {isSelectingWhatsappNumber ? (
+                                      <>
+                                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                        Salvando…
+                                      </>
+                                    ) : (
+                                      "Confirmar número"
+                                    )}
+                                  </Button>
+                                )}
                               </div>
                             )}
                             {int.connected && isGoogleCard && int.onDisconnect && (
@@ -3636,51 +3749,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                       </DialogContent>
                     </Dialog>
                   </div>
-
-                  {whatsappPhoneNumbers.length > 0 && (
-                    <div className="mt-6 space-y-3">
-                      <h3 className="text-sm font-medium">Selecione o número do WhatsApp</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Escolha qual número oficial será utilizado pelo SDR para enviar mensagens.
-                      </p>
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                        <div className="w-full space-y-1 sm:max-w-xs">
-                          <Label htmlFor="whatsapp-phone-number">Número do WhatsApp</Label>
-                          <Select
-                            value={selectedWhatsappPhoneId ?? ""}
-                            onValueChange={(value) => setSelectedWhatsappPhoneId(value)}
-                          >
-                            <SelectTrigger id="whatsapp-phone-number">
-                              <SelectValue placeholder="Selecione um número" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {whatsappPhoneNumbers.map((phone) => (
-                                <SelectItem key={phone.id} value={phone.id}>
-                                  {phone.display_phone_number}
-                                  {phone.verified_name ? ` — ${phone.verified_name}` : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button
-                          type="button"
-                          className="sm:ml-2"
-                          disabled={!selectedWhatsappPhoneId || isSelectingWhatsappNumber}
-                          onClick={handleWhatsappSelectPhoneNumber}
-                        >
-                          {isSelectingWhatsappNumber ? (
-                            <>
-                              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                              Salvando…
-                            </>
-                          ) : (
-                            <>Confirmar número</>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
 
                 </CardContent>
               </Card>

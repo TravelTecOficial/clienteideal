@@ -69,6 +69,7 @@ export function WhatsappFacebookCallbackPage() {
             return JSON.parse(raw) as {
               success?: boolean
               display_phone_number?: string
+              phoneNumbers?: { id: string; display_phone_number: string; verified_name?: string | null }[]
               error?: string
               hint?: string
             } | null
@@ -82,8 +83,12 @@ export function WhatsappFacebookCallbackPage() {
           throw new Error(msg)
         }
 
-        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(STORAGE_KEY)
         window.sessionStorage.removeItem(STORAGE_KEY)
+
+        if (data?.phoneNumbers && data.phoneNumbers.length > 0) {
+          window.sessionStorage.setItem("whatsapp_pending_phone_numbers", JSON.stringify(data.phoneNumbers))
+        }
 
         toast({
           title: "WhatsApp conectado",
@@ -92,14 +97,14 @@ export function WhatsappFacebookCallbackPage() {
             : "A conta foi conectada com sucesso.",
         })
 
-        navigate("/dashboard/configuracoes?tab=integracoes", { replace: true })
+        navigate("/dashboard/configuracoes/integracoes", { replace: true })
       } catch (err) {
         toast({
           variant: "destructive",
           title: "Erro ao finalizar conexão WhatsApp",
           description: getErrorMessage(err),
         })
-        navigate("/dashboard/configuracoes?tab=integracoes", { replace: true })
+        navigate("/dashboard/configuracoes/integracoes", { replace: true })
       }
     }
 

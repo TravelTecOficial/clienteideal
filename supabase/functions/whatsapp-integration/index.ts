@@ -9,9 +9,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 }
 
-// Apenas permissões Standard Access (evita 400 "Application does not have permission")
-// business_management e public_profile removidos — não necessários para fluxo direto
-const WHATSAPP_SCOPES = ["whatsapp_business_management", "whatsapp_business_messaging"]
+// Standard Access: public_profile exigido pelo endpoint me/assigned_whatsapp_business_accounts
+// business_management removido (não necessário para fluxo direto)
+const WHATSAPP_SCOPES = [
+  "public_profile",
+  "whatsapp_business_management",
+  "whatsapp_business_messaging",
+]
 
 type WhatsappAction =
   | "getLoginUrl"
@@ -40,11 +44,14 @@ interface ExchangeCodeBody extends BaseBody {
 
 interface GetPhoneNumbersBody extends BaseBody {
   action: "getPhoneNumbers"
+  company_id?: string
 }
 
 interface SelectPhoneNumberBody extends BaseBody {
   action: "selectPhoneNumber"
   phone_number_id?: string
+  display_phone_number?: string
+  company_id?: string
 }
 
 interface ConnectEmbeddedBody extends BaseBody {
@@ -266,6 +273,12 @@ async function getAesKey(encryptionKey: string): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["encrypt", "decrypt"])
 }
 
+function fromBase64Url(b64: string): Uint8Array {
+  const padded = b64.replace(/-/g, "+").replace(/_/g, "/")
+  const bin = atob(padded)
+  return new Uint8Array([...bin].map((c) => c.charCodeAt(0)))
+}
+
 async function encryptToken(plain: string, encryptionKey: string): Promise<string> {
   const encoder = new TextEncoder()
   const key = await getAesKey(encryptionKey)
@@ -279,6 +292,16 @@ async function encryptToken(plain: string, encryptionKey: string): Promise<strin
   const ivB64 = toBase64Url(iv)
   const cipherB64 = toBase64Url(cipherBytes)
   return `${ivB64}:${cipherB64}`
+}
+
+async function decryptToken(encrypted: string, encryptionKey: string): Promise<string> {
+  const [ivB64, cipherB64] = encrypted.split(":")
+  if (!ivB64 || !cipherB64) throw new Error("Token criptografado inválido")
+  const key = await getAesKey(encryptionKey)
+  const iv = fromBase64Url(ivB64)
+  const cipher = fromBase64Url(cipherB64)
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher)
+  return new TextDecoder().decode(plain)
 }
 
 async function validateCompanyAccess(
@@ -327,6 +350,87 @@ async function handleExchangeCode(
 
   const { appId, appSecret, redirectUri } = config
   const code = typeof body.code === "string" ? body.code.trim() : ""
+
+  // #region BYPASS TEMPORÁRIO — screencast (app em desenvolvimento)
+  // Quando WHATSAPP_DEV_BYPASS_TOKEN está definido, pula a troca code→token e as chamadas à Meta.
+  // Configure a secret no Supabase: WHATSAPP_DEV_BYPASS_TOKEN = <token manual>
+  const bypassToken = Deno.env.get("WHATSAPP_DEV_BYPASS_TOKEN")?.trim()
+  const bypassWabaId = Deno.env.get("WHATSAPP_TEST_WABA_ID")?.trim() || "245937908592211"
+  if (bypassToken) {
+    const accessToken = bypassToken
+    const wabaId = bypassWabaId
+    const phoneNumbers: PhoneNumberDTO[] = [
+      { id: "screencast_test_phone", display_phone_number: "+15551234567", verified_name: "Test (screencast)" },
+    ]
+    const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
+    const companyId = typeof body.company_id === "string" ? body.company_id.trim() : ""
+    if (companyId) {
+      const supabase = getSupabaseClient()
+      const hasAccess = await validateCompanyAccess(sub, companyId, supabase)
+      if (!hasAccess) {
+        return jsonResponse(
+          { error: "Sem permissão para conectar WhatsApp a esta empresa.", code: "FORBIDDEN_COMPANY" } satisfies ErrorResponse,
+          403,
+        )
+      }
+      const encConfig = getConnectEmbeddedConfig()
+      if ("error" in encConfig) return encConfig.error
+      let accessTokenEncrypted: string
+      try {
+        accessTokenEncrypted = await encryptToken(accessToken, encConfig.encryptionKey)
+      } catch (err) {
+        console.error("[whatsapp-integration] Erro ao criptografar token (bypass):", err)
+        return jsonResponse({ error: "Erro ao criptografar token.", code: "ENCRYPTION_ERROR" } satisfies ErrorResponse, 500)
+      }
+      const firstPhone = phoneNumbers[0]
+      const { error: upsertError } = await supabase.from("meta_connections").upsert(
+        {
+          company_id: companyId,
+          clerk_user_id: sub,
+          provider_type: "whatsapp",
+          external_account_id: wabaId,
+          external_phone_id: firstPhone.id,
+          display_phone_number: firstPhone.display_phone_number,
+          access_token: accessTokenEncrypted,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "company_id,provider_type" },
+      )
+      if (upsertError) {
+        console.error("[whatsapp-integration] Erro ao salvar meta_connections (bypass):", upsertError)
+        return jsonResponse({ error: "Erro ao salvar conexão WhatsApp.", code: "SUPABASE_ERROR" } satisfies ErrorResponse, 500)
+      }
+      await supabase.from("companies").update({ celular_atendimento: firstPhone.display_phone_number }).eq("id", companyId)
+      return jsonResponse({
+        success: true,
+        display_phone_number: firstPhone.display_phone_number,
+        waba_id: wabaId,
+        phone_number_id: firstPhone.id,
+        phoneNumbers,
+      })
+    }
+    const supabase = getSupabaseClient()
+    const { error } = await supabase.from("integrations").upsert(
+      {
+        user_id: sub,
+        provider: "whatsapp",
+        access_token: accessToken,
+        waba_id: wabaId,
+        phone_number_id: null,
+        expires_at: expiresAt,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,provider" },
+    )
+    if (error) {
+      console.error("[whatsapp-integration] Erro ao salvar integração (bypass):", error)
+      return jsonResponse({ error: "Erro ao salvar integração WhatsApp.", code: "SUPABASE_ERROR" } satisfies ErrorResponse, 500)
+    }
+    return jsonResponse({ success: true, phoneNumbers })
+  }
+  // #endregion
+
   if (!code) {
     return jsonResponse(
       { error: "Parâmetro 'code' é obrigatório.", code: "MISSING_CODE" } satisfies ErrorResponse,
@@ -574,8 +678,91 @@ async function handleExchangeCode(
   return jsonResponse({ success: true, phoneNumbers })
 }
 
-async function handleGetPhoneNumbers(_body: GetPhoneNumbersBody, sub: string): Promise<Response> {
+async function handleGetPhoneNumbers(body: GetPhoneNumbersBody, sub: string): Promise<Response> {
   const supabase = getSupabaseClient()
+  const companyId = typeof body.company_id === "string" ? body.company_id.trim() : ""
+
+  if (companyId) {
+    const hasAccess = await validateCompanyAccess(sub, companyId, supabase)
+    if (!hasAccess) {
+      return jsonResponse(
+        { error: "Sem permissão para acessar esta empresa.", code: "FORBIDDEN_COMPANY" } satisfies ErrorResponse,
+        403,
+      )
+    }
+    const { data: metaRow, error: metaErr } = await supabase
+      .from("meta_connections")
+      .select("access_token, external_account_id")
+      .eq("company_id", companyId)
+      .eq("provider_type", "whatsapp")
+      .maybeSingle()
+
+    if (metaErr || !metaRow?.access_token || !metaRow?.external_account_id) {
+      return jsonResponse(
+        {
+          error: "Nenhuma conexão WhatsApp encontrada para esta empresa. Conecte primeiro via OAuth.",
+          code: "INTEGRATION_NOT_FOUND",
+        } satisfies ErrorResponse,
+        404,
+      )
+    }
+
+    const encConfig = getConnectEmbeddedConfig()
+    if ("error" in encConfig) return encConfig.error
+    let accessToken: string
+    try {
+      accessToken = await decryptToken(
+        (metaRow as { access_token: string }).access_token,
+        encConfig.encryptionKey,
+      )
+    } catch (err) {
+      console.error("[whatsapp-integration] Erro ao descriptografar token (getPhoneNumbers):", err)
+      return jsonResponse(
+        { error: "Erro ao acessar dados da conexão.", code: "DECRYPTION_ERROR" } satisfies ErrorResponse,
+        500,
+      )
+    }
+
+    const wabaId = (metaRow as { external_account_id: string }).external_account_id
+    try {
+      const phonesRes = await axios.get<MetaPhoneNumbersResponse>(
+        `https://graph.facebook.com/${getMetaGraphVersion()}/${encodeURIComponent(wabaId)}/phone_numbers`,
+        {
+          params: {
+            fields: "id,display_phone_number,verified_name",
+            access_token: accessToken,
+          },
+        },
+      )
+      const data = phonesRes.data
+      const rawPhones = Array.isArray(data.data) ? data.data : []
+      const phoneNumbers = rawPhones
+        .map((p): PhoneNumberDTO | null => {
+          const id = typeof p.id === "string" ? p.id.trim() : ""
+          const display =
+            typeof p.display_phone_number === "string" ? p.display_phone_number.trim() : ""
+          const verifiedName =
+            typeof p.verified_name === "string" ? p.verified_name.trim() : null
+          if (!id || !display) return null
+          return { id, display_phone_number: display, verified_name: verifiedName }
+        })
+        .filter((p): p is PhoneNumberDTO => p !== null)
+      return jsonResponse({ phoneNumbers })
+    } catch (err) {
+      const axiosErr = err as { response?: { status: number; data?: unknown }; message?: string }
+      console.error("[whatsapp-integration] Erro ao listar phone_numbers (getPhoneNumbers company):", axiosErr)
+      const metaError = (axiosErr.response?.data as { error?: { message?: string } } | undefined)?.error
+      const message =
+        metaError?.message ?? axiosErr.message ?? "Erro ao comunicar com a API da Meta."
+      return jsonResponse(
+        { error: message, code: "META_PHONE_NUMBERS_ERROR" } satisfies ErrorResponse,
+        (axiosErr.response?.status && axiosErr.response.status >= 400 && axiosErr.response.status < 600)
+          ? axiosErr.response.status
+          : 502,
+      )
+    }
+  }
+
   const { data: row, error } = await supabase
     .from("integrations")
     .select("access_token, waba_id")
@@ -641,6 +828,9 @@ async function handleSelectPhoneNumber(
 
   const phoneNumberId =
     typeof body.phone_number_id === "string" ? body.phone_number_id.trim() : ""
+  const companyId = typeof body.company_id === "string" ? body.company_id.trim() : ""
+  const displayPhoneNumber =
+    typeof body.display_phone_number === "string" ? body.display_phone_number.trim() : ""
 
   if (!phoneNumberId) {
     return jsonResponse(
@@ -650,6 +840,47 @@ async function handleSelectPhoneNumber(
       } satisfies ErrorResponse,
       400,
     )
+  }
+
+  if (companyId) {
+    const hasAccess = await validateCompanyAccess(sub, companyId, supabase)
+    if (!hasAccess) {
+      return jsonResponse(
+        { error: "Sem permissão para acessar esta empresa.", code: "FORBIDDEN_COMPANY" } satisfies ErrorResponse,
+        403,
+      )
+    }
+    const updatePayload: Record<string, unknown> = {
+      external_phone_id: phoneNumberId,
+      updated_at: new Date().toISOString(),
+    }
+    if (displayPhoneNumber) updatePayload.display_phone_number = displayPhoneNumber
+
+    const { error: metaErr } = await supabase
+      .from("meta_connections")
+      .update(updatePayload)
+      .eq("company_id", companyId)
+      .eq("provider_type", "whatsapp")
+
+    if (metaErr) {
+      console.error("[whatsapp-integration] Erro ao atualizar meta_connections (selectPhoneNumber):", metaErr)
+      return jsonResponse(
+        {
+          error: "Erro ao atualizar o número do WhatsApp para esta empresa.",
+          code: "SUPABASE_ERROR",
+        } satisfies ErrorResponse,
+        500,
+      )
+    }
+
+    if (displayPhoneNumber) {
+      await supabase
+        .from("companies")
+        .update({ celular_atendimento: displayPhoneNumber })
+        .eq("id", companyId)
+    }
+
+    return jsonResponse({ success: true }, 200)
   }
 
   try {
