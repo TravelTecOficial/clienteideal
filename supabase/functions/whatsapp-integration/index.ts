@@ -9,12 +9,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 }
 
-const WHATSAPP_SCOPES = [
-  "public_profile",
-  "whatsapp_business_management",
-  "whatsapp_business_messaging",
-  "business_management",
-]
+// Apenas permissões Standard Access (evita 400 "Application does not have permission")
+// business_management e public_profile removidos — não necessários para fluxo direto
+const WHATSAPP_SCOPES = ["whatsapp_business_management", "whatsapp_business_messaging"]
 
 type WhatsappAction =
   | "getLoginUrl"
@@ -213,15 +210,14 @@ function getMetaGraphVersion(): string {
 function getWhatsappConfig(): { appId: string; appSecret: string; redirectUri: string } | { error: Response } {
   const appId = Deno.env.get("META_APP_ID")?.trim()
   const appSecret = Deno.env.get("META_APP_SECRET")?.trim()
-  const redirectUri =
-    Deno.env.get("META_WHATSAPP_REDIRECT_URI")?.trim() ||
-    Deno.env.get("META_REDIRECT_URI")?.trim()
+  // WhatsApp usa /auth/facebook/callback; META_REDIRECT_URI aponta para /auth/meta/callback (Instagram)
+  const redirectUri = Deno.env.get("META_WHATSAPP_REDIRECT_URI")?.trim()
   if (!appId || !appSecret || !redirectUri) {
     return {
       error: jsonResponse(
         {
           error: "Configuração da Meta/WhatsApp incompleta.",
-          hint: "Configure META_APP_ID, META_APP_SECRET e META_WHATSAPP_REDIRECT_URI (ou META_REDIRECT_URI) nas secrets do Supabase.",
+          hint: "Configure META_APP_ID, META_APP_SECRET e META_WHATSAPP_REDIRECT_URI (ex.: https://seu-dominio.com/auth/facebook/callback). Não use META_REDIRECT_URI — WhatsApp usa rota diferente de Instagram.",
         } satisfies ErrorResponse,
         500,
       ),
@@ -389,6 +385,7 @@ async function handleExchangeCode(
   }
 
   let wabaId: string
+  const testWabaId = Deno.env.get("WHATSAPP_TEST_WABA_ID")?.trim()
   try {
     const wabaRes = await axios.get<{ data?: MetaWaba[] }>(
       `https://graph.facebook.com/${getMetaGraphVersion()}/me/assigned_whatsapp_business_accounts`,
@@ -397,7 +394,11 @@ async function handleExchangeCode(
       },
     )
     const wabas = Array.isArray(wabaRes.data?.data) ? wabaRes.data.data : []
-    const firstWaba = wabas.find((w) => typeof w.id === "string" && w.id.trim().length > 0)
+    // Preferir WABA de teste quando definido (ex.: 245937908592211 em dev mode)
+    const preferredWaba =
+      testWabaId && wabas.find((w) => String(w?.id).trim() === testWabaId)
+    const firstWaba =
+      preferredWaba ?? wabas.find((w) => typeof w.id === "string" && w.id.trim().length > 0)
     if (!firstWaba?.id) {
       return jsonResponse(
         {
@@ -770,6 +771,7 @@ async function handleConnectEmbedded(
   }
 
   let wabaId: string
+  const testWabaId = Deno.env.get("WHATSAPP_TEST_WABA_ID")?.trim()
   try {
     const wabaRes = await axios.get<{ data?: MetaWaba[] }>(
       `https://graph.facebook.com/${graphVersion}/me/assigned_whatsapp_business_accounts`,
@@ -778,7 +780,10 @@ async function handleConnectEmbedded(
       },
     )
     const wabas = Array.isArray(wabaRes.data?.data) ? wabaRes.data.data : []
-    const firstWaba = wabas.find((w) => typeof w.id === "string" && w.id.trim().length > 0)
+    const preferredWaba =
+      testWabaId && wabas.find((w) => String(w?.id).trim() === testWabaId)
+    const firstWaba =
+      preferredWaba ?? wabas.find((w) => typeof w.id === "string" && w.id.trim().length > 0)
     if (!firstWaba?.id) {
       return jsonResponse(
         {

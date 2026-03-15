@@ -84,7 +84,8 @@ Fluxos principais (`action` no body):
 
 - `"getLoginUrl"`:
   - Retorna a URL de OAuth da Meta para conectar a conta do WhatsApp Business.
-  - Usa `META_APP_ID`, `META_WHATSAPP_REDIRECT_URI` e escopos `WHATSAPP_SCOPES`.
+  - Usa `META_APP_ID`, `META_WHATSAPP_REDIRECT_URI` e escopos `WHATSAPP_SCOPES` (apenas `whatsapp_business_management` e `whatsapp_business_messaging` — Standard Access).
+- Opcional: `WHATSAPP_TEST_WABA_ID` — em dev mode, prioriza esse WABA quando retornado pela API (ex.: `245937908592211`).
 - `"exchangeCode"`:
   - Troca o `code` da Meta por `access_token` e obtém:
     - **WABA** (WhatsApp Business Account) do usuário.
