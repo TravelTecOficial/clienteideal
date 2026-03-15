@@ -3707,7 +3707,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                 </Select>
                               </div>
                             )}
-                            {int.connected && !isMetaCard && !isGoogleCard && int.onDisconnect && (
+                            {int.connected && !isMetaCard && !isGoogleCard && !isWhatsappCard && int.onDisconnect && (
                               <Button
                                 variant="ghost"
                                 size="sm"
