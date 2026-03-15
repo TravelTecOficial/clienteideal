@@ -1458,6 +1458,25 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         }
       }
       const justConnected = window.sessionStorage.getItem("whatsapp_just_connected");
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
+        body: JSON.stringify({
+          sessionId: "9bd63d",
+          runId: "pre-fix-redirect",
+          hypothesisId: "H4",
+          location: "ConfiguracoesPage.tsx:integracoesEffect",
+          message: "Integracoes page loaded WhatsApp redirect state",
+          data: {
+            section,
+            hasPendingPhones: Boolean(pending),
+            justConnected,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       if (justConnected) {
         window.sessionStorage.removeItem("whatsapp_just_connected");
         setShowWhatsappPostConfirmDialog(true);
@@ -1838,6 +1857,31 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
 
       // Backup do companyId para o callback (state vem na URL, mas storage garante fallback)
       window.sessionStorage.setItem("whatsapp_connect_company_id", companyId);
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
+        body: JSON.stringify({
+          sessionId: "9bd63d",
+          runId: "pre-fix-redirect",
+          hypothesisId: "H1",
+          location: "ConfiguracoesPage.tsx:handleWhatsappConnectClick",
+          message: "Redirecting user to Meta login",
+          data: {
+            hasUrl: Boolean(data.url),
+            urlHost: (() => {
+              try {
+                return new URL(data.url).host;
+              } catch {
+                return "invalid-url";
+              }
+            })(),
+            hasCompanyId: Boolean(companyId),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
 
       window.location.href = data.url;
     } catch (err) {
