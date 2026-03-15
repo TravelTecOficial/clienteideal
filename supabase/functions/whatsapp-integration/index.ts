@@ -24,6 +24,8 @@ type WhatsappAction =
   | "selectPhoneNumber"
   | "connectEmbedded"
   | "getWhatsappConnection"
+  | "disconnect"
+  | "sendMessage"
 
 interface BaseBody {
   action?: WhatsappAction
@@ -65,6 +67,18 @@ interface GetWhatsappConnectionBody extends BaseBody {
   company_id: string
 }
 
+interface DisconnectBody extends BaseBody {
+  action: "disconnect"
+  company_id: string
+}
+
+interface SendMessageBody extends BaseBody {
+  action: "sendMessage"
+  company_id: string
+  to: string
+  text: string
+}
+
 type WhatsappRequestBody =
   | GetLoginUrlBody
   | ExchangeCodeBody
@@ -72,6 +86,8 @@ type WhatsappRequestBody =
   | SelectPhoneNumberBody
   | ConnectEmbeddedBody
   | GetWhatsappConnectionBody
+  | DisconnectBody
+  | SendMessageBody
 
 interface MetaOAuthTokenResponse {
   access_token: string
@@ -1195,6 +1211,147 @@ async function handleGetWhatsappConnection(
   })
 }
 
+async function handleDisconnect(body: DisconnectBody, sub: string): Promise<Response> {
+  const companyId = typeof body.company_id === "string" ? body.company_id.trim() : ""
+  if (!companyId) {
+    return jsonResponse(
+      { error: "Parâmetro 'company_id' é obrigatório.", code: "MISSING_COMPANY_ID" } satisfies ErrorResponse,
+      400,
+    )
+  }
+  const supabase = getSupabaseClient()
+  const hasAccess = await validateCompanyAccess(sub, companyId, supabase)
+  if (!hasAccess) {
+    return jsonResponse(
+      { error: "Sem permissão para desconectar WhatsApp desta empresa.", code: "FORBIDDEN_COMPANY" } satisfies ErrorResponse,
+      403,
+    )
+  }
+  const { error } = await supabase
+    .from("meta_connections")
+    .delete()
+    .eq("company_id", companyId)
+    .eq("provider_type", "whatsapp")
+  if (error) {
+    console.error("[whatsapp-integration] Erro ao remover meta_connections:", error)
+    return jsonResponse(
+      { error: "Erro ao desconectar WhatsApp.", code: "SUPABASE_ERROR" } satisfies ErrorResponse,
+      500,
+    )
+  }
+  return jsonResponse({ success: true })
+}
+
+/** Normaliza número para formato Meta: apenas dígitos, sem + */
+function normalizePhoneForMeta(phone: string): string {
+  return phone.replace(/\D/g, "").trim()
+}
+
+async function handleSendMessage(body: SendMessageBody, sub: string): Promise<Response> {
+  const companyId = typeof body.company_id === "string" ? body.company_id.trim() : ""
+  const to = typeof body.to === "string" ? body.to.trim() : ""
+  const text = typeof body.text === "string" ? body.text.trim() : ""
+  if (!companyId) {
+    return jsonResponse(
+      { error: "Parâmetro 'company_id' é obrigatório.", code: "MISSING_COMPANY_ID" } satisfies ErrorResponse,
+      400,
+    )
+  }
+  if (!to) {
+    return jsonResponse(
+      { error: "Parâmetro 'to' (número do destinatário) é obrigatório.", code: "MISSING_TO" } satisfies ErrorResponse,
+      400,
+    )
+  }
+  if (!text) {
+    return jsonResponse(
+      { error: "Parâmetro 'text' (mensagem) é obrigatório.", code: "MISSING_TEXT" } satisfies ErrorResponse,
+      400,
+    )
+  }
+  const supabase = getSupabaseClient()
+  const hasAccess = await validateCompanyAccess(sub, companyId, supabase)
+  if (!hasAccess) {
+    return jsonResponse(
+      { error: "Sem permissão para enviar mensagens por esta empresa.", code: "FORBIDDEN_COMPANY" } satisfies ErrorResponse,
+      403,
+    )
+  }
+  const { data: row, error: fetchError } = await supabase
+    .from("meta_connections")
+    .select("access_token, external_phone_id")
+    .eq("company_id", companyId)
+    .eq("provider_type", "whatsapp")
+    .maybeSingle()
+  if (fetchError || !row) {
+    return jsonResponse(
+      { error: "WhatsApp não conectado para esta empresa.", code: "WHATSAPP_NOT_CONNECTED" } satisfies ErrorResponse,
+      404,
+    )
+  }
+  const phoneNumberId = (row as { external_phone_id: string | null }).external_phone_id
+  const encryptedToken = (row as { access_token: string | null }).access_token
+  if (!phoneNumberId || !encryptedToken) {
+    return jsonResponse(
+      { error: "Conexão WhatsApp incompleta.", code: "INCOMPLETE_CONNECTION" } satisfies ErrorResponse,
+      500,
+    )
+  }
+  const encConfig = getConnectEmbeddedConfig()
+  if ("error" in encConfig) return encConfig.error
+  let accessToken: string
+  try {
+    accessToken = await decryptToken(encryptedToken, encConfig.encryptionKey)
+  } catch (err) {
+    console.error("[whatsapp-integration] Erro ao descriptografar token:", err)
+    return jsonResponse(
+      { error: "Erro ao recuperar token WhatsApp.", code: "DECRYPT_ERROR" } satisfies ErrorResponse,
+      500,
+    )
+  }
+  const toNormalized = normalizePhoneForMeta(to)
+  if (!toNormalized) {
+    return jsonResponse(
+      { error: "Número do destinatário inválido.", code: "INVALID_PHONE" } satisfies ErrorResponse,
+      400,
+    )
+  }
+  const graphVersion = getMetaGraphVersion()
+  const url = `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(phoneNumberId)}/messages`
+  try {
+    const res = await axios.post(
+      url,
+      {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: toNormalized,
+        type: "text",
+        text: { body: text },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    )
+    const msgId = (res.data?.messages?.[0] as { id?: string } | undefined)?.id ?? null
+    return jsonResponse({ success: true, message_id: msgId })
+  } catch (err) {
+    const axiosErr = err as { response?: { status: number; data?: unknown }; message?: string }
+    console.error("[whatsapp-integration] Erro ao enviar mensagem:", axiosErr)
+    const metaError = (axiosErr.response?.data as { error?: { message?: string } } | undefined)?.error
+    const message =
+      metaError?.message ?? axiosErr.message ?? "Erro ao enviar mensagem via WhatsApp."
+    return jsonResponse(
+      { error: message, code: "META_SEND_ERROR" } satisfies ErrorResponse,
+      (axiosErr.response?.status && axiosErr.response.status >= 400 && axiosErr.response.status < 600)
+        ? axiosErr.response.status
+        : 502,
+    )
+  }
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
@@ -1230,12 +1387,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     action !== "getPhoneNumbers" &&
     action !== "selectPhoneNumber" &&
     action !== "connectEmbedded" &&
-    action !== "getWhatsappConnection"
+    action !== "getWhatsappConnection" &&
+    action !== "disconnect" &&
+    action !== "sendMessage"
   ) {
     return jsonResponse(
       {
         error:
-          "Parâmetro 'action' inválido. Use 'getLoginUrl', 'exchangeCode', 'getPhoneNumbers', 'selectPhoneNumber', 'connectEmbedded' ou 'getWhatsappConnection'.",
+          "Parâmetro 'action' inválido. Use 'getLoginUrl', 'exchangeCode', 'getPhoneNumbers', 'selectPhoneNumber', 'connectEmbedded', 'getWhatsappConnection', 'disconnect' ou 'sendMessage'.",
         code: "INVALID_ACTION",
       } satisfies ErrorResponse,
       400,
@@ -1264,6 +1423,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
   if (action === "connectEmbedded") {
     return handleConnectEmbedded(body as ConnectEmbeddedBody, sub)
+  }
+  if (action === "disconnect") {
+    return handleDisconnect(body as DisconnectBody, sub)
+  }
+  if (action === "sendMessage") {
+    return handleSendMessage(body as SendMessageBody, sub)
   }
   return handleGetWhatsappConnection(body as GetWhatsappConnectionBody, sub)
 })

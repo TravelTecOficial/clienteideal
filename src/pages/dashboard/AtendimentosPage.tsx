@@ -8,6 +8,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   SidebarInset,
   SidebarProvider,
@@ -16,6 +17,7 @@ import {
 import { AppSidebar } from "@/components/app-sidebar"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 import AtendimentoPageContent from "@/pages/dashboard/atendimento"
+import ChatAtendimento from "@/pages/dashboard/atendimento/ChatAtendimento"
 
 export function AtendimentosPage() {
   return (
@@ -44,7 +46,18 @@ export function AtendimentosPage() {
           <ProfileDropdown className="ml-auto" />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-          <AtendimentoPageContent />
+          <Tabs defaultValue="chat" className="flex-1 flex flex-col">
+            <TabsList>
+              <TabsTrigger value="chat">Chat</TabsTrigger>
+              <TabsTrigger value="listagem">Listagem</TabsTrigger>
+            </TabsList>
+            <TabsContent value="chat" className="flex-1 mt-4">
+              <ChatAtendimento />
+            </TabsContent>
+            <TabsContent value="listagem" className="flex-1 mt-4">
+              <AtendimentoPageContent />
+            </TabsContent>
+          </Tabs>
         </div>
       </SidebarInset>
     </SidebarProvider>

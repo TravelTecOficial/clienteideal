@@ -377,6 +377,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [whatsappSelectedDisplay, setWhatsappSelectedDisplay] = useState<string | null>(null);
   const [isSelectingWhatsappNumber, setIsSelectingWhatsappNumber] = useState(false);
   const [isLoadingWhatsappPhoneNumbers, setIsLoadingWhatsappPhoneNumbers] = useState(false);
+  const [showWhatsappPostConfirmDialog, setShowWhatsappPostConfirmDialog] = useState(false);
 
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
   const evolutionForm = useForm<EvolutionFormValues>({
@@ -1926,6 +1927,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         description:
           "O número escolhido será utilizado como remetente oficial nas mensagens do SDR.",
       });
+      setShowWhatsappPostConfirmDialog(true);
     } catch (err) {
       toast({
         variant: "destructive",
@@ -1966,6 +1968,43 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       setIsLoadingWhatsappPhoneNumbers(false);
     }
   }
+
+  const handleWhatsappDisconnect = useCallback(async () => {
+    const ok = window.confirm(
+      "Desconectar o WhatsApp desta empresa? O número não poderá mais enviar ou receber mensagens pelo app.",
+    );
+    if (!ok) return;
+    if (!companyId) return;
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Token de autenticação indisponível. Faça login novamente.");
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-integration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "disconnect" as const,
+          company_id: companyId,
+          token,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as { success?: boolean; error?: string } | null;
+      if (!res.ok || data?.error) throw new Error(data?.error ?? "Erro ao desconectar");
+      setIsWhatsappConnected(false);
+      setWhatsappSelectedDisplay(null);
+      setWhatsappPhoneNumbers([]);
+      setSelectedWhatsappPhoneId(null);
+      toast({ title: "WhatsApp desconectado" });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao desconectar WhatsApp",
+        description: getErrorMessage(err),
+      });
+    }
+  }, [companyId, getToken, toast]);
 
   async function handleLoadMetaAccounts(serviceOverride?: "instagram" | "facebook" | "meta_ads") {
     if (!companyId) {
@@ -3240,9 +3279,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                         connected: isWhatsappConnected,
                         connecting: isWhatsappConnecting,
                         onConnect: handleWhatsappConnectClick,
-                        onDisconnect: undefined,
+                        onDisconnect: handleWhatsappDisconnect,
                         connectLabel: "Conectar",
-                        // OAuth redirect não depende do Meta SDK; botão sempre habilitado quando há companyId
                         disabled: false,
                       },
                       {
@@ -3307,6 +3345,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                       },
                     ].map((int) => {
                       const Icon = int.icon;
+                      const isWhatsappCard = int.id === "whatsapp";
                       const isMetaCard = int.id === "instagram" || int.id === "facebook" || int.id === "meta-ads";
                       const isGoogleCard =
                         int.id === "google-analytics" || int.id === "google-ads" || int.id === "google-meu-negocio";
@@ -3351,7 +3390,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                             <Button
                               size="sm"
                               variant={
-                                int.connected && (isMetaCard || isGoogleCard)
+                                int.connected && (isMetaCard || isGoogleCard || isWhatsappCard)
                                   ? "warning"
                                   : int.connected
                                     ? "outline"
@@ -3362,9 +3401,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                               onClick={
                                 int.connected && (isMetaCard || isGoogleCard) && int.onDisconnect
                                   ? int.onDisconnect
-                                  : int.reloadHint
-                                    ? () => window.location.reload()
-                                    : int.onConnect
+                                  : int.connected && isWhatsappCard && int.onDisconnect
+                                    ? int.onDisconnect
+                                    : int.reloadHint
+                                      ? () => window.location.reload()
+                                      : int.onConnect
                               }
                             >
                               {int.connecting ? (
@@ -3372,7 +3413,7 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                   Conectando…
                                 </>
-                              ) : int.connected && (isMetaCard || isGoogleCard) ? (
+                              ) : int.connected && (isMetaCard || isGoogleCard || isWhatsappCard) ? (
                                 "Desconectar"
                               ) : int.connected ? (
                                 <>
@@ -4076,6 +4117,35 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                       ) : (
                         "Excluir"
                       )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={showWhatsappPostConfirmDialog} onOpenChange={setShowWhatsappPostConfirmDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>WhatsApp conectado</DialogTitle>
+                    <DialogDescription>
+                      Deseja começar a receber e enviar mensagens para seus clientes?
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowWhatsappPostConfirmDialog(false)}
+                    >
+                      Não
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setShowWhatsappPostConfirmDialog(false);
+                        navigate("/dashboard/atendimentos");
+                      }}
+                    >
+                      Sim
                     </Button>
                   </DialogFooter>
                 </DialogContent>
