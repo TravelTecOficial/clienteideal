@@ -1457,6 +1457,11 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
           window.sessionStorage.removeItem("whatsapp_pending_phone_numbers");
         }
       }
+      const justConnected = window.sessionStorage.getItem("whatsapp_just_connected");
+      if (justConnected) {
+        window.sessionStorage.removeItem("whatsapp_just_connected");
+        setShowWhatsappPostConfirmDialog(true);
+      }
     }
   }, [section, loadWhatsappConnectionState, loadGoogleConnectionState, loadMetaConnectionState, loadWordpressConnection]);
 

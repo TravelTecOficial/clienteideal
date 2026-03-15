@@ -89,6 +89,7 @@ export function WhatsappFacebookCallbackPage() {
         if (data?.phoneNumbers && data.phoneNumbers.length > 0) {
           window.sessionStorage.setItem("whatsapp_pending_phone_numbers", JSON.stringify(data.phoneNumbers))
         }
+        window.sessionStorage.setItem("whatsapp_just_connected", "1")
 
         toast({
           title: "WhatsApp conectado",
