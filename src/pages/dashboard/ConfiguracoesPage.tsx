@@ -1800,13 +1800,18 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
       })();
 
       if (!res.ok || data?.error) {
-        const msg = data?.hint ? `${data.error ?? res.status} — ${data.hint}` : (data?.error ?? `Erro ${res.status}`);
+        const baseMsg = data?.error ?? `Erro ${res.status}`;
+        const hint = data?.hint ?? (raw && raw.length < 200 && !raw.startsWith("<") ? raw : undefined);
+        const msg = hint ? `${baseMsg} — ${hint}` : baseMsg;
         throw new Error(msg);
       }
 
       if (!data?.url) {
         throw new Error("A função não retornou a URL de login da Meta.");
       }
+
+      // Backup do companyId para o callback (state vem na URL, mas storage garante fallback)
+      window.sessionStorage.setItem("whatsapp_connect_company_id", companyId);
 
       window.location.href = data.url;
     } catch (err) {
@@ -3185,8 +3190,8 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
                         onConnect: handleWhatsappConnectClick,
                         onDisconnect: undefined,
                         connectLabel: "Conectar",
-                        disabled: !isMetaSdkReady && !metaSdkLoadFailed,
-                        reloadHint: metaSdkLoadFailed,
+                        // OAuth redirect não depende do Meta SDK; botão sempre habilitado quando há companyId
+                        disabled: false,
                       },
                       {
                         id: "instagram",
