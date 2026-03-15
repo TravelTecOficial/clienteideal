@@ -10,11 +10,12 @@ const corsHeaders = {
 }
 
 // Standard Access: public_profile exigido pelo endpoint me/assigned_whatsapp_business_accounts
-// business_management removido (não necessário para fluxo direto)
+// pages_show_list exigido pela Meta para exibir as caixas de seleção de permissões ao usuário
 const WHATSAPP_SCOPES = [
   "public_profile",
   "whatsapp_business_management",
   "whatsapp_business_messaging",
+  "pages_show_list",
 ]
 
 type WhatsappAction =

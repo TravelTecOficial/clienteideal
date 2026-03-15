@@ -90,20 +90,6 @@ export function WhatsappFacebookCallbackPage() {
           window.sessionStorage.setItem("whatsapp_pending_phone_numbers", JSON.stringify(data.phoneNumbers))
         }
         window.sessionStorage.setItem("whatsapp_just_connected", "1")
-        // #region agent log
-        fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-          body: JSON.stringify({
-            sessionId: "9bd63d",
-            location: "WhatsappFacebookCallbackPage.tsx",
-            message: "Callback set whatsapp_just_connected before navigate",
-            data: { hasPhoneNumbers: !!(data?.phoneNumbers?.length) },
-            timestamp: Date.now(),
-            hypothesisId: "A",
-          }),
-        }).catch(() => {})
-        // #endregion
 
         toast({
           title: "WhatsApp conectado",

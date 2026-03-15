@@ -379,23 +379,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
   const [isLoadingWhatsappPhoneNumbers, setIsLoadingWhatsappPhoneNumbers] = useState(false);
   const [showWhatsappPostConfirmDialog, setShowWhatsappPostConfirmDialog] = useState(false);
 
-  // #region agent log
-  useEffect(() => {
-    fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-      body: JSON.stringify({
-        sessionId: "9bd63d",
-        location: "ConfiguracoesPage.tsx:showWhatsappPostConfirmDialog",
-        message: "Dialog state changed",
-        data: { showWhatsappPostConfirmDialog },
-        timestamp: Date.now(),
-        hypothesisId: "C",
-      }),
-    }).catch(() => {});
-  }, [showWhatsappPostConfirmDialog]);
-  // #endregion
-
   const { execute: executeEvolutionProxy } = useEvolutionProxy();
   const evolutionForm = useForm<EvolutionFormValues>({
     resolver: zodResolver(evolutionFormSchema),
@@ -1475,20 +1458,6 @@ export function ConfiguracoesPage({ section }: ConfiguracoesPageProps) {
         }
       }
       const justConnected = window.sessionStorage.getItem("whatsapp_just_connected");
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/f98a865e-323b-4de9-a075-eed5347401f2", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9bd63d" },
-        body: JSON.stringify({
-          sessionId: "9bd63d",
-          location: "ConfiguracoesPage.tsx:effect",
-          message: "Integracoes effect ran",
-          data: { section, justConnected: !!justConnected, justConnectedVal: justConnected },
-          timestamp: Date.now(),
-          hypothesisId: "B",
-        }),
-      }).catch(() => {})
-      // #endregion
       if (justConnected) {
         window.sessionStorage.removeItem("whatsapp_just_connected");
         setShowWhatsappPostConfirmDialog(true);
